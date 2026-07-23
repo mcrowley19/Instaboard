@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "instaboard — DataHub coach",
+  "version": "0.1.0",
+  "description": "Context-aware onboarding help beside DataHub. Chat with your live catalog: tables, owners, lineage, and real SQL.",
+  "action": {
+    "default_title": "Open instaboard"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["sidePanel", "tabs", "storage"],
+  "host_permissions": ["http://localhost:3000/*", "http://127.0.0.1:3000/*"],
+  "content_scripts": [
+    {
+      "matches": [
+        "http://localhost:9002/*",
+        "http://127.0.0.1:9002/*",
+        "https://*.acryl.io/*",
+        "https://*.datahubproject.io/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

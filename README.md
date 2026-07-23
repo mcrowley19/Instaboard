@@ -7,6 +7,13 @@ pipelines, or how metrics are defined. instaboard is an AI onboarding copilot th
 answers those questions from your organization's **live DataHub catalog** — not
 generic docs — via the official [DataHub MCP Server](https://github.com/acryldata/mcp-server-datahub).
 
+It ships as two surfaces sharing one backend:
+
+- **Web app (the brain)** — chat, learning paths, lineage explainer, progress, settings
+- **Chrome extension (the coach)** — a side panel that follows you *inside* DataHub,
+  detects the entity on screen, and answers "explain this table" in place
+  ([install instructions](extension/README.md))
+
 > *"What tables do we use for revenue?"* → real dataset names, owners, lineage,
 > sample SQL, and URNs, with every DataHub call visible in a collapsible trace.
 
@@ -23,6 +30,10 @@ generic docs — via the official [DataHub MCP Server](https://github.com/acryld
 - **🔀 Lineage explainer** — search a dataset, get upstream sources, downstream
   consumers, and an "impact if changed" briefing with owners to talk to.
 - **✅ Progress tracker** — check off learning-path items as you ramp (localStorage).
+- **🧩 Chrome side panel** — context-aware coaching next to DataHub itself: the
+  extension captures the URL/URN/selection of the page you're on and offers
+  one-click actions ("Explain this table", "Who owns this?", "Show lineage",
+  "Common SQL for this"). Thin client — no keys in the extension.
 
 ## Quick start
 
@@ -98,21 +109,22 @@ Open [http://localhost:3000](http://localhost:3000) and ask:
 ## Architecture
 
 ```
-┌──────────────────────────────┐
-│  Next.js UI (light, streamed)│  chat · learning path · lineage · progress
-└──────────────┬───────────────┘
-               │ fetch (NDJSON event stream)
-┌──────────────▼───────────────┐
-│  API routes (app/api/*)      │  /chat · /path · /lineage · /save-document
-│  ┌────────────────────────┐  │
-│  │ Agent loop (lib/agent) │  │  LLM ⇄ tools until final answer
-│  └───┬───────────────┬────┘  │
-│      │               │       │
-│  LLM providers   MCP client  │  lib/providers.ts · lib/mcp.ts
-│  (Claude /       (singleton, │
-│   OpenRouter /    stdio)     │
-│   Gemini)            │       │
-└──────────────────────┼───────┘
+┌──────────────────────────────┐   ┌────────────────────────────────┐
+│  Next.js UI (light, streamed)│   │  Chrome extension (side panel) │
+│  chat · path · lineage ·     │   │  context capture on DataHub ·  │
+│  progress                    │   │  quick actions · same chat     │
+└──────────────┬───────────────┘   └───────────────┬────────────────┘
+               │ fetch (NDJSON event stream)       │ fetch + {message, context}
+┌──────────────▼───────────────────────────────────▼───────┐
+│  API routes (app/api/*)                                  │
+│  /chat · /learning-path · /lineage · /save-document ·    │
+│  /health — CORS-enabled for the extension                │
+│  ┌────────────────────────┐                              │
+│  │ Agent loop (lib/agent) │  LLM ⇄ tools until answered  │
+│  └───┬───────────────┬────┘                              │
+│  LLM providers   MCP client (singleton, stdio)           │
+│  (Claude / OpenRouter / Gemini — keys server-side only)  │
+└──────────────────────┼───────────────────────────────────┘
                        │ spawns: uvx mcp-server-datahub
             ┌──────────▼──────────┐
             │  DataHub MCP Server │  search · get_entities · get_lineage ·
