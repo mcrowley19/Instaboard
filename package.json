@@ -1,0 +1,32 @@
+{
+  "name": "instaboard",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI onboarding copilot for data teams, powered by your DataHub catalog",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "seed": "uv run --with acryl-datahub scripts/seed_datahub.py",
+    "datahub:up": "uv run --with acryl-datahub datahub docker quickstart",
+    "datahub:down": "uv run --with acryl-datahub datahub docker quickstart --stop"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.113.0",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "next": "^15.3.3",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "typescript": "^5.8.0",
+    "vitest": "^3.2.0"
+  }
+}
