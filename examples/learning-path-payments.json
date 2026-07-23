@@ -1,0 +1,108 @@
+{
+  "role": "Junior Data Analyst",
+  "domain": "Payments",
+  "summary": "Week one takes you from the raw payment stream to the board-level MRR report. You'll learn the six tables that matter, how revenue and churn are defined, which pipelines feed them, the SQL analysts actually run, and the three people who own it all.",
+  "days": [
+    {
+      "day": 1,
+      "title": "Core tables to understand",
+      "items": [
+        {
+          "title": "payments — raw payment attempts",
+          "detail": "The Stripe webhook stream. Includes failures and retries; always filter to status='succeeded' for revenue work.",
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.payments,PROD)"
+        },
+        {
+          "title": "fct_revenue — the canonical revenue fact",
+          "detail": "One row per successful payment, net of refunds. All finance reporting reads from here — use net_amount_usd.",
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)"
+        },
+        {
+          "title": "mrr_monthly — board-level rollup",
+          "detail": "Monthly MRR/ARR by plan. Feeds the Finance KPIs dashboard and the investor update.",
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)"
+        }
+      ]
+    },
+    {
+      "day": 2,
+      "title": "Key metrics & glossary terms",
+      "items": [
+        {
+          "title": "MRR — Monthly Recurring Revenue",
+          "detail": "Sum of active subscription amounts normalized monthly; annual plans divided by 12. One-time fees and refunds excluded.",
+          "urn": "urn:li:glossaryTerm:MRR"
+        },
+        {
+          "title": "Churn Rate",
+          "detail": "churned_subscribers / subscribers_at_period_start, on calendar months. Computed in fct_churn.",
+          "urn": "urn:li:glossaryTerm:ChurnRate"
+        },
+        {
+          "title": "GMV vs net revenue",
+          "detail": "GMV is pre-refund order value (gross_amount_usd); revenue reporting uses net_amount_usd. Mixing them up is the classic new-hire mistake."
+        }
+      ]
+    },
+    {
+      "day": 3,
+      "title": "Important pipelines & lineage",
+      "items": [
+        {
+          "title": "payments → stg_payments → fct_revenue → mrr_monthly",
+          "detail": "The revenue spine. stg_payments dedupes retries and filters to terminal states before facts are built.",
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.stg_payments,PROD)"
+        },
+        {
+          "title": "subscriptions + dim_customers → fct_churn",
+          "detail": "Churn joins subscription cancellations against the customer dimension — check both sides when churn numbers look off.",
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_churn,PROD)"
+        },
+        {
+          "title": "payment_health_daily — the on-call view",
+          "detail": "Success/failure rates by provider. First place to look when payments alarms fire.",
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)"
+        }
+      ]
+    },
+    {
+      "day": 4,
+      "title": "Common SQL patterns",
+      "items": [
+        {
+          "title": "Run the saved 'Monthly MRR trend by plan' query",
+          "detail": "The exact query finance uses for the board deck — saved on mrr_monthly in DataHub."
+        },
+        {
+          "title": "Revenue-by-geo join pattern",
+          "detail": "fct_revenue joined to dim_customers on customer_id — the standard weekly-business-review cut."
+        },
+        {
+          "title": "Churn with 3-month rolling average",
+          "detail": "Window-function pattern over fct_churn; the canonical starting point for churn questions."
+        }
+      ]
+    },
+    {
+      "day": 5,
+      "title": "People to know",
+      "items": [
+        {
+          "title": "Priya Patel — Payments Data Lead",
+          "detail": "Owns payments, fct_revenue, and mrr_monthly. Sign-off required for changes to Finance-tagged tables.",
+          "urn": "urn:li:corpuser:priya.patel"
+        },
+        {
+          "title": "Mike Rodriguez — Analytics Engineer",
+          "detail": "Owns the dbt staging and mart layer. Go to him for lineage and modeling questions.",
+          "urn": "urn:li:corpuser:mike.rodriguez"
+        },
+        {
+          "title": "Sarah Chen — Staff Data Engineer",
+          "detail": "Owns the source postgres tables and ingestion. On-call escalation for Tier1 breakage.",
+          "urn": "urn:li:corpuser:sarah.chen"
+        }
+      ]
+    }
+  ]
+}

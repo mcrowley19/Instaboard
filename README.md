@@ -1,0 +1,171 @@
+# ⚡ instaboard
+
+**Turn your DataHub catalog into a personal tutor for new data hires.**
+
+When someone joins a data team, they don't know which tables matter, who owns the
+pipelines, or how metrics are defined. instaboard is an AI onboarding copilot that
+answers those questions from your organization's **live DataHub catalog** — not
+generic docs — via the official [DataHub MCP Server](https://github.com/acryldata/mcp-server-datahub).
+
+> *"What tables do we use for revenue?"* → real dataset names, owners, lineage,
+> sample SQL, and URNs, with every DataHub call visible in a collapsible trace.
+
+## Features
+
+- **💬 Chat assistant** — plain-English Q&A grounded in DataHub metadata. The agent
+  calls `search`, `get_entities`, `get_lineage`, `get_dataset_queries`, and schema
+  tools as needed, and every MCP call is shown in an expandable tool trace.
+- **🗺️ Week-1 learning path generator** — pick a role + domain, get a structured
+  5-day plan (core tables → metrics & glossary → pipelines & lineage → SQL
+  patterns → people to know) built from live catalog exploration, with real URNs.
+- **📤 Write-back to DataHub** — one click saves the generated path into DataHub
+  via the MCP `save_document` tool, so the *next* hire finds it in the catalog.
+- **🔀 Lineage explainer** — search a dataset, get upstream sources, downstream
+  consumers, and an "impact if changed" briefing with owners to talk to.
+- **✅ Progress tracker** — check off learning-path items as you ramp (localStorage).
+
+## Quick start
+
+### 1. Install
+
+```bash
+npm install
+```
+
+You'll also need [uv](https://docs.astral.sh/uv/getting-started/installation/)
+(`curl -LsSf https://astral.sh/uv/install.sh | sh`) — it runs the DataHub MCP
+server and the seed script; no manual Python setup required.
+
+### 2. Run DataHub locally (Docker)
+
+```bash
+npm run datahub:up        # wraps: datahub docker quickstart
+```
+
+This starts the full DataHub stack (GMS on `:8080`, UI on `:9002`). First run
+downloads several images — give it a few minutes. Docs:
+[DataHub quickstart](https://docs.datahub.com/docs/quickstart).
+
+### 3. Seed the demo catalog
+
+```bash
+npm run seed
+```
+
+Seeds **Northbeam**, a fictional subscription-commerce company: 14 datasets across
+postgres + snowflake with full schemas and docs, 4 owners, 3 domains, PII/Tier1/
+Finance tags, a metrics glossary (MRR, ARR, Churn Rate, GMV, Active User),
+lineage across 4 pipelines, and 5 saved SQL queries. Verify at
+[http://localhost:9002](http://localhost:9002) (login `datahub` / `datahub`).
+
+### 4. Configure environment
+
+```bash
+cp .env.example .env.local
+```
+
+The defaults work for a local quickstart. If your DataHub requires auth, set
+`DATAHUB_GMS_TOKEN` to a personal access token.
+
+### 5. Add an LLM API key
+
+No keys are hardcoded — bring your own, either way:
+
+- **In the app (recommended):** click **Settings** in the sidebar and paste a key
+  for Anthropic (Claude), OpenRouter, or Google Gemini. Stored only in your
+  browser's localStorage and sent to your own server per-request.
+- **Or in `.env.local`:** set `LLM_PROVIDER` and `LLM_API_KEY`.
+
+### 6. Run
+
+```bash
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000) and ask:
+*“How do we calculate MRR?”*
+
+## Try these
+
+| Ask | What happens |
+| --- | --- |
+| What tables do we use for revenue? | `search` → `get_entities` → cites `fct_revenue`, `mrr_monthly` with owners & URNs |
+| Who owns the payments pipeline? | fetches entities and reports actual owners (Priya Patel et al.) |
+| How is customer_id defined? | schema-field lookup across `dim_customers` and sources |
+| Show me SQL for churn analysis | `get_dataset_queries` returns the real saved query on `fct_churn` |
+| What breaks if I change users.email? | `get_lineage` downstream walk → impacted marts + who to warn |
+
+## Architecture
+
+```
+┌──────────────────────────────┐
+│  Next.js UI (dark, streamed) │  chat · learning path · lineage · progress
+└──────────────┬───────────────┘
+               │ fetch (NDJSON event stream)
+┌──────────────▼───────────────┐
+│  API routes (app/api/*)      │  /chat · /path · /lineage · /save-document
+│  ┌────────────────────────┐  │
+│  │ Agent loop (lib/agent) │  │  LLM ⇄ tools until final answer
+│  └───┬───────────────┬────┘  │
+│      │               │       │
+│  LLM providers   MCP client  │  lib/providers.ts · lib/mcp.ts
+│  (Claude /       (singleton, │
+│   OpenRouter /    stdio)     │
+│   Gemini)            │       │
+└──────────────────────┼───────┘
+                       │ spawns: uvx mcp-server-datahub
+            ┌──────────▼──────────┐
+            │  DataHub MCP Server │  search · get_entities · get_lineage ·
+            └──────────┬──────────┘  get_dataset_queries · save_document …
+                       │ GraphQL/REST
+            ┌──────────▼──────────┐
+            │  DataHub GMS :8080  │  (docker quickstart)
+            └─────────────────────┘
+```
+
+- The MCP server is spawned once per server process (`uvx mcp-server-datahub`)
+  with `TOOLS_IS_MUTATION_ENABLED=true` so `save_document` write-back works.
+- The agent loop hands the LLM the **live** MCP tool list, executes every tool
+  call against DataHub, and streams `tool_call` / `tool_result` / `text` events
+  to the UI — which is what renders the collapsible trace.
+- Learning paths are generated as structured JSON from real catalog exploration,
+  rendered as a checklist, and written back with `save_document`.
+
+## Scripts
+
+| Script | Purpose |
+| --- | --- |
+| `npm run dev` | start the app on :3000 |
+| `npm run build` / `npm start` | production build / serve |
+| `npm test` | vitest smoke tests (MCP mocked — runtime always hits real DataHub) |
+| `npm run seed` | seed the Northbeam demo catalog into DataHub |
+| `npm run datahub:up` / `datahub:down` | start / stop the local DataHub stack |
+
+## Project layout
+
+```
+app/            pages (chat, path, lineage, progress) + API routes
+components/     Sidebar, ToolTrace, Markdown, SettingsModal
+lib/            mcp.ts (MCP client) · agent.ts (loop) · providers.ts (LLMs) · prompts.ts
+scripts/        seed_datahub.py — demo catalog ingestion
+tests/          vitest smoke tests
+examples/       sample generated learning path, SQL snippets, saved document
+```
+
+## Security notes
+
+- `.env`, `.env.local`, `*.key`, and `credentials.json` are gitignored; the repo
+  ships only `.env.example` with placeholders.
+- API keys pasted in the UI live in browser localStorage and are forwarded as
+  request headers to *your own* Next.js server only.
+
+## Troubleshooting
+
+- **Sidebar says "DataHub offline"** — GMS isn't reachable. Check
+  `docker ps`, then `curl http://localhost:8080/health`. The status pill polls
+  every 30s.
+- **"No LLM configured"** — add a key in Settings or `.env.local`.
+- **Learning path comes back empty** — the catalog probably has no data for that
+  domain. Run `npm run seed` and try domain "Payments".
+- **First MCP call is slow** — `uvx` resolves `mcp-server-datahub` on first use;
+  subsequent calls are warm.
