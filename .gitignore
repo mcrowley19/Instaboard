@@ -31,3 +31,4 @@ __pycache__/
 
 # test
 coverage/
+tsconfig.tsbuildinfo
