@@ -8,14 +8,17 @@ export const maxDuration = 60;
  * MCP server's save_document tool, so the next hire finds it in the catalog.
  */
 export async function POST(req: Request) {
-  const body = (await req.json()) as { title?: string; content?: string };
+  const body = (await req.json()) as { title?: string; content?: string; documentType?: string };
   if (!body.title || !body.content) {
     return Response.json({ error: "title and content are required" }, { status: 400 });
   }
 
   const result = await callDataHubTool("save_document", {
+    // One of the MCP server's supported document subtypes.
+    document_type: body.documentType ?? "Note",
     title: body.title,
     content: body.content,
+    topics: ["onboarding"],
   });
 
   if (result.isError) {
