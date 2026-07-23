@@ -1,19 +1,19 @@
 :root {
-  --bg: #0b0c0f;
-  --bg-raised: #111318;
-  --bg-hover: #191c23;
-  --bg-active: #1f232c;
-  --border: #23262f;
-  --border-strong: #2e323d;
-  --text: #e7e9ee;
-  --text-dim: #9aa0ad;
-  --text-faint: #616875;
-  --accent: #6e7ff3;
-  --accent-strong: #8b9aff;
-  --accent-dim: rgba(110, 127, 243, 0.14);
-  --green: #4ade80;
-  --amber: #fbbf24;
-  --red: #f87171;
+  --bg: #ffffff;
+  --bg-raised: #f7fafd;
+  --bg-hover: #eff6fc;
+  --bg-active: #e3eef8;
+  --border: #e3eaf2;
+  --border-strong: #cdd9e5;
+  --text: #1e293b;
+  --text-dim: #5b6b7e;
+  --text-faint: #8fa0b3;
+  --accent: #38a3e8;
+  --accent-strong: #1d8fdb;
+  --accent-dim: rgba(56, 163, 232, 0.12);
+  --green: #16a34a;
+  --amber: #d97706;
+  --red: #dc2626;
   --mono: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
   --sans: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   --radius: 8px;
@@ -88,7 +88,7 @@ select {
   width: 22px;
   height: 22px;
   border-radius: 6px;
-  background: linear-gradient(135deg, var(--accent), #a78bfa);
+  background: linear-gradient(135deg, #7cc4f2, var(--accent));
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -148,7 +148,7 @@ select {
 
 .status-dot.ok {
   background: var(--green);
-  box-shadow: 0 0 6px rgba(74, 222, 128, 0.6);
+  box-shadow: 0 0 6px rgba(22, 163, 74, 0.45);
 }
 
 .status-dot.err {
@@ -204,7 +204,7 @@ p.page-sub {
 
 .btn:hover {
   background: var(--bg-hover);
-  border-color: #3a3f4d;
+  border-color: #b7c8d8;
 }
 
 .btn:disabled {
@@ -252,7 +252,7 @@ p.page-sub {
 
 .select {
   appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa0ad' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%235b6b7e' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 28px;
@@ -288,7 +288,7 @@ p.page-sub {
 }
 
 .tag.warn {
-  background: rgba(251, 191, 36, 0.12);
+  background: rgba(217, 119, 6, 0.12);
   color: var(--amber);
 }
 
@@ -379,7 +379,7 @@ p.page-sub {
 }
 
 .md pre {
-  background: #0d0f13;
+  background: #f4f8fb;
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 14px 16px;
@@ -699,7 +699,7 @@ p.page-sub {
 .progress-bar > div {
   height: 100%;
   border-radius: 99px;
-  background: linear-gradient(90deg, var(--accent), #a78bfa);
+  background: linear-gradient(90deg, var(--accent), #7cc4f2);
   transition: width 0.3s ease;
 }
 
@@ -786,8 +786,8 @@ p.page-sub {
 }
 
 .error-banner {
-  background: rgba(248, 113, 113, 0.08);
-  border: 1px solid rgba(248, 113, 113, 0.3);
+  background: rgba(220, 38, 38, 0.06);
+  border: 1px solid rgba(220, 38, 38, 0.25);
   color: var(--red);
   border-radius: 10px;
   padding: 12px 16px;
@@ -800,7 +800,7 @@ p.page-sub {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(15, 23, 42, 0.35);
   display: flex;
   align-items: center;
   justify-content: center;

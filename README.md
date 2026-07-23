@@ -99,7 +99,7 @@ Open [http://localhost:3000](http://localhost:3000) and ask:
 
 ```
 ┌──────────────────────────────┐
-│  Next.js UI (dark, streamed) │  chat · learning path · lineage · progress
+│  Next.js UI (light, streamed)│  chat · learning path · lineage · progress
 └──────────────┬───────────────┘
                │ fetch (NDJSON event stream)
 ┌──────────────▼───────────────┐
