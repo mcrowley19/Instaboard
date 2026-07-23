@@ -10,6 +10,27 @@ Rules:
 - If the catalog has no answer, say so plainly and suggest what to search for instead. Never invent tables, owners, or metrics.
 - You may call several tools before answering; do so when it makes the answer more complete.`;
 
+import type { PageContext } from "./types";
+
+/**
+ * Render the extension's page context as an extra system-prompt section so
+ * "this table" resolves to the entity the user is looking at in DataHub.
+ */
+export function pageContextBlock(context?: PageContext): string {
+  if (!context || (!context.url && !context.datasetUrn && !context.selection)) return "";
+  const lines = ["", "", "## Current page context", "The user is browsing DataHub right now:"];
+  if (context.url) lines.push(`- URL: ${context.url}`);
+  if (context.title) lines.push(`- Page title: ${context.title}`);
+  if (context.datasetUrn) {
+    lines.push(`- Entity on screen (${context.entityType ?? "entity"}): \`${context.datasetUrn}\``);
+  }
+  if (context.selection) lines.push(`- Text the user selected: "${context.selection.slice(0, 1500)}"`);
+  lines.push(
+    'When the user says "this table", "this page", or asks a question without naming an entity, resolve it to the entity above. Fetch its live details with the tools before answering — do not answer from the URL alone.'
+  );
+  return lines.join("\n");
+}
+
 export function learningPathSystemPrompt(role: string, domain: string): string {
   return `You are instaboard, generating a Week-1 onboarding learning path for a new "${role}" joining the "${domain}" domain of a data team.
 

@@ -1,3 +1,4 @@
+export { corsPreflight as OPTIONS } from "@/lib/cors";
 import { agentStreamResponse, llmConfigFromRequest } from "@/lib/agent";
 import { callDataHubTool } from "@/lib/mcp";
 import { lineageSystemPrompt } from "@/lib/prompts";

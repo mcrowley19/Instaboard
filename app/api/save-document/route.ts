@@ -1,3 +1,4 @@
+export { corsPreflight as OPTIONS } from "@/lib/cors";
 import { callDataHubTool } from "@/lib/mcp";
 
 export const runtime = "nodejs";

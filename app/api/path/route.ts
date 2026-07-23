@@ -1,3 +1,4 @@
+export { corsPreflight as OPTIONS } from "@/lib/cors";
 import { agentStreamResponse, llmConfigFromRequest } from "@/lib/agent";
 import { learningPathSystemPrompt } from "@/lib/prompts";
 

@@ -40,6 +40,26 @@ export type AgentTurn =
   | { kind: "assistant"; content: string; toolCalls: { id: string; name: string; args: Record<string, unknown> }[] }
   | { kind: "tool_results"; results: { id: string; name: string; content: string; isError?: boolean }[] };
 
+/**
+ * Page context captured by the Chrome extension while the user browses
+ * DataHub. Sent alongside chat messages so answers can target the entity
+ * on screen.
+ */
+export interface PageContext {
+  url?: string;
+  title?: string;
+  datasetUrn?: string;
+  entityType?: string;
+  selection?: string;
+}
+
+/** Body accepted by /api/chat — web app sends `messages`, extension sends `message` (+ optional prior `messages`) and `context`. */
+export interface ChatRequestBody {
+  messages?: ChatMessage[];
+  message?: string;
+  context?: PageContext;
+}
+
 export interface LearningPathItem {
   title: string;
   detail: string;
