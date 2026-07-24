@@ -9,8 +9,14 @@
 <body>
   <header class="topbar">
     <div class="logo"><span class="mark">⚡</span> instaboard</div>
+    <button id="record-btn" class="record-btn" title="Record a handoff">● Record</button>
     <button id="settings-btn" class="icon-btn" title="Backend settings">⚙</button>
   </header>
+
+  <nav class="tabs">
+    <button id="tab-coach" class="tab active">Coach</button>
+    <button id="tab-handoffs" class="tab">Handoffs</button>
+  </nav>
 
   <div id="settings" class="settings hidden">
     <label for="backend-url">Backend URL</label>
@@ -21,26 +27,43 @@
     <p class="hint">The extension holds no API keys — the backend uses its own <code>.env.local</code> config.</p>
   </div>
 
+  <div id="record-bar" class="record-bar hidden">
+    <div class="rec-head">
+      <span class="rec-dot"></span>
+      <span id="rec-count">Recording · 0 steps</span>
+      <button id="rec-stop" class="btn stop">■ Stop</button>
+    </div>
+    <div class="rec-note-row">
+      <input id="rec-note" type="text" placeholder="Why do you do this here? (note for current step)" />
+      <button id="rec-add-note" class="btn">Add note</button>
+    </div>
+  </div>
+
   <div id="context-bar" class="context-bar hidden">
     <span class="ctx-dot"></span>
     <span id="context-label"></span>
   </div>
 
-  <div id="quick-actions" class="quick-actions">
-    <button class="qa" data-q="Explain this table for a new hire: what is it, what are the key columns, and what should I be careful about?">Explain this table</button>
-    <button class="qa" data-q="Who owns this? Give names and roles, and who I should ask first.">Who owns this?</button>
-    <button class="qa" data-q="Show the lineage of this: where does the data come from and who consumes it downstream?">Show lineage</button>
-    <button class="qa" data-q="Show me common SQL for this table — real saved queries if there are any.">Common SQL for this</button>
-  </div>
+  <!-- Coach view -->
+  <section id="view-coach" class="view">
+    <div id="quick-actions" class="quick-actions">
+      <button class="qa" data-q="Explain this table for a new hire: what is it, what are the key columns, and what should I be careful about?">Explain this table</button>
+      <button class="qa" data-q="Who owns this? Give names and roles, and who I should ask first.">Who owns this?</button>
+      <button class="qa" data-q="Show the lineage of this: where does the data come from and who consumes it downstream?">Show lineage</button>
+      <button class="qa" data-q="Show me common SQL for this table — real saved queries if there are any.">Common SQL for this</button>
+    </div>
+    <main id="chat"></main>
+    <div id="error" class="error hidden"></div>
+    <footer class="composer">
+      <textarea id="input" rows="1" placeholder="Ask about this page or anything in the catalog…"></textarea>
+      <button id="send" class="send" title="Send">↑</button>
+    </footer>
+  </section>
 
-  <main id="chat"></main>
-
-  <div id="error" class="error hidden"></div>
-
-  <footer class="composer">
-    <textarea id="input" rows="1" placeholder="Ask about this page or anything in the catalog…"></textarea>
-    <button id="send" class="send" title="Send">↑</button>
-  </footer>
+  <!-- Handoffs view -->
+  <section id="view-handoffs" class="view hidden">
+    <main id="handoffs-main"></main>
+  </section>
 
   <script src="sidepanel.js"></script>
 </body>
