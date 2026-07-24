@@ -78,7 +78,7 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="logo">
-        <span className="mark">⚡</span> instaboard
+        <span className="mark">i</span> instaboard
       </div>
 
       {NAV.map((item) => (
