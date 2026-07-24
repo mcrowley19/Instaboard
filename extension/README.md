@@ -57,3 +57,40 @@ When a DataHub entity is detected (blue context bar shows the dataset name):
 - **Common SQL for this**
 
 Buttons are disabled on non-DataHub pages.
+
+## Handoffs: record → inherit
+
+**Leaving? Record your task.** Hit **● Record** in the panel header, then just
+do the task in your DataHub tab. Every page you visit is captured as a step
+(URL, title, entity URN). Type a note on each page — the "why" your successor
+can't google — and press *Add note*. Hit **■ Stop**, give the task a title and
+your name, and click *Generate runbook & save to DataHub*. The backend looks
+up every entity you touched (owners, schemas, real saved queries, lineage),
+merges in your notes, and produces a step-by-step runbook that is:
+
+- stored on the backend (`GET /api/handoffs`), and
+- **written back into DataHub** via the MCP `save_document` tool, linked to
+  the datasets it references — so it's discoverable in the catalog itself.
+
+**Joining? Inherit it.** Open the **Handoffs** tab, pick a task, and replay it:
+each step shows what to do, why, real SQL, and gotchas; *Open this page ↗*
+navigates your DataHub tab to the right entity; a **📍 You're on this page**
+pill confirms when your current tab matches the step; *Ask the coach* jumps to
+chat pre-loaded with the step's context. Progress is saved per handoff.
+
+`POST /api/handoffs` request body:
+
+```json
+{
+  "title": "Monthly MRR report for the board deck",
+  "author": "Priya Patel",
+  "role": "Payments Data Lead",
+  "steps": [
+    { "url": "http://localhost:9002/dataset/…", "title": "fct_revenue | DataHub",
+      "urn": "urn:li:dataset:(…)", "note": "net_amount_usd, never gross." }
+  ]
+}
+```
+
+The response streams NDJSON: `tool_call` / `tool_result` events while the
+agent explores the catalog, then `{"type": "result", "data": <handoff>}`.

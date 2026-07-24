@@ -1,0 +1,61 @@
+{
+  "id": "sample-monthly-mrr-report",
+  "title": "Monthly MRR report for the board deck",
+  "author": "Priya Patel",
+  "role": "Payments Data Lead",
+  "summary": "How I produce the MRR numbers for the monthly board deck: sanity-check payment health first, verify the revenue fact loaded, then pull the MRR rollup and hand the numbers to finance.",
+  "createdAt": "2026-07-01T09:00:00.000Z",
+  "sample": true,
+  "steps": [
+    {
+      "title": "Check payment pipeline health",
+      "instruction": "Open payment_health_daily and confirm yesterday's success_rate is above 0.97 for both providers. If it dipped, the revenue numbers may undercount — check with the on-call before reporting anything.",
+      "why": "A payment outage silently deflates MRR. Finance has been burned by this before — always rule it out first.",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Canalytics.marts.payment_health_daily%2CPROD)",
+      "tips": "The saved query 'Payment success rate by provider' on this dataset is the fastest check."
+    },
+    {
+      "title": "Verify fct_revenue loaded cleanly",
+      "instruction": "Open fct_revenue and check the dataset's last updated time and row-count trend. Use net_amount_usd for anything you report — gross_amount_usd includes refunded charges.",
+      "why": "fct_revenue is the canonical revenue source; every downstream number is wrong if this load was partial.",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Canalytics.marts.fct_revenue%2CPROD)",
+      "sql": "SELECT MAX(revenue_date) AS latest, COUNT(*) AS rows_loaded\nFROM analytics.marts.fct_revenue\nWHERE revenue_date >= DATEADD(day, -35, CURRENT_DATE);",
+      "tips": "If latest is more than a day behind, ping Mike Rodriguez — the dbt mart job may have failed."
+    },
+    {
+      "title": "Pull the MRR rollup",
+      "instruction": "Open mrr_monthly and run the saved query 'Monthly MRR trend by plan' for the last 12 months. Copy mrr_usd and net_new_mrr_usd into the board template.",
+      "why": "This table implements the official MRR definition (glossary term MRR) — never recompute it by hand from payments.",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Canalytics.marts.mrr_monthly%2CPROD)",
+      "sql": "SELECT month, plan, mrr_usd, net_new_mrr_usd\nFROM analytics.marts.mrr_monthly\nWHERE month >= DATEADD(month, -12, CURRENT_DATE)\nORDER BY month, plan;",
+      "tips": "Board deck wants plan-level rows plus a total — the total is the SUM over plans, not a separate table."
+    }
+  ],
+  "recorded": [
+    {
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Canalytics.marts.payment_health_daily%2CPROD)",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+      "title": "payment_health_daily",
+      "note": "Always check this first after an incident-heavy month."
+    },
+    {
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Canalytics.marts.fct_revenue%2CPROD)",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+      "title": "fct_revenue",
+      "note": "net_amount_usd, never gross."
+    },
+    {
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Canalytics.marts.mrr_monthly%2CPROD)",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+      "title": "mrr_monthly",
+      "note": "Saved query has the exact board cut."
+    }
+  ],
+  "datahub": {
+    "saved": false,
+    "detail": "Sample handoff — regenerate to write back."
+  }
+}
