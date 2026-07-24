@@ -48,7 +48,7 @@ const NAV = [
 export default function Sidebar() {
   const pathname = usePathname();
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [status, setStatus] = useState<{ connected: boolean; toolCount: number } | null>(null);
+  const [status, setStatus] = useState<{ connected: boolean; toolCount: number; demo?: boolean } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,9 +92,24 @@ export default function Sidebar() {
         Settings
       </button>
 
-      <div className="status-pill" title={status?.connected ? `${status.toolCount} DataHub tools available` : "DataHub MCP not reachable"}>
+      <div
+        className="status-pill"
+        title={
+          status?.demo
+            ? "Demo mode: answering from the built-in Northbeam fixture catalog"
+            : status?.connected
+              ? `${status.toolCount} DataHub tools available`
+              : "DataHub MCP not reachable"
+        }
+      >
         <span className={`status-dot ${status ? (status.connected ? "ok" : "err") : ""}`} />
-        {status === null ? "Checking DataHub…" : status.connected ? `DataHub · ${status.toolCount} tools` : "DataHub offline"}
+        {status === null
+          ? "Checking DataHub…"
+          : status.demo
+            ? `Demo catalog · ${status.toolCount} tools`
+            : status.connected
+              ? `DataHub · ${status.toolCount} tools`
+              : "DataHub offline"}
       </div>
 
       {settingsOpen && <SettingsModal onClose={() => setSettingsOpen(false)} />}

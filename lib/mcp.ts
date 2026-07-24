@@ -1,6 +1,13 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { callDemoTool, DEMO_TOOLS } from "./demo-mcp";
 import type { ToolDef } from "./types";
+
+/** Demo mode answers all tools from the fixture Northbeam catalog — no DataHub needed. */
+export function isDemoMode(): boolean {
+  const v = (process.env.DEMO_MODE || "").toLowerCase();
+  return v === "true" || v === "1" || v === "yes";
+}
 
 /**
  * Singleton connection to the DataHub MCP server (acryl-data/mcp-server-datahub),
@@ -65,6 +72,7 @@ export async function getMcpClient(): Promise<Client> {
 
 /** List DataHub MCP tools mapped to a provider-neutral shape (cached). */
 export async function listDataHubTools(): Promise<ToolDef[]> {
+  if (isDemoMode()) return DEMO_TOOLS;
   if (state.tools) return state.tools;
   const client = await getMcpClient();
   const { tools } = await client.listTools();
@@ -83,6 +91,7 @@ export async function callDataHubTool(
   name: string,
   args: Record<string, unknown>
 ): Promise<{ content: string; isError: boolean }> {
+  if (isDemoMode()) return callDemoTool(name, args);
   const client = await getMcpClient();
   try {
     const result = await client.callTool({ name, arguments: args });
@@ -104,10 +113,10 @@ export async function callDataHubTool(
 }
 
 /** Health probe used by the UI status pill. */
-export async function mcpStatus(): Promise<{ connected: boolean; toolCount: number; error?: string }> {
+export async function mcpStatus(): Promise<{ connected: boolean; toolCount: number; demo?: boolean; error?: string }> {
   try {
     const tools = await listDataHubTools();
-    return { connected: true, toolCount: tools.length };
+    return { connected: true, toolCount: tools.length, ...(isDemoMode() ? { demo: true } : {}) };
   } catch (err) {
     return {
       connected: false,

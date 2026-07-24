@@ -37,6 +37,26 @@ It ships as two surfaces sharing one backend:
 
 ## Quick start
 
+### 0. Fastest path: demo mode (no DataHub needed)
+
+Want to see everything working in under a minute? Skip Docker entirely:
+
+```bash
+npm install
+echo "DEMO_MODE=true" > .env.local
+npm run dev
+```
+
+Open [http://localhost:3000](http://localhost:3000), paste an LLM key in
+**Settings** (Anthropic / OpenRouter / Gemini), and ask *"How do we calculate
+MRR?"*. Demo mode answers every DataHub tool call from a built-in fixture of
+the same Northbeam catalog the seed script creates — same datasets, owners,
+lineage, glossary, and saved SQL — so the full agent loop, tool traces,
+learning paths, and lineage explainer all work with zero infrastructure.
+The sidebar pill shows **Demo catalog** so you always know which mode you're in.
+
+For the real thing against a live DataHub, continue below.
+
 ### 1. Install
 
 ```bash
