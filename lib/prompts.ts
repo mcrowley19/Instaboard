@@ -54,60 +54,30 @@ When you have enough material, output the plan as a single JSON object inside a 
 Constraints: 2-4 items per day; "urn" only when you have a real URN from the catalog (omit for people/practice items if none applies); keep "detail" to one or two sentences a new hire can act on. Output ONLY the fenced JSON, no prose before or after.`;
 }
 
-export function walkthroughSystemPrompt(): string {
-  return `You are instaboard's trainer assistant. An experienced team member ("the trainer") just performed a task while instaboard watched their DataHub screen: you receive the trail of pages they visited (entity URNs, page titles, text they selected, and notes they typed). Your job is to turn that trail into a reusable step-by-step walkthrough that teaches a NEW HIRE to do the same task.
+export function handoffSystemPrompt(): string {
+  return `You are instaboard, turning a departing employee's recorded DataHub browsing session into a runbook their successor can follow step by step.
 
-Before writing anything, enrich every step with the LIVE catalog:
-- get_entities on each URN in the trail — descriptions, schema fields, owners, tags.
-- get_lineage where the task involves pipelines or impact ("upstream"/"downstream").
-- get_dataset_queries on key datasets so steps can reference real SQL.
-Never invent entities or owners — everything must come from tool results.
+You receive the raw trail: pages they visited (with entity URNs) and the notes they typed at each step. For EVERY step with a URN, look the entity up in DataHub first — get_entities for description/owners/schema, get_dataset_queries for real SQL, get_lineage when the note implies dependencies. Ground every instruction in what the catalog actually says; keep the author's notes as the voice of experience (quote or paraphrase them — never drop them).
 
-Then output the walkthrough as a single JSON object inside a \`\`\`json code fence, with EXACTLY this shape:
+Then output ONE JSON object in a \`\`\`json fence, exactly this shape:
 
 {
-  "title": "short imperative task name, e.g. 'Investigate a revenue dashboard discrepancy'",
-  "goal": "1-2 sentences: what the trainee will be able to do after this walkthrough",
+  "title": "task title (keep the author's title)",
+  "summary": "2-3 sentences: what this task is, when it's done, and what the outcome is",
   "steps": [
     {
-      "order": 1,
-      "title": "short step name",
-      "urn": "urn:li:... (the entity to open for this step — omit only if the step has no entity)",
-      "entityType": "dataset | dashboard | glossaryTerm | ...",
-      "instruction": "what to do on this page, concrete and specific",
-      "why": "why this step matters, grounded in catalog facts (owners, tags, lineage)",
-      "lookFor": "specific fields/tags/owners/queries to notice (optional)"
+      "title": "short imperative step name",
+      "instruction": "what the successor should DO on this page, concretely",
+      "why": "why this step exists — institutional knowledge, from the author's note plus catalog context",
+      "urn": "urn:li:... (from the recording, if any)",
+      "url": "the page url from the recording",
+      "sql": "a real relevant query if one exists in the catalog (omit otherwise)",
+      "tips": "gotchas: owners to ping, tags like PII/Finance to respect, thresholds (omit if none)"
     }
-  ],
-  "quiz": [ { "question": "...", "answer": "..." } ]
+  ]
 }
 
-Constraints: keep the trainer's step ORDER; merge consecutive visits to the same entity into one step; 3-10 steps; 2-3 quiz questions that check real understanding (answers grounded in the catalog); every "why" must cite something you actually fetched (an owner name, tag, lineage edge, or query). Output ONLY the fenced JSON, no prose before or after.`;
-}
-
-/** Render a generated walkthrough as the markdown document saved to DataHub. */
-export function walkthroughMarkdown(w: {
-  title: string;
-  goal: string;
-  steps: { order: number; title: string; urn?: string; instruction: string; why: string; lookFor?: string }[];
-  quiz?: { question: string; answer: string }[];
-}): string {
-  const lines = [`# ${w.title}`, "", `**Goal:** ${w.goal}`, "", "_Recorded by a trainer with instaboard; follow along in the instaboard side panel._", ""];
-  for (const s of w.steps) {
-    lines.push(`## Step ${s.order}: ${s.title}`);
-    if (s.urn) lines.push(`Entity: \`${s.urn}\``);
-    lines.push("", s.instruction, "", `**Why:** ${s.why}`);
-    if (s.lookFor) lines.push("", `**Look for:** ${s.lookFor}`);
-    lines.push("");
-  }
-  if (w.quiz?.length) {
-    lines.push("## Check your understanding", "");
-    for (const q of w.quiz) lines.push(`- **${q.question}**\n  ${q.answer}`);
-    lines.push("");
-  }
-  // Machine-readable copy so the extension can replay the walkthrough step-by-step.
-  lines.push("```json", JSON.stringify(w, null, 2), "```");
-  return lines.join("\n");
+Rules: one output step per meaningful recorded step (merge only exact duplicates); preserve the recorded order; mention real owner names when the catalog has them; never invent tables, columns, or queries. Output ONLY the fenced JSON.`;
 }
 
 export function lineageSystemPrompt(): string {

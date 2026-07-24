@@ -4,14 +4,6 @@ A Manifest V3 side panel that coaches new hires **while they browse DataHub**.
 It is a thin client: every LLM call, MCP call, and secret stays on the
 instaboard backend — the extension holds **no API keys**.
 
-Three modes (tabs at the top of the panel):
-
-- **Coach** — context-aware chat about the page you're on.
-- **Train** — for experienced team members: record yourself doing a task in
-  DataHub and instaboard turns it into a walkthrough that teaches new hires.
-- **Learn** — for new hires: follow trainer-recorded walkthroughs step by
-  step, with live "you're here" detection as you browse.
-
 ## Install (unpacked)
 
 1. Start the backend: `npm run dev` in the repo root (and have DataHub running + seeded).
@@ -66,27 +58,39 @@ When a DataHub entity is detected (blue context bar shows the dataset name):
 
 Buttons are disabled on non-DataHub pages.
 
-## Trainer mode (Train tab)
+## Handoffs: record → inherit
 
-1. Name the task (e.g. *"Check why revenue looks off"*), click **Start
-   recording**, then just do the task in DataHub. The panel watches your
-   screen's context — every entity page you visit becomes a step. Add a note
-   to the current step to explain *why* you're there; select text on the page
-   to highlight what matters.
-2. Click **Stop**, prune any accidental steps, then **Generate walkthrough**.
-   The backend agent enriches every step through the DataHub MCP server
-   (`get_entities`, `get_lineage`, `get_dataset_queries`) so instructions cite
-   real owners, tags, and saved SQL — you see every call in the tool trace.
-3. Click **Save to DataHub** — the walkthrough is written back to the catalog
-   via `save_document` (topics: `training`, `walkthrough`), so it's a normal
-   catalog document, discoverable in DataHub itself.
+**Leaving? Record your task.** Hit **● Record** in the panel header, then just
+do the task in your DataHub tab. Every page you visit is captured as a step
+(URL, title, entity URN). Type a note on each page — the "why" your successor
+can't google — and press *Add note*. Hit **■ Stop**, give the task a title and
+your name, and click *Generate runbook & save to DataHub*. The backend looks
+up every entity you touched (owners, schemas, real saved queries, lineage),
+merges in your notes, and produces a step-by-step runbook that is:
 
-## Trainee mode (Learn tab)
+- stored on the backend (`GET /api/handoffs`), and
+- **written back into DataHub** via the MCP `save_document` tool, linked to
+  the datasets it references — so it's discoverable in the catalog itself.
 
-Lists every training walkthrough found in the DataHub catalog. Open one and
-follow along: as you browse DataHub, the step matching the page on screen
-lights up ("you're here") and is checked off automatically. Progress is saved
-locally. Stuck? **Ask about this step** jumps to the Coach chat pre-loaded
-with the step's entity and instruction, and the agent answers from the live
-catalog. Each walkthrough ends with a short quiz whose answers are grounded
-in catalog facts.
+**Joining? Inherit it.** Open the **Handoffs** tab, pick a task, and replay it:
+each step shows what to do, why, real SQL, and gotchas; *Open this page ↗*
+navigates your DataHub tab to the right entity; a **📍 You're on this page**
+pill confirms when your current tab matches the step; *Ask the coach* jumps to
+chat pre-loaded with the step's context. Progress is saved per handoff.
+
+`POST /api/handoffs` request body:
+
+```json
+{
+  "title": "Monthly MRR report for the board deck",
+  "author": "Priya Patel",
+  "role": "Payments Data Lead",
+  "steps": [
+    { "url": "http://localhost:9002/dataset/…", "title": "fct_revenue | DataHub",
+      "urn": "urn:li:dataset:(…)", "note": "net_amount_usd, never gross." }
+  ]
+}
+```
+
+The response streams NDJSON: `tool_call` / `tool_result` events while the
+agent explores the catalog, then `{"type": "result", "data": <handoff>}`.

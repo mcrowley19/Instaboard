@@ -34,13 +34,16 @@ It ships as two surfaces sharing one backend:
   extension captures the URL/URN/selection of the page you're on and offers
   one-click actions ("Explain this table", "Who owns this?", "Show lineage",
   "Common SQL for this"). Thin client — no keys in the extension.
-- **🎓 Trainer & trainee modes** — an experienced teammate hits **Record** in the
-  side panel and just does a task in DataHub; instaboard captures the trail,
-  enriches every step through the DataHub MCP tools (owners, lineage, real SQL),
-  and saves the resulting step-by-step walkthrough into the catalog via
-  `save_document`. New hires open the **Learn** tab, pick a walkthrough, and
-  follow it with live "you're here" detection, auto-checked progress, grounded
-  per-step Q&A, and a closing quiz.
+- **🔁 Handoffs** — the headline feature. Someone *leaving* hits ● Record in the
+  side panel and just does their task in DataHub; every page they visit becomes
+  a step, and they annotate each one with the "why" that never makes it into
+  docs. The agent then enriches every step from the live catalog (owners, real
+  SQL, lineage, tags), producing a runbook that is saved locally **and written
+  back into DataHub via `save_document`**, linked to the datasets it touches.
+  Someone *joining* inherits it in the same panel: guided step-by-step replay
+  with "Open this page", a live "📍 You're on this page" indicator when their
+  current DataHub tab matches the step's entity, per-step "Ask the coach", and
+  tracked progress. Also browsable in the web app at `/handoffs`.
 
 ## Quick start
 
@@ -144,8 +147,8 @@ Open [http://localhost:3000](http://localhost:3000) and ask:
                │ fetch (NDJSON event stream)       │ fetch + {message, context}
 ┌──────────────▼───────────────────────────────────▼───────┐
 │  API routes (app/api/*)                                  │
-│  /chat · /learning-path · /lineage · /save-document ·    │
-│  /health — CORS-enabled for the extension                │
+│  /chat · /learning-path · /lineage · /handoffs ·         │
+│  /save-document · /health — CORS-enabled for extension   │
 │  ┌────────────────────────┐                              │
 │  │ Agent loop (lib/agent) │  LLM ⇄ tools until answered  │
 │  └───┬───────────────┬────┘                              │
