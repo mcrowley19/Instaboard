@@ -34,6 +34,13 @@ It ships as two surfaces sharing one backend:
   extension captures the URL/URN/selection of the page you're on and offers
   one-click actions ("Explain this table", "Who owns this?", "Show lineage",
   "Common SQL for this"). Thin client — no keys in the extension.
+- **🎓 Trainer & trainee modes** — an experienced teammate hits **Record** in the
+  side panel and just does a task in DataHub; instaboard captures the trail,
+  enriches every step through the DataHub MCP tools (owners, lineage, real SQL),
+  and saves the resulting step-by-step walkthrough into the catalog via
+  `save_document`. New hires open the **Learn** tab, pick a walkthrough, and
+  follow it with live "you're here" detection, auto-checked progress, grounded
+  per-step Q&A, and a closing quiz.
 
 ## Quick start
 

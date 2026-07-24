@@ -60,6 +60,38 @@ export interface ChatRequestBody {
   context?: PageContext;
 }
 
+/**
+ * One raw step captured by the extension while a trainer browses DataHub
+ * in recording mode. The backend enriches these into a Walkthrough.
+ */
+export interface RecordedStep {
+  url?: string;
+  title?: string;
+  urn?: string;
+  entityType?: string;
+  selection?: string;
+  note?: string;
+}
+
+/** One teachable step of a generated walkthrough. */
+export interface WalkthroughStep {
+  order: number;
+  title: string;
+  urn?: string;
+  entityType?: string;
+  instruction: string;
+  why: string;
+  lookFor?: string;
+}
+
+/** A trainer-recorded task, enriched from the catalog, saved back to DataHub. */
+export interface Walkthrough {
+  title: string;
+  goal: string;
+  steps: WalkthroughStep[];
+  quiz?: { question: string; answer: string }[];
+}
+
 export interface LearningPathItem {
   title: string;
   detail: string;

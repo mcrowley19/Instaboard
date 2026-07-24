@@ -21,26 +21,94 @@
     <p class="hint">The extension holds no API keys — the backend uses its own <code>.env.local</code> config.</p>
   </div>
 
+  <nav class="tabs">
+    <button class="tab active" data-view="coach">Coach</button>
+    <button class="tab" data-view="train">Train</button>
+    <button class="tab" data-view="learn">Learn</button>
+  </nav>
+
   <div id="context-bar" class="context-bar hidden">
     <span class="ctx-dot"></span>
     <span id="context-label"></span>
   </div>
 
-  <div id="quick-actions" class="quick-actions">
-    <button class="qa" data-q="Explain this table for a new hire: what is it, what are the key columns, and what should I be careful about?">Explain this table</button>
-    <button class="qa" data-q="Who owns this? Give names and roles, and who I should ask first.">Who owns this?</button>
-    <button class="qa" data-q="Show the lineage of this: where does the data come from and who consumes it downstream?">Show lineage</button>
-    <button class="qa" data-q="Show me common SQL for this table — real saved queries if there are any.">Common SQL for this</button>
+  <!-- ── Coach: context-aware chat ─────────────────────────── -->
+  <div id="view-coach" class="view">
+    <div id="quick-actions" class="quick-actions">
+      <button class="qa" data-q="Explain this table for a new hire: what is it, what are the key columns, and what should I be careful about?">Explain this table</button>
+      <button class="qa" data-q="Who owns this? Give names and roles, and who I should ask first.">Who owns this?</button>
+      <button class="qa" data-q="Show the lineage of this: where does the data come from and who consumes it downstream?">Show lineage</button>
+      <button class="qa" data-q="Show me common SQL for this table — real saved queries if there are any.">Common SQL for this</button>
+    </div>
+
+    <main id="chat"></main>
+
+    <footer class="composer">
+      <textarea id="input" rows="1" placeholder="Ask about this page or anything in the catalog…"></textarea>
+      <button id="send" class="send" title="Send">↑</button>
+    </footer>
   </div>
 
-  <main id="chat"></main>
+  <!-- ── Train: record a task, teach it forward ────────────── -->
+  <div id="view-train" class="view hidden">
+    <main class="pane">
+      <p class="pane-intro">Do a task in DataHub while instaboard records the pages you visit. It turns your trail into a step-by-step walkthrough — enriched from the catalog — and saves it to DataHub for new hires.</p>
+
+      <label class="field-label" for="rec-title">Task name</label>
+      <input id="rec-title" type="text" placeholder="e.g. Check why revenue looks off" />
+      <label class="field-label" for="rec-goal">Goal (optional)</label>
+      <input id="rec-goal" type="text" placeholder="What should a trainee be able to do afterwards?" />
+
+      <div class="rec-controls">
+        <button id="record-btn" class="btn primary">● Start recording</button>
+        <span id="rec-status" class="rec-status"></span>
+      </div>
+
+      <div id="rec-steps" class="rec-steps"></div>
+
+      <div id="rec-note-row" class="note-row hidden">
+        <input id="rec-note" type="text" placeholder="Note for the current step (why you're here)…" />
+        <button id="rec-note-add" class="btn">Add</button>
+      </div>
+
+      <button id="generate-btn" class="btn primary wide hidden">Generate walkthrough</button>
+
+      <div id="train-output"></div>
+
+      <div id="wt-preview" class="wt-preview hidden">
+        <div class="wt-preview-head">
+          <strong id="wt-preview-title"></strong>
+          <span id="wt-preview-meta" class="rec-status"></span>
+        </div>
+        <button id="save-wt-btn" class="btn primary wide">Save to DataHub</button>
+        <div id="save-result" class="hint"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- ── Learn: follow a walkthrough step by step ──────────── -->
+  <div id="view-learn" class="view hidden">
+    <main class="pane">
+      <div id="wt-list-wrap">
+        <div class="pane-head">
+          <span class="field-label">Trainings in your catalog</span>
+          <button id="wt-refresh" class="icon-btn" title="Refresh">↻</button>
+        </div>
+        <div id="wt-list" class="wt-list"></div>
+      </div>
+
+      <div id="wt-player" class="hidden">
+        <button id="wt-back" class="btn small">← All trainings</button>
+        <h2 id="wt-title" class="wt-title"></h2>
+        <p id="wt-goal" class="pane-intro"></p>
+        <div id="wt-progress" class="rec-status"></div>
+        <div id="wt-steps"></div>
+        <div id="wt-quiz"></div>
+      </div>
+    </main>
+  </div>
 
   <div id="error" class="error hidden"></div>
-
-  <footer class="composer">
-    <textarea id="input" rows="1" placeholder="Ask about this page or anything in the catalog…"></textarea>
-    <button id="send" class="send" title="Send">↑</button>
-  </footer>
 
   <script src="sidepanel.js"></script>
 </body>
