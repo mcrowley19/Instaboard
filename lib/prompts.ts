@@ -54,6 +54,32 @@ When you have enough material, output the plan as a single JSON object inside a 
 Constraints: 2-4 items per day; "urn" only when you have a real URN from the catalog (omit for people/practice items if none applies); keep "detail" to one or two sentences a new hire can act on. Output ONLY the fenced JSON, no prose before or after.`;
 }
 
+export function handoffSystemPrompt(): string {
+  return `You are instaboard, turning a departing employee's recorded DataHub browsing session into a runbook their successor can follow step by step.
+
+You receive the raw trail: pages they visited (with entity URNs) and the notes they typed at each step. For EVERY step with a URN, look the entity up in DataHub first — get_entities for description/owners/schema, get_dataset_queries for real SQL, get_lineage when the note implies dependencies. Ground every instruction in what the catalog actually says; keep the author's notes as the voice of experience (quote or paraphrase them — never drop them).
+
+Then output ONE JSON object in a \`\`\`json fence, exactly this shape:
+
+{
+  "title": "task title (keep the author's title)",
+  "summary": "2-3 sentences: what this task is, when it's done, and what the outcome is",
+  "steps": [
+    {
+      "title": "short imperative step name",
+      "instruction": "what the successor should DO on this page, concretely",
+      "why": "why this step exists — institutional knowledge, from the author's note plus catalog context",
+      "urn": "urn:li:... (from the recording, if any)",
+      "url": "the page url from the recording",
+      "sql": "a real relevant query if one exists in the catalog (omit otherwise)",
+      "tips": "gotchas: owners to ping, tags like PII/Finance to respect, thresholds (omit if none)"
+    }
+  ]
+}
+
+Rules: one output step per meaningful recorded step (merge only exact duplicates); preserve the recorded order; mention real owner names when the catalog has them; never invent tables, columns, or queries. Output ONLY the fenced JSON.`;
+}
+
 export function lineageSystemPrompt(): string {
   return `You are instaboard's lineage explainer. Given a dataset URN, use get_lineage (upstream and downstream), get_entities, and get_dataset_queries to build a plain-English explanation for a NEW HIRE.
 

@@ -10,6 +10,7 @@ export type AgentEvent =
   | { type: "text"; text: string }
   | { type: "tool_call"; id: string; name: string; args: Record<string, unknown> }
   | { type: "tool_result"; id: string; name: string; result: string; isError?: boolean }
+  | { type: "result"; data: unknown }
   | { type: "done" }
   | { type: "error"; message: string };
 
@@ -78,4 +79,48 @@ export interface LearningPath {
   summary: string;
   days: LearningPathDay[];
   generatedAt?: string;
+}
+
+/* ── Handoffs: record a workflow in DataHub, inherit it step-by-step ───── */
+
+/** One raw page visit captured by the extension while recording. */
+export interface RecordedStep {
+  url: string;
+  title?: string;
+  urn?: string;
+  entityType?: string;
+  note?: string;
+  selection?: string;
+  visitedAt?: string;
+}
+
+/** One step of the AI-enriched runbook the joiner replays. */
+export interface HandoffStep {
+  title: string;
+  instruction: string;
+  why: string;
+  urn?: string;
+  url?: string;
+  tips?: string;
+  sql?: string;
+}
+
+export interface Handoff {
+  id: string;
+  title: string;
+  author: string;
+  role?: string;
+  summary: string;
+  steps: HandoffStep[];
+  recorded: RecordedStep[];
+  createdAt: string;
+  sample?: boolean;
+  datahub?: { saved: boolean; detail?: string };
+}
+
+export interface CreateHandoffBody {
+  title?: string;
+  author?: string;
+  role?: string;
+  steps?: RecordedStep[];
 }

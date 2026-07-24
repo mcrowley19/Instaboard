@@ -32,3 +32,6 @@ __pycache__/
 # test
 coverage/
 tsconfig.tsbuildinfo
+
+# runtime user data (handoffs)
+data/
