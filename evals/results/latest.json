@@ -1,0 +1,1099 @@
+{
+  "meta": {
+    "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "mode": "demo catalog (fixture)",
+    "at": "2026-07-31 21:35 UTC"
+  },
+  "arms": [
+    {
+      "arm": "grounded",
+      "cases": [
+        {
+          "id": "revenue-tables",
+          "category": "grounding",
+          "question": "What tables do we use for revenue?",
+          "answer": "Here are the core revenue tables in the catalog, ordered by how close they are to the \"source of truth\" for reporting.\n\n| Table | Platform | Role | Owners | Health | Tags / Glossary |\n|-------|----------|------|--------|--------|-----------------|\n| **`analytics.marts.fct_revenue`** (`urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)`) | Snowflake | **Canonical revenue fact** — one row per successful payment, net of refunds. All finance dashboards and MRR rollups read from here. | Priya Patel (Payments Data Lead), Mike Rodriguez (Analytics Engineer) | ✅ Healthy — volume assertion passing | Tier1, Finance · MRR, GMV |\n| **`analytics.marts.mrr_monthly`** (`urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)`) | Snowflake | **Board-level MRR rollup** by month and plan. Downstream of `fct_revenue`; feeds Finance KPIs dashboard & monthly investor update. | Priya Patel | ✅ Healthy — freshness assertion passing (lands by 06:00 UTC) | Tier1, Finance · MRR, ARR |\n| **`northbeam_app.public.payments`** (`urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.payments,PROD)`) | Postgres | Raw payment attempts from Stripe webhook. **Includes failures/retries** — must filter `status='succeeded'` for revenue work. Upstream of `fct_revenue`. | Priya Patel, Sarah Chen (Staff Data Engineer) | ⚠️ **Open incident**: Stripe webhook retry storms producing duplicate rows during provider outages (opened 2026-07-18, still open) | Tier1, Finance |\n| **`northbeam_app.public.refunds`** (`urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.refunds,PROD)`) | Postgres | Refunds issued against payments. Joined into `fct_revenue` to compute net revenue. | Priya Patel | (no health check run) | Finance |\n| **`analytics.marts.dim_customers`** (`urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.dim_customers,PROD)`) | Snowflake | Customer dimension (lifetime aggregates). Join key for almost every mart, including revenue analyses. | Mike Rodriguez | (no health check run) | Tier1 |\n\n### Quick guidance for a new hire\n- **Start with `fct_revenue`** for any ad-hoc revenue query — it's the cleaned, net-of-refunds fact table and is healthy.\n- Use `mrr_monthly` when you need the board-ready, monthly MRR series (already aggregated).\n- **Avoid querying `payments` directly** unless you're debugging the Stripe ingestion; the open incident means duplicate rows can appear during provider outages.\n- Join `dim_customers` on `customer_id` when you need customer attributes (plan, segment, LTV, etc.).\n\nWant to see the actual SQL analysts run against `fct_revenue`, or the downstream dashboards that would break if it changed?",
+          "checks": [
+            {
+              "label": "names fct_revenue",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names the MRR rollup",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "cites a real URN",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "invents a revenue table",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 4,
+          "maxScore": 4,
+          "toolCalls": [
+            "search",
+            "get_dataset_health",
+            "get_dataset_health"
+          ],
+          "durationMs": 27316
+        },
+        {
+          "id": "mrr-computed-where",
+          "category": "grounding",
+          "question": "Where is MRR actually computed? I need the table the board deck reads from.",
+          "answer": "",
+          "checks": [
+            {
+              "label": "names mrr_monthly",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "names its upstream fact",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "cites the URN",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 3,
+          "toolCalls": [
+            "search",
+            "get_dataset_health",
+            "get_lineage",
+            "search"
+          ],
+          "durationMs": 18232,
+          "error": "openrouter returned no choices"
+        },
+        {
+          "id": "customer-id-definition",
+          "category": "grounding",
+          "question": "How is customer_id defined, and which table is the source of truth for customers?",
+          "answer": "## `customer_id` Definition & Source of Truth\n\n| Aspect | Detail |\n|--------|--------|\n| **Definition** | `customer_id` is the canonical customer key across all marts. In `dim_customers` it is typed as `number` and its description reads: **\"= users.id. Canonical customer key across all marts.\"** |\n| **Physical source** | The column originates from **`northbeam_app.public.users.id`** (Postgres) — a `bigint` primary key described as *\"Primary key. Referenced everywhere as user_id / customer_id.\"* |\n| **Analytics-layer key** | `analytics.marts.dim_customers.customer_id` — one row per user with lifetime aggregates; *\"the join key for almost every mart.\"* |\n| **Owner (source)** | Sarah Chen, Staff Data Engineer (`urn:li:corpuser:sarah.chen`) |\n| **Owner (analytics layer)** | Mike Rodriguez, Analytics Engineer (`urn:li:corpuser:mike.rodriguez`) |\n| **Health** | ✅ Both tables are healthy — no deprecation, open incidents, or failing assertions. |\n\n### Which table is the **source of truth** for customers?\n\n**`northbeam_app.public.users`** (Postgres) — the catalog explicitly labels it *\"Source-of-truth user accounts from the production app. One row per registered user. Synced to Snowflake hourly via Fivetran.\"*  \n\n`dim_customers` is the **analytics-ready dimension** built on top of it (via dbt), adding lifetime aggregates (`lifetime_revenue_usd`, `first_paid_at`, etc.) and serving as the standard join key for downstream marts.\n\n### Quick reference\n\n| Table | Platform | Role | Key column |\n|-------|----------|------|------------|\n| `northbeam_app.public.users` | Postgres | Source of truth (operational) | `id` (bigint) |\n| `analytics.marts.dim_customers` | Snowflake | Analytics dimension (one row per customer) | `customer_id` (number = users.id) |\n\n> **Tip:** When writing queries against marts, join on `dim_customers.customer_id`. If you need raw signup fields (e.g., `created_at`, raw `plan`), go to `users`.",
+          "checks": [
+            {
+              "label": "names dim_customers",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "cites the URN",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "search",
+            "get_entities",
+            "get_dataset_health",
+            "get_dataset_health"
+          ],
+          "durationMs": 17404
+        },
+        {
+          "id": "payments-owner",
+          "category": "ownership",
+          "question": "Who owns the payments pipeline? I need to ask about a discrepancy.",
+          "answer": "The payments pipeline spans a few datasets, but **Priya Patel (Payments Data Lead)** is the consistent owner across the core tables:\n\n| Dataset | Platform | Key Owners | Tier / Tags |\n|---|---|---|---|\n| `northbeam_app.public.payments` (raw Stripe webhook data) | postgres | **Priya Patel**, Sarah Chen (Staff Data Engineer) | Tier1, Finance |\n| `analytics.marts.stg_payments` (staging, deduped) | snowflake | **Mike Rodriguez** (Analytics Engineer), Priya Patel | Finance |\n| `analytics.marts.fct_revenue` (canonical revenue fact) | snowflake | **Priya Patel**, Mike Rodriguez | Tier1, Finance |\n| `analytics.marts.mrr_monthly` (board-level MRR) | snowflake | **Priya Patel** | Tier1, Finance |\n| `analytics.marts.payment_health_daily` (on-call dashboard) | snowflake | **Priya Patel** | — |\n\n**Who to ping:**\n- **Priya Patel** (`priya.patel@northbeam.io`) — owns the end-to-end pipeline and is the Payments Data Lead. Best first contact for any discrepancy.\n- **Mike Rodriguez** — owns the analytics-layer models (`stg_payments`, `fct_revenue`, `fct_churn`).\n- **Sarah Chen** — owns the raw ingestion (`payments` table).\n\n⚠️ **Open incident on the raw table:** The `payments` table has an active warning: *“Stripe webhook retry storms are producing duplicate payment rows during provider outages”* (opened 2026-07-18). If your discrepancy looks like double-counting, this is a known issue — Priya is the one to confirm whether it affects your specific case.\n\nWhich dataset are you seeing the discrepancy in? (Raw `payments`, `stg_payments`, `fct_revenue`, or `mrr_monthly`?) That’ll tell you exactly which owner to loop in.",
+          "checks": [
+            {
+              "label": "names Priya Patel",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "invents an owner",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search"
+          ],
+          "durationMs": 16146
+        },
+        {
+          "id": "growth-owner",
+          "category": "ownership",
+          "question": "Who should I ask about the product events data?",
+          "answer": "**Who to ask about product events data:**\n\n| Table | Status | Owners | Best for |\n|-------|--------|--------|----------|\n| `northbeam_app.public.events` (Postgres) | **⚠️ Deprecated** since 2025‑11‑01 — superseded by `events_sessionized` | • **James Okafor** (Senior Growth Analyst)  \\n• **Sarah Chen** (Staff Data Engineer) | Pipeline debugging only |\n| `analytics.marts.events_sessionized` (Snowflake) | **Active** — recommended for all activation/engagement analysis | • **James Okafor** (Senior Growth Analyst) | All activation & engagement analysis |\n\n**Who to ask:**\n- **James Okafor** (Senior Growth Analyst) — owns the sessionized mart and is the primary analyst for product‑events analysis.\n- **Sarah Chen** (Staff Data Engineer) — owns the raw firehose and the ingestion pipeline; ask her about pipeline/ingestion issues.\n\n**Key point:** For any activation/engagement analysis, use `analytics.marts.events_sessionized` (owned by James). The raw `northbeam_app.public.events` table is deprecated and kept only for pipeline debugging.",
+          "checks": [
+            {
+              "label": "names James Okafor",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 1,
+          "maxScore": 1,
+          "toolCalls": [
+            "search"
+          ],
+          "durationMs": 53875
+        },
+        {
+          "id": "email-blast-radius",
+          "category": "lineage",
+          "question": "What breaks if I change the email column on the users table?",
+          "answer": "",
+          "checks": [
+            {
+              "label": "names the staging model",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "names the downstream dim",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "get_lineage",
+            "get_lineage",
+            "get_lineage",
+            "get_dataset_queries",
+            "get_dataset_queries",
+            "get_dataset_health",
+            "get_dataset_health",
+            "get_dataset_health",
+            "get_dataset_health"
+          ],
+          "durationMs": 54112
+        },
+        {
+          "id": "fct-revenue-upstream",
+          "category": "lineage",
+          "question": "Where does fct_revenue get its data from?",
+          "answer": "**fct_revenue** (`urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)`) — **healthy** (volume assertion passing, no open incidents)\n\n---\n\n### Upstream Lineage (2 hops)\n\n| Hop | Source Dataset | Platform | Description | Owner(s) |\n|-----|----------------|----------|-------------|----------|\n| **1** | `analytics.marts.stg_payments` | Snowflake | Staging model over raw payments: filters to terminal states and deduplicates retries | Mike Rodriguez, Priya Patel |\n| **1** | `northbeam_app.public.orders` | Postgres | One row per checkout (one-time purchases + initial subscription order) | Sarah Chen |\n| **1** | `northbeam_app.public.refunds` | Postgres | Refunds issued against payments; joined into fct_revenue to compute net revenue | Priya Patel |\n| **2** | `northbeam_app.public.payments` | Postgres | **⚠️ Open incident** — Stripe webhook retry storms producing duplicate payment rows during provider outages (opened 2026-07-18) | Priya Patel, Sarah Chen |\n\n---\n\n### Key Notes\n\n- **stg_payments** is the primary feed — it cleans the raw `payments` table (dedupes retries, filters to `status='succeeded'`).\n- **orders** brings in purchase/subscription metadata (plan, amount, customer).\n- **refunds** is joined to subtract refunded amounts → net revenue.\n- The raw `payments` table has an **open incident** for duplicate rows during Stripe outages. Since `stg_payments` deduplicates, the impact on `fct_revenue` is mitigated, but worth knowing if you're debugging anomalies.\n\n---\n\n### Owners to talk to\n- **Priya Patel** (Payments Data Lead) — owns `refunds`, `payments`, co-owns `fct_revenue` and `stg_payments`\n- **Mike Rodriguez** (Analytics Engineer) — co-owns `stg_payments` and `fct_revenue`\n- **Sarah Chen** (Staff Data Engineer) — owns `orders`, co-owns `payments`",
+          "checks": [
+            {
+              "label": "names stg_payments",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names orders",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names refunds",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 3,
+          "maxScore": 3,
+          "toolCalls": [
+            "search",
+            "get_lineage",
+            "get_dataset_health"
+          ],
+          "durationMs": 21650
+        },
+        {
+          "id": "mrr-debug-upstream",
+          "category": "lineage",
+          "question": "The MRR number looks wrong this month. What should I check upstream?",
+          "answer": "**Upstream lineage for `mrr_monthly` (the Board-level MRR rollup):**\n\n| Hop | Dataset | Platform | Description | Owner(s) | Health |\n|-----|---------|----------|-------------|----------|--------|\n| 1 | `analytics.marts.fct_revenue` | Snowflake | Canonical revenue fact table (net of refunds). All revenue reporting reads from here. | Priya Patel, Mike Rodriguez | ✅ Healthy (volume assertion passing) |\n| 2 | `analytics.marts.stg_payments` | Snowflake | Staging model: filters to terminal states, deduplicates retries. | Mike Rodriguez, Priya Patel | ✅ Healthy |\n| 2 | `northbeam_app.public.orders` | Postgres | Checkout rows (one-time + initial subscription orders). | Sarah Chen | Unknown (not checked) |\n| 2 | `northbeam_app.public.refunds` | Postgres | Refunds joined into fct_revenue for net revenue. | Priya Patel | Unknown (not checked) |\n| 3 | `northbeam_app.public.payments` | Postgres | **Raw Stripe webhook events** — includes failures & retries. Must filter to `status='succeeded'`. | Priya Patel, Sarah Chen | ⚠️ **OPEN INCIDENT** |\n\n---\n\n### ⚠️ Critical finding: Open incident on the raw source\n\n**`northbeam_app.public.payments`** has an active warning incident (opened 2026-07-18):\n\n> **Stripe webhook retry storms are producing duplicate payment rows during provider outages**\n\nThis is the *most likely culprit* if this month's MRR looks inflated. The staging model (`stg_payments`) is supposed to deduplicate retries, but if the duplicate rows have slightly different payloads or the dedup logic missed a case, they'll flow into `fct_revenue` → `mrr_monthly`.\n\n---\n\n### What to check, in order\n\n1. **Raw payments duplicate rate this month**  \n   Query `northbeam_app.public.payments` for the current month: count rows grouped by `stripe_payment_id` (or whatever the idempotency key is) and look for `count > 1`. Compare to prior months.\n\n2. **Staging dedup effectiveness**  \n   Check `analytics.marts.stg_payments` — does its row count for the month match the *deduplicated* count from raw? Any gap means dedup missed something.\n\n3. **Revenue fact volume**  \n   `fct_revenue` has a volume assertion (≤20% day-over-day drop). If MRR is *up*, the assertion won't fire — but you can still compare this month's successful-payment row count to the same month last year.\n\n4. **Subscription lifecycle changes**  \n   `northbeam_app.public.subscriptions` (also tagged MRR/ChurnRate) drives which subscriptions are \"active\" for MRR. If a batch of annual plans was mis-categorized as monthly (or vice versa), the monthly normalization (`annual / 12`) would shift MRR. Priya Patel owns this table.\n\n5. **Refund processing**  \n   `northbeam_app.public.refunds` feeds net revenue. A missed refund batch would overstate MRR.\n\n---\n\n### Who to ping\n\n| Area | Owner | URN |\n|------|-------|-----|\n| MRR model / `mrr_monthly` | **Priya Patel** (Payments Data Lead) | `urn:li:corpuser:priya.patel` |\n| Revenue fact / staging | **Mike Rodriguez** (Analytics Engineer) | `urn:li:corpuser:mike.rodriguez` |\n| Raw payments / Stripe webhook | **Sarah Chen** (Staff Data Engineer) | `urn:li:corpuser:sarah.chen` |\n| Subscriptions table | **Priya Patel** | `urn:li:corpuser:priya.patel` |\n\n---\n\n### Quick SQL to start (suggested — not from catalog)\n\n```sql\n-- 1. Duplicate check on raw payments (run in Postgres)\nSELECT stripe_payment_id, COUNT(*) AS cnt\nFROM northbeam_app.public.payments\nWHERE created_at >= DATE_TRUNC('month', CURRENT_DATE)\n  AND status = 'succeeded'\nGROUP BY 1\nHAVING COUNT(*) > 1\nORDER BY 2 DESC;\n\n-- 2. Month-over-month successful payment volume (run in Snowflake)\nSELECT DATE_TRUNC('month', payment_ts) AS month, COUNT(*)\nFROM analytics.marts.fct_revenue\nGROUP BY 1\nORDER BY 1 DESC\nLIMIT 13;\n```\n\nStart with the raw payments duplicate check — the open incident makes it the highest-probability root cause.",
+          "checks": [
+            {
+              "label": "points at fct_revenue",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 1,
+          "maxScore": 1,
+          "toolCalls": [
+            "search",
+            "get_lineage",
+            "get_dataset_health",
+            "get_dataset_health",
+            "get_dataset_health",
+            "get_dataset_health",
+            "get_lineage",
+            "get_lineage",
+            "get_entities"
+          ],
+          "durationMs": 98145
+        },
+        {
+          "id": "deprecated-events-trap",
+          "category": "health-trap",
+          "question": "Is it safe to build a new engagement report on the raw events table?",
+          "answer": "",
+          "checks": [
+            {
+              "label": "flags it as deprecated",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "points to the replacement",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "recommends it without warning",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 3,
+          "toolCalls": [
+            "search",
+            "get_dataset_health",
+            "get_dataset_health"
+          ],
+          "durationMs": 12797,
+          "error": "openrouter returned no choices"
+        },
+        {
+          "id": "active-users-table",
+          "category": "health-trap",
+          "question": "I need to count 28-day active users. Which table should I query?",
+          "answer": "**Use `analytics.marts.events_sessionized`** (Snowflake) — it's the canonical table for activation/engagement analysis and has a dedicated column for the 28-day Active User definition.\n\n| Detail | Value |\n|--------|-------|\n| **Dataset** | `analytics.marts.events_sessionized` (`urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.events_sessionized,PROD)`) |\n| **Owner** | James Okafor (Senior Growth Analyst) |\n| **Health** | ✅ Healthy — no deprecation, open incidents, or failing assertions |\n| **Usage (30d)** | 233 queries, trending up (top user: `james.okafor`) |\n| **Key column** | `is_active_marker` (boolean) — *“Counts toward the 28-day Active User definition.”* |\n| **Glossary term** | `ActiveUser` |\n\n---\n\n### Suggested query pattern\n\n```sql\n-- 28-day active users as of a given date (e.g., yesterday)\nSELECT COUNT(DISTINCT user_id) AS active_users_28d\nFROM analytics.marts.events_sessionized\nWHERE is_active_marker = TRUE\n  AND session_start >= DATEADD(day, -28, CURRENT_DATE());  -- adjust anchor as needed\n```\n\n**Why not the raw `events` table?**  \nIt’s deprecated for this purpose (`deprecated since 2025-11-01`; replacement → `events_sessionized`). The raw firehose is kept only for pipeline debugging.\n\n**If you need user attributes** (plan, country, etc.), join to `analytics.marts.dim_customers` on `user_id = customer_id`.",
+          "checks": [
+            {
+              "label": "routes to events_sessionized",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "references the active-user marker or definition",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "get_entities",
+            "get_dataset_health",
+            "get_usage_stats"
+          ],
+          "durationMs": 25908
+        },
+        {
+          "id": "payments-open-incident",
+          "category": "health-trap",
+          "question": "Any reason to be careful using the payments table right now?",
+          "answer": "**⚠️ Yes — there's an open incident on the raw `payments` table.**\n\n| Detail | Value |\n|--------|-------|\n| **Table** | `northbeam_app.public.payments` (Postgres) |\n| **URN** | `urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.payments,PROD)` |\n| **Tags** | Tier1, Finance |\n| **Owners** | Priya Patel (Payments Data Lead), Sarah Chen (Staff Data Engineer) |\n| **Incident** | **Stripe webhook retry storms are producing duplicate payment rows during provider outages** (opened 2026-07-18, status: **open**, severity: warning) |\n| **Health** | ❌ Not healthy |\n\n**What this means for you:**\n- The raw table contains **every payment attempt**, including failures and retries.\n- During Stripe outages, retries can create **duplicate rows for the same payment** — so `count(*)` or `sum(amount)` on this table will overstate revenue.\n- The table description explicitly says: *“filter to status='succeeded' for revenue work.”*\n\n**Safer alternative:**\nUse the staging model **`analytics.marts.stg_payments`** (Snowflake) instead:\n- It **filters to terminal states** and **deduplicates retries**.\n- Owned by Mike Rodriguez (Analytics Engineer) and Priya Patel.\n- Tagged Finance (not Tier1, but the canonical cleaned version for analytics).\n\n**If you must query the raw table:**\n```sql\n-- Only count/aggregate payments that actually succeeded\nSELECT *\nFROM northbeam_app.public.payments\nWHERE status = 'succeeded'\n  -- and consider adding a dedup key if you need one row per payment_id\n```\n\n**Who to talk to:** Priya Patel (Payments Data Lead) owns both tables and is tracking the incident.",
+          "checks": [
+            {
+              "label": "surfaces the open incident",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 1,
+          "maxScore": 1,
+          "toolCalls": [
+            "search",
+            "get_dataset_health"
+          ],
+          "durationMs": 24526
+        },
+        {
+          "id": "payment-health-freshness",
+          "category": "health-trap",
+          "question": "Is payment_health_daily reliable right now? I want to use it for an on-call check.",
+          "answer": "⚠️ **payment_health_daily is NOT healthy right now** — do not rely on it for an on-call check without verifying freshness first.\n\n| Signal | Status | Details |\n|--------|--------|---------|\n| **Deprecated** | No | — |\n| **Open Incidents** | None | — |\n| **Freshness Assertion** | **FAIL** | Expected to land by 05:00 UTC daily; last check failed at `2026-07-29T05:00:00Z` |\n\n**Owner:** Priya Patel (Payments Data Lead, `urn:li:corpuser:priya.patel`) — reach out to confirm when the pipeline will catch up.\n\n**Dataset:** `urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)`\n\n**Recommendation:** Check with Priya or the Payments data team for the current ETA. If you need a fallback, ask them which upstream table(s) feed this mart — you may be able to query a fresher source directly.",
+          "checks": [
+            {
+              "label": "flags the failing assertion or staleness",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "declares it healthy",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "get_dataset_health"
+          ],
+          "durationMs": 10806
+        },
+        {
+          "id": "payments-learn-first",
+          "category": "usage",
+          "question": "I just joined the Payments team. Which table should I learn first, and why that one?",
+          "answer": "**Saved query to start with** (from `fct_revenue`):\n```sql\n-- Net revenue by customer country (last 90 days)\nSELECT c.country, SUM(r.net_amount_usd) AS net_revenue\nFROM analytics.marts.fct_revenue r\nJOIN analytics.marts.dim_customers c ON c.customer_id = r.customer_id\nWHERE r.revenue_date >= DATEADD(day, -90, CURRENT_DATE)\nGROUP BY 1 ORDER BY 2 DESC;\n```\n\n---\n\n### Who to talk to\n- **Priya Patel** (`priya.patel`) — Payments Data Lead, owns `fct_revenue`, `mrr_monthly`, `payments`, `subscriptions`, `refunds`, `payment_health_daily`\n- **Mike Rodriguez** (`mike.rodriguez`) — Analytics Engineer, owns `stg_payments`, `fct_churn`, co-owns `fct_revenue`\n- **Sarah Chen** (`sarah.chen`) — Staff Data Engineer, owns raw `payments` and `orders`\n\n---\n\n### Quick win for your first PR\nThe raw `payments` table description mentions \"filter to status='succeeded' for revenue work\" but doesn't call out the active duplicate-row incident. If you want to contribute immediately, I can draft a one-line description update for `payments` that flags the incident and points to `stg_payments` as the cleaned version. Want me to save that as a **DescriptionProposal**?",
+          "checks": [
+            {
+              "label": "picks a genuinely high-traffic table",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "justifies with real query volume",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "leads with a low-traffic staging model",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 3,
+          "maxScore": 3,
+          "toolCalls": [
+            "search",
+            "get_dataset_health",
+            "get_usage_stats",
+            "get_usage_stats",
+            "get_usage_stats",
+            "get_lineage",
+            "get_dataset_queries"
+          ],
+          "durationMs": 59884
+        },
+        {
+          "id": "stg-payments-importance",
+          "category": "usage",
+          "question": "Is stg_payments an important table for me to know?",
+          "answer": "",
+          "checks": [
+            {
+              "label": "characterizes it as staging/intermediate",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "grounds in low usage or points to the fact table",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 435,
+          "error": "openrouter returned no choices"
+        },
+        {
+          "id": "mrr-definition",
+          "category": "glossary",
+          "question": "How do we calculate MRR here?",
+          "answer": "## How MRR is Calculated Here\n\n### Canonical Definition (from Glossary)\n> **MRR (Monthly Recurring Revenue)** — \"Sum of all active subscription amounts normalized to a monthly value. Computed in `analytics.mrr_monthly` from `fct_revenue`, excluding one-time fees and refunds. Annual plans are divided by 12.\"\n\n### The Table You Should Query\n| Dataset | URN | Owner | Health |\n|---------|-----|-------|--------|\n| `analytics.marts.mrr_monthly` | `urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)` | **Priya Patel** (Payments Data Lead) | ✅ Healthy — freshness check passes (lands by 06:00 UTC daily) |\n\n**Schema** (board-level rollup by month & plan):\n| Column | Type | Notes |\n|--------|------|-------|\n| `month` | date | Calendar month |\n| `plan` | varchar | Plan slug |\n| `mrr_usd` | number(14,2) | Monthly recurring revenue (tagged **MRR**) |\n| `arr_usd` | number(14,2) | `mrr_usd × 12` (tagged **ARR**) |\n| `net_new_mrr_usd` | number(14,2) | New + expansion − contraction − churned MRR |\n\n### How It's Built (Upstream Lineage)\n```\nanalytics.marts.fct_revenue  (Tier1, Finance)\n        │\n        ▼  (filters: is_recurring = true, excludes one-time/refunds,\n            normalizes annual plans ÷ 12, aggregates by month+plan)\nanalytics.marts.mrr_monthly  (Tier1, Finance)\n```\n\n- **Source**: `analytics.marts.fct_revenue` — one row per successful payment, net of refunds. The **canonical source for all revenue reporting**.\n- **Key filter**: `is_recurring = true` (tagged **MRR** in the schema).\n- **Annual plans**: `gross_amount_usd / 12` (handled in the mart build).\n\n### Real Query Finance Runs (for the board deck)\n```sql\nSELECT month, plan, mrr_usd, net_new_mrr_usd\nFROM analytics.marts.mrr_monthly\nWHERE month >= DATEADD(month, -12, CURRENT_DATE)\nORDER BY month, plan;\n```\n\n### Related Metrics (Glossary Graph)\n- **ARR** = MRR × 12 (sourced from the same mart, reported to board monthly)\n- **ChurnRate** — uses `net_new_mrr_usd` components\n- **GMV** — tracked in `fct_revenue.gross_amount_usd` (pre-refund)\n\n### Quick Start for You\n1. **Default query**: `SELECT * FROM analytics.marts.mrr_monthly WHERE month >= DATEADD(month, -12, CURRENT_DATE)`\n2. **If you need row-level detail** (e.g., per-customer MRR): go upstream to `analytics.marts.fct_revenue` and filter `is_recurring = true`.\n3. **Owner to ping**: Priya Patel (`urn:li:corpuser:priya.patel`) — owns both the mart and the source fact table.",
+          "checks": [
+            {
+              "label": "grounds in the catalog's MRR term or table",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "relates it to a neighbouring term",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "search",
+            "get_entities",
+            "get_dataset_health",
+            "get_lineage",
+            "get_dataset_queries",
+            "get_entities"
+          ],
+          "durationMs": 75647
+        },
+        {
+          "id": "mrr-vs-arr",
+          "category": "glossary",
+          "question": "What's the difference between MRR and ARR in our metrics?",
+          "answer": "**MRR (Monthly Recurring Revenue)** — `urn:li:glossaryTerm:MRR`\n- **Definition**: Sum of all active subscription amounts normalized to a monthly value. Computed in `analytics.mrr_monthly` from `fct_revenue`, excluding one-time fees and refunds. Annual plans are divided by 12.\n- **Related terms**: ARR, ChurnRate, GMV\n\n**ARR (Annual Recurring Revenue)** — `urn:li:glossaryTerm:ARR`\n- **Definition**: MRR × 12. Reported to the board monthly; sourced from `analytics.mrr_monthly`.\n- **Related terms**: MRR\n\n---\n\n### Quick comparison\n\n| Aspect | MRR | ARR |\n|--------|-----|-----|\n| **Grain** | Monthly | Annual (derived) |\n| **Source table** | `analytics.mrr_monthly` (built from `fct_revenue`) | Same table — ARR is a simple multiplication |\n| **Exclusions** | One-time fees, refunds; annual plans ÷ 12 | Inherits MRR exclusions |\n| **Primary use** | Operational tracking, cohort analysis | Board reporting, annual planning |\n\n---\n\n### Key takeaway\nARR is a *direct derivation* of MRR (×12), not a separately computed metric. Both ultimately come from `analytics.mrr_monthly`. If you're building dashboards or alerts, use MRR for month-over-month granularity; use ARR when communicating with leadership or the board.",
+          "checks": [
+            {
+              "label": "states the ×12 relationship",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "grounds in the real column or table",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "search"
+          ],
+          "durationMs": 28182
+        },
+        {
+          "id": "churn-sql",
+          "category": "sql",
+          "question": "Show me the SQL people here use for churn analysis.",
+          "answer": "Here are the **actual saved queries** analysts run for churn analysis in this org.\n\n---\n\n### 1. Canonical churn query — **start here**\n\n| Detail | Value |\n|--------|-------|\n| **Table** | `analytics.marts.fct_churn` (Snowflake) |\n| **Owner** | Mike Rodriguez (Analytics Engineer) — `urn:li:corpuser:mike.rodriguez` |\n| **Glossary term** | `ChurnRate` |\n| **Health** | ✅ Healthy — no incidents, no failing assertions, not deprecated |\n\n**SQL** — *Churn rate by plan with 3-month rolling average*  \n```sql\nSELECT month,\n       plan,\n       churn_rate,\n       AVG(churn_rate) OVER (\n           PARTITION BY plan\n           ORDER BY month\n           ROWS BETWEEN 2 PRECEDING AND CURRENT ROW\n       ) AS churn_rate_3mo\nFROM analytics.marts.fct_churn\nORDER BY month DESC, plan;\n```\n\n> **Description in catalog:** *“The canonical churn analysis query — start here for any churn question.”*\n\n---\n\n### 2. Related MRR query (often paired with churn)\n\n| Detail | Value |\n|--------|-------|\n| **Table** | `analytics.marts.mrr_monthly` (Snowflake) |\n| **Owner** | Priya Patel (Payments Data Lead) — `urn:li:corpuser:priya.patel` |\n| **Tags** | `Tier1`, `Finance` |\n| **Glossary terms** | `MRR`, `ARR` |\n\n**SQL** — *Monthly MRR trend by plan (last 12 months)*  \n```sql\nSELECT month,\n       plan,\n       mrr_usd,\n       net_new_mrr_usd\nFROM analytics.marts.mrr_monthly\nWHERE month >= DATEADD(month, -12, CURRENT_DATE)\nORDER BY month, plan;\n```\n\n> Finance uses this for the board deck; `net_new_mrr_usd` captures expansion + churn together.\n\n---\n\n### 3. Upstream source (if you need to trace logic)\n\n| Table | Platform | Owner | Notes |\n|-------|----------|-------|-------|\n| `northbeam_app.public.subscriptions` | Postgres | Priya Patel | One row per subscription; status transitions drive churn metrics. Tagged `Tier1`, `Finance`. No saved queries on this raw table — analysts use `fct_churn` instead.\n\n---\n\n### Quick take for a new hire\n- **Default to `fct_churn`** — it’s the curated mart, has a saved canonical query, and is healthy.\n- The 3-month rolling average (`churn_rate_3mo`) is the pattern the team standardizes on.\n- If you need MRR context (expansion, contraction, net new), join or compare with `mrr_monthly`.\n- Raw `subscriptions` is the source of truth but not queried directly for analysis.",
+          "checks": [
+            {
+              "label": "uses the churn fact table",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "uses the real column",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "get_dataset_queries",
+            "get_dataset_queries",
+            "get_dataset_health",
+            "get_dataset_queries"
+          ],
+          "durationMs": 84612
+        },
+        {
+          "id": "revenue-by-country-sql",
+          "category": "sql",
+          "question": "How do I pull net revenue by customer country?",
+          "answer": "**Short answer:** Use the saved query that already exists — it joins `fct_revenue` (net revenue) to `dim_customers` (country).\n\n### Ready-to-run SQL (from catalog)\n\n```sql\nSELECT c.country,\n       SUM(r.net_amount_usd) AS net_revenue\nFROM analytics.marts.fct_revenue r\nJOIN analytics.marts.dim_customers c ON c.customer_id = r.customer_id\nWHERE r.revenue_date >= DATEADD(day, -90, CURRENT_DATE)\nGROUP BY 1\nORDER BY 2 DESC;\n```\n\n- **Tables used:**\n  - `analytics.marts.fct_revenue` (urn: `urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)`) — net_amount_usd is already net of refunds; tagged **Tier1 + Finance**; owners: Priya Patel, Mike Rodriguez.\n  - `analytics.marts.dim_customers` (urn: `urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.dim_customers,PROD)`) — country is ISO code; tagged **Tier1**; owner: Mike Rodriguez.\n- **Health:** Both tables are healthy — no deprecation, no open incidents, volume assertion passes on `fct_revenue`.\n\n### Key columns\n| Table | Column | Meaning |\n|-------|--------|---------|\n| `fct_revenue` | `net_amount_usd` | Charged amount minus refunds — **use this for revenue** |\n| `fct_revenue` | `customer_id` | FK → `dim_customers.customer_id` |\n| `fct_revenue` | `revenue_date` | Settlement date (filter window here) |\n| `dim_customers` | `customer_id` | Canonical customer key |\n| `dim_customers` | `country` | ISO country code |\n\n### If you need a different window\nChange the `WHERE` clause, e.g.:\n- **MTD:** `r.revenue_date >= DATE_TRUNC('month', CURRENT_DATE)`\n- **Last full month:** `r.revenue_date >= DATEADD(month, -1, DATE_TRUNC('month', CURRENT_DATE)) AND r.revenue_date < DATE_TRUNC('month', CURRENT_DATE)`\n\n### Who to ask\n- **Revenue logic / refunds:** Priya Patel (Payments Data Lead)\n- **Customer dimension / country mapping:** Mike Rodriguez (Analytics Engineer)",
+          "checks": [
+            {
+              "label": "uses the net column",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "joins the customer dim",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "sums the gross column as revenue",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 3,
+          "maxScore": 3,
+          "toolCalls": [
+            "search",
+            "get_entities",
+            "get_dataset_health",
+            "get_dataset_health",
+            "get_dataset_queries"
+          ],
+          "durationMs": 35645
+        },
+        {
+          "id": "fake-marketing-table",
+          "category": "hallucination",
+          "question": "What columns are in our marketing_attribution table?",
+          "answer": "There's no `marketing_attribution` table in the catalog. The catalog currently has 10 datasets, all focused on core app data (users, orders, payments, subscriptions, events, refunds) and Snowflake staging/mart models — none with \"marketing\" or \"attribution\" in the name or description.\n\n**Available datasets:**\n| Dataset | Platform | Domain | Owner(s) |\n|---------|----------|--------|----------|\n| `users` | postgres | Core | Sarah Chen |\n| `orders` | postgres | Core | Sarah Chen |\n| `payments` | postgres | Payments | Priya Patel, Sarah Chen |\n| `subscriptions` | postgres | Payments | Priya Patel |\n| `events` | postgres | Growth | James Okafor, Sarah Chen |\n| `refunds` | postgres | Payments | Priya Patel |\n| `stg_users` | snowflake | Core | Mike Rodriguez |\n| `stg_payments` | snowflake | Payments | Mike Rodriguez, Priya Patel |\n| `dim_customers` | snowflake | Core | Mike Rodriguez |\n| `fct_revenue` | snowflake | Payments | Priya Patel, Mike Rodriguez |\n\nIf you're looking for marketing/attribution data, it may:\n- Live in a different platform/schema not yet ingested\n- Be named differently (e.g., `utm_*`, `channel_*`, `campaign_*`)\n- Exist as a dbt model that hasn't been cataloged\n\nWould you like me to search for any related terms (e.g., \"utm\", \"campaign\", \"channel\") or check a specific schema?",
+          "checks": [
+            {
+              "label": "admits it is not in the catalog",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "invents a schema",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "search",
+            "search",
+            "search",
+            "search"
+          ],
+          "durationMs": 22105
+        },
+        {
+          "id": "fake-feature-store",
+          "category": "hallucination",
+          "question": "Who owns the ml_feature_store dataset?",
+          "answer": "**No dataset named `ml_feature_store` exists in the DataHub catalog.**\n\nI searched for exact matches and variations (`ml_feature`, `feature_store`, `feature`, `ml`, `store`) — none returned a dataset with that name. The catalog currently contains 10 datasets across Postgres (source) and Snowflake (marts/staging), but none are an ML feature store.\n\n**Closest candidates that might be related:**\n| Dataset | Platform | Domain | Description |\n|---------|----------|--------|-------------|\n| `events` (deprecated) | postgres | Growth | Raw product event firehose — used as raw input for feature engineering |\n| `dim_customers` | snowflake | Core | Customer dimension with lifetime aggregates — often used as a feature base |\n| `fct_revenue` | snowflake | Payments | Revenue fact table — could feed financial features |\n\n**What to do next:**\n- If you know the platform (e.g., `snowflake`, `postgres`, `redshift`) or schema, I can search more precisely.\n- If this is a new table not yet ingested into DataHub, ask your data engineering team to register it (or the dbt model that produces it).\n- If you meant a different name (e.g., `features`, `user_features`, `ml_features`), let me know and I’ll search again.",
+          "checks": [
+            {
+              "label": "admits it is not in the catalog",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "invents an owner",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "search",
+            "search",
+            "search",
+            "search",
+            "search",
+            "search",
+            "search"
+          ],
+          "durationMs": 31504
+        }
+      ],
+      "casesPassed": 15,
+      "checksPassed": 34,
+      "checksTotal": 44,
+      "toolCalls": 86,
+      "durationMs": 718931
+    },
+    {
+      "arm": "blind",
+      "cases": [
+        {
+          "id": "revenue-tables",
+          "category": "grounding",
+          "question": "What tables do we use for revenue?",
+          "answer": "SELECT table_name, description, owner\nFROM information_schema.tables\nWHERE table_schema = 'public'\n  AND (table_name ILIKE '%revenue%' OR table_name ILIKE '%transaction%' OR table_name ILIKE '%order%' OR table_name ILIKE '%subscription%' OR table_name ILIKE '%payment%')\nORDER BY table_name;",
+          "checks": [
+            {
+              "label": "names fct_revenue",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "names the MRR rollup",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "cites a real URN",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "invents a revenue table",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 4,
+          "toolCalls": [],
+          "durationMs": 3020
+        },
+        {
+          "id": "mrr-computed-where",
+          "category": "grounding",
+          "question": "Where is MRR actually computed? I need the table the board deck reads from.",
+          "answer": "**Table:** `analytics.mrr_monthly`  \n**Owner:** Data Team (maintained by @data-eng, reviewed by Finance)  \n**Board deck source:** This is the single source of truth for all MRR slides — the deck pulls from the `mrr_monthly` view in the `analytics` schema.\n\n---\n\n### Key columns\n| Column | Type | Description |\n|--------|------|-------------|\n| `month` | `date` | First day of the month (e.g., `2024-01-01`) |\n| `mrr` | `numeric(18,2)` | Total MRR at month-end (includes upgrades, downgrades, churn, new) |\n| `new_mrr` | `numeric(18,2)` | MRR from brand-new subscriptions in the month |\n| `expansion_mrr` | `numeric(18,2)` | MRR from upgrades / add-ons |\n| `contraction_mrr` | `numeric(18,2)` | MRR lost from downgrades / removals |\n| `churned_mrr` | `numeric(18,2)` | MRR lost from canceled subscriptions |\n| `net_new_mrr` | `numeric(18,2)` | `new_mrr + expansion_mrr - contraction_mrr - churned_mrr` |\n| `customer_count` | `integer` | Active subscribers at month-end |\n\n---\n\n### How it’s built (simplified lineage)\n```sql\n-- analytics.mrr_monthly is a materialized view refreshed daily at 06:00 UTC\n-- Source: analytics.subscription_events (immutable event log)\n-- Logic: \n--   1. Normalize all subscription changes to monthly buckets\n--   2. Apply proration rules (mid-cycle changes = partial MRR)\n--   3. Aggregate to month-end snapshot\n-- 4. Join to dim_customer for segment filters (plan, channel, cohort)\n```\n\n---\n\n### Quick query for your first board slide\n```sql\nSELECT\n  month,\n  mrr,\n  new_mrr,\n  expansion_mrr,\n  contraction_mrr,\n  churned_mrr,\n  net_new_mrr,\n  customer_count\nFROM analytics.mrr_monthly\nWHERE month >= '2023-01-01'\nORDER BY month;\n```\n\n---\n\n### Gotchas\n- **Do not use** `raw.stripe_invoices` or `raw.recharge_charges` directly — they’re not prorated, don’t handle mid-cycle changes, and differ from the board number by 3–7%.\n- The view is **month-end snapshot** (not daily). If you need intra-month trend, use `analytics.mrr_daily` (same logic, daily grain, owned by same team).\n- Finance locks the prior month on the 5th business day — before then, `mrr` for the current month is **preliminary**.",
+          "checks": [
+            {
+              "label": "names mrr_monthly",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names its upstream fact",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "cites the URN",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 3,
+          "toolCalls": [],
+          "durationMs": 25401
+        },
+        {
+          "id": "customer-id-definition",
+          "category": "grounding",
+          "question": "How is customer_id defined, and which table is the source of truth for customers?",
+          "answer": "**Source of truth:** `core.customers` (owned by **Data Engineering**, maintained by **Analytics Engineering**)\n\n**Primary key:** `customer_id` (UUID, generated at first order via `uuid_generate_v4()`)\n\n**How it’s created**\n- A row is inserted in `core.customers` the first time a shopper completes a paid order (`orders.status = 'paid'`).\n- The same `customer_id` is then propagated to:\n  - `core.orders.customer_id`\n  - `core.subscriptions.customer_id`\n  - `marketing.email_events.customer_id`\n  - `product.events.customer_id` (via server-side identity stitching)\n\n**Key columns**\n| Column | Type | Notes |\n|--------|------|-------|\n| `customer_id` | uuid | PK, immutable |\n| `email` | varchar(320) | Lower-cased, unique constraint |\n| `first_name`, `last_name` | varchar(100) | From checkout |\n| `created_at` | timestamptz | Order timestamp of first paid order |\n| `updated_at` | timestamptz | Last profile change (email, name, address) |\n| `is_active` | boolean | True unless GDPR delete requested |\n| `source` | varchar(50) | `'checkout'`, `'import'`, `'pos'` |\n\n**Common pitfalls**\n- Do **not** join on `email` — it can change; always use `customer_id`.\n- `core.customers` excludes guest checkouts (`orders.customer_id IS NULL`). Guest orders live only in `core.orders` with `customer_id = NULL`.\n\n**Example: current active customers**\n```sql\nSELECT customer_id, email, created_at\nFROM core.customers\nWHERE is_active\n  AND created_at >= '2024-01-01';\n```\n\n**Ownership / SLAs**\n- **Data Eng:** ingestion, schema changes, GDPR deletes (24-hr SLA).\n- **Analytics Eng:** dbt model `stg_customers` → `dim_customers` (daily refresh, 06:00 UTC).\n- **Product Analytics:** owns identity-stitching logic that backfills `customer_id` into `product.events`.",
+          "checks": [
+            {
+              "label": "names dim_customers",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "cites the URN",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 13771
+        },
+        {
+          "id": "payments-owner",
+          "category": "ownership",
+          "question": "Who owns the payments pipeline? I need to ask about a discrepancy.",
+          "answer": "**Payments pipeline owner:** **Data Engineering team** — specifically **@david.park** (Lead Data Engineer) and **@priya.shah** (Analytics Engineer).\n\n**Slack channel:** `#data-engineering-payments` (they triage discrepancies there).\n\n**Key tables they maintain:**\n- `payments.raw_stripe_events` (raw webhook payloads)\n- `payments.stg_stripe_charges` (cleaned charges)\n- `payments.fct_charges` (fact table used by Finance & Revenue)\n\n**If you need to file a ticket:** Use the Jira project **DE-PAY** with label `discrepancy`. Include the `charge_id`(s) and the time window.",
+          "checks": [
+            {
+              "label": "names Priya Patel",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "invents an owner",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 5026
+        },
+        {
+          "id": "growth-owner",
+          "category": "ownership",
+          "question": "Who should I ask about the product events data?",
+          "answer": "",
+          "checks": [
+            {
+              "label": "names James Okafor",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 1,
+          "toolCalls": [],
+          "durationMs": 347,
+          "error": "openrouter returned no choices"
+        },
+        {
+          "id": "email-blast-radius",
+          "category": "lineage",
+          "question": "What breaks if I change the email column on the users table?",
+          "answer": "Changing `users.email` (type, name, nullability, or values) is **high-risk** — it touches identity, auth, billing, marketing, and nearly every downstream model. Here’s what breaks, by category, with concrete places to check in your warehouse.\n\n---\n\n### 1. **Direct foreign-key / join dependencies** (run this to find them)\n```sql\nSELECT\n  tc.table_schema,\n  tc.table_name,\n  kcu.column_name,\n  ccu.table_schema AS referenced_schema,\n  ccu.table_name AS referenced_table,\n  ccu.column_name AS referenced_column\nFROM information_schema.table_constraints tc\nJOIN information_schema.key_column_usage kcu\n  ON tc.constraint_name = kcu.constraint_name\nJOIN information_schema.constraint_column_usage ccu\n  ON tc.constraint_name = ccu.constraint_name\nWHERE tc.constraint_type = 'FOREIGN KEY'\n  AND ccu.table_name = 'users'\n  AND ccu.column_name = 'email';\n```\n**Typical tables that FK to `users.email`:**\n| Table | Column | Owner | Why it breaks |\n|-------|--------|-------|---------------|\n| `orders` | `customer_email` | Data Eng (orders) | Order attribution, LTV calcs |\n| `subscriptions` | `customer_email` | Data Eng (subs) | Renewal logic, churn models |\n| `email_events` (SendGrid/Mailgun) | `email` | Marketing Ops | Open/click joins, suppressions |\n| `stripe_customers` | `email` | Finance | Invoice sync, payment retries |\n| `zendesk_tickets` | `requester_email` | Support | Ticket-to-user linkage |\n| `referrals` | `referrer_email` / `referred_email` | Growth | Attribution, reward payouts |\n\n---\n\n### 2. **dbT / transformation layer** (search your repo)\n```bash\ngrep -r \"users\\.email\" models/ --include=\"*.sql\"\ngrep -r \"ref('users')\" models/ --include=\"*.sql\" | grep -v \".yml\"\n```\n**Likely broken models:**\n- `stg_users` (renames/casts email)\n- `fct_orders`, `fct_subscriptions` (join on email)\n- `dim_customer` (surrogate key built from email)\n- `mart_marketing_attribution` (email-hashed joins to ad platforms)\n- `mart_support_metrics` (zendesk join)\n\n**Owners:** Analytics Engineers (ask in `#data-modeling` Slack).\n\n---\n\n### 3. **BI / Dashboards** (Looker / Mode / Tableau)\n- **Looker:** Search `users.email` in LookML — appears in `explore: users`, `view: orders`, `view: subscriptions`, `view: email_campaigns`.\n- **Mode/Tableau:** Any report joining `users` → `orders`/`subs` on email.\n- **Owners:** BI Analysts (tag `@bi-team` in PR).\n\n---\n\n### 4. **Application code & auth** (outside warehouse, but you’ll feel it)\n| System | Impact | Who to ping |\n|--------|--------|-------------|\n| **Auth0 / Firebase / custom auth** | Login, password reset, MFA | Backend Eng (`@platform`) |\n| **Stripe / Braintree** | Customer portal, invoices, webhooks | Payments Eng (`@payments`) |\n| **Braze / Iterable / Customer.io** | Segments, campaigns, transactional emails | Marketing Eng (`@martech`) |\n| **Segment / RudderStack** | `identify` calls, downstream destinations | Data Eng (`@data-platform`) |\n| **Admin internal tools** | User lookup, support impersonation | Internal Tools (`@tools`) |\n\n---\n\n### 5. **Operational / compliance pipelines**\n- **GDPR/CCPA deletion jobs** — search `email` in `pii_deletion` DAGs (Airflow/DBT).\n- **Data-dog / PagerDuty alerts** — `users.email` used in alert routing.\n- **Snowflake/Redshift row-access policies** — email may be in masking policies.\n\n---\n\n### 6. **Safe-change checklist** (do before merging)\n1. **Run the FK query above** — fix every referencing table (add new column, backfill, switch joins, drop old).\n2. **Search dbt repo** for `users.email` — update all models, run `dbt build --select +modified_models+` in CI.\n3. **Notify owners** (Slack `#data-modeling` + `@platform @payments @martech @bi-team`) with 48h notice.\n4. **Deploy in stages**:\n   - Add `email_new` column, keep `email`.\n   - Backfill `email_new` from `email` (or new source).\n   - Switch **one** downstream model at a time (start with `stg_users`).\n   - Verify row counts / join keys in staging.\n   - Drop `email` only after zero references remain (check `information_schema.column_usage`).\n5. **Update documentation** (`docs/users.md`, data catalog, ERD).\n\n---\n\n### 7. **Quick “am I safe?” query** (run after deploy)\n```sql\nSELECT\n  table_schema,\n  table_name,\n  column_name\nFROM information_schema.columns\nWHERE column_name ILIKE '%email%'\n  AND table_schema NOT IN ('information_schema', 'pg_catalog')\nORDER BY table_schema, table_name;\n```\nIf `users.email` is gone and no other table has a column named `email` that *should* have been updated, you’re clean.\n\n---\n\n**Bottom line:** Treat `users.email` as a **primary key surrogate** — changing it is a cross-team migration, not a schema tweak. Start with the FK query, tag the owners listed above, and stage the rollout.",
+          "checks": [
+            {
+              "label": "names the staging model",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names the downstream dim",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 35281
+        },
+        {
+          "id": "fct-revenue-upstream",
+          "category": "lineage",
+          "question": "Where does fct_revenue get its data from?",
+          "answer": "[{\\\"tool\\\": \\\"get_lineage\\\", \\\"arguments\\\": {\\\"table_name\\\": \\\"fct_revenue\\\", \\\"direction\\\": \\\"upstream\\\", \\\"depth\\\": 3}}]",
+          "checks": [
+            {
+              "label": "names stg_payments",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "names orders",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "names refunds",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 3,
+          "toolCalls": [],
+          "durationMs": 2393
+        },
+        {
+          "id": "mrr-debug-upstream",
+          "category": "lineage",
+          "question": "The MRR number looks wrong this month. What should I check upstream?",
+          "answer": "**Start here — 3 queries, 5 minutes**\n\n```sql\n-- 1. Spot-check the MRR fact table vs. raw subscriptions this month\nSELECT\n  date_trunc('month', mrr_month)::date AS mrr_month,\n  SUM(mrr_usd)          AS mrr_fact,\n  COUNT(DISTINCT subscription_id) AS sub_count_fact\nFROM analytics.mrr_monthly_fact\nWHERE mrr_month = date_trunc('month', CURRENT_DATE)\nGROUP BY 1;\n\n-- 2. Same month, raw subscription state (source of truth)\nSELECT\n  date_trunc('month', CURRENT_DATE)::date AS mrr_month,\n  SUM(plan_monthly_price_usd) AS mrr_raw,\n  COUNT(DISTINCT id)          AS sub_count_raw\nFROM core.subscriptions\nWHERE status = 'active'\n  AND billing_cycle_anchor <= (date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day')\n  AND (canceled_at IS NULL OR canceled_at > date_trunc('month', CURRENT_DATE));\n```\n\n**If the two totals diverge, check these 4 upstream tables in order**\n\n| Table | Owner | What to look for | Quick SQL |\n|-------|-------|------------------|-----------|\n| `core.subscription_events` | **Data Eng (Sam)** | Missing/duplicate `mrr_change` events this month (type = `new`, `churn`, `upgrade`, `downgrade`, `pause`, `resume`) | `SELECT event_type, COUNT(*), SUM(mrr_change_usd) FROM core.subscription_events WHERE event_month = date_trunc('month', CURRENT_DATE) GROUP BY 1;` |\n| `core.plans` | **Product (Mina)** | Price changes this month not reflected in `plan_monthly_price_usd` | `SELECT id, name, monthly_price_usd, updated_at FROM core.plans WHERE updated_at >= date_trunc('month', CURRENT_DATE);` |\n| `core.subscription_price_overrides` | **Growth (Jen)** | One-off discounts/prorations not expired yet | `SELECT subscription_id, price_usd, expires_at FROM core.subscription_price_overrides WHERE expires_at >= date_trunc('month', CURRENT_DATE);` |\n| `analytics.exchange_rates_daily` | **Data Eng (Sam)** | USD rate flip mid-month (if you bill in non-USD) | `SELECT date, currency, rate FROM analytics.exchange_rates_daily WHERE date >= date_trunc('month', CURRENT_DATE) ORDER BY date;` |\n\n**Common culprits (in order of frequency)**\n1. **Late-arriving `subscription_events`** — the nightly MRR build runs at 03:00 UTC; events landing after 02:45 UTC miss this month’s build. Check `core.subscription_events.created_at` vs. `event_month`.\n2. **Plan price change mid-month** — `core.plans.updated_at` after the 1st but `plan_monthly_price_usd` on `subscriptions` not backfilled.\n3. **Proration math** — `core.subscription_events.mrr_change_usd` for `upgrade`/`downgrade` uses daily proration; verify with `core.subscription_events.proration_days`.\n4. **Stuck `paused` subscriptions** — `status = 'paused'` but `mrr_usd > 0` in `mrr_monthly_fact` (should be 0).\n\n**If nothing jumps out**\n```sql\n-- Diff the two sets row-by-row\nWITH fact AS (\n  SELECT subscription_id, mrr_usd FROM analytics.mrr_monthly_fact\n  WHERE mrr_month = date_trunc('month', CURRENT_DATE)\n),\nraw AS (\n  SELECT id AS subscription_id, plan_monthly_price_usd AS mrr_usd\n  FROM core.subscriptions\n  WHERE status = 'active'\n    AND billing_cycle_anchor <= (date_trunc('month', CURRENT_DATE) + interval '1 month' - interval '1 day')\n    AND (canceled_at IS NULL OR canceled_at > date_trunc('month', CURRENT_DATE))\n)\nSELECT\n  COALESCE(f.subscription_id, r.subscription_id) AS subscription_id,\n  f.mrr_usd AS fact_mrr,\n  r.mrr_usd AS raw_mrr,\n  f.mrr_usd - r.mrr_usd AS diff\nFROM fact f\nFULL JOIN raw r USING (subscription_id)\nWHERE f.mrr_usd IS DISTINCT FROM r.mrr_usd\nORDER BY diff DESC NULLS LAST\nLIMIT 50;\n```\n\n**Who to ping**\n- **Sam (Data Eng)** — owns `mrr_monthly_fact` build & `subscription_events` pipeline\n- **Mina (Product)** — owns `plans` pricing\n- **Jen (Growth)** — owns `subscription_price_overrides`\n\nRun the three queries above; the diff query will hand you the exact `subscription_id`s to hand to Sam.",
+          "checks": [
+            {
+              "label": "points at fct_revenue",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 1,
+          "toolCalls": [],
+          "durationMs": 40532
+        },
+        {
+          "id": "deprecated-events-trap",
+          "category": "health-trap",
+          "question": "Is it safe to build a new engagement report on the raw events table?",
+          "answer": "**Short answer: No.** Don’t build reports directly on the raw Segment events table.\n\n**Why**\n- Raw events (`segment.raw_events` or the source schema equivalent) are **immutable, unpartitioned, and untested**. They contain duplicate `message_id`s, malformed JSON, and schema drift from mobile/web SDK changes.\n- The data team **does not guarantee freshness or correctness** on raw tables — they’re landing zones only.\n\n**What to use instead**\n| Table | Owner | Grain | When to use |\n|-------|-------|-------|-------------|\n| `stg_segment__events` | Data Eng (Ingest) | 1 row / event (deduped, typed, renamed) | Ad-hoc exploration, custom funnels, any new engagement logic |\n| `fct_events` | Data Eng (Core) | 1 row / event (enriched with user, session, feature flags) | Standard product engagement dashboards, retention, activation |\n| `fct_user_activity` | Data Eng (Core) | 1 row / user / day (pre-aggregated sessions, active_minutes, feature_use) | High-level engagement trends, cohort reports, executive summaries |\n\n**Starter query for a new engagement report**\n```sql\n-- Use the staged table; it’s partitioned by received_at and has tests\nSELECT\n  user_id,\n  DATE_TRUNC('day', received_at)::date AS activity_date,\n  COUNT(DISTINCT session_id)          AS sessions,\n  SUM(CASE WHEN event_type = 'track' THEN 1 END) AS track_events,\n  SUM(CASE WHEN event_name ILIKE '%purchase%' THEN 1 END) AS purchase_events\nFROM analytics.stg_segment__events\nWHERE received_at >= CURRENT_DATE - INTERVAL '90 days'\n  AND user_id IS NOT NULL\nGROUP BY 1,2\nORDER BY 2 DESC;\n```\n\n**Governance notes**\n- `stg_segment__events` is refreshed **every 15 min** via the `segment_ingest` Airflow DAG (owner: @data-eng-ingest).\n- Downstream facts (`fct_events`, `fct_user_activity`) are rebuilt **hourly** by `dbt run --select +fct_events` (owner: @data-eng-core).\n- If you need a new derived column (e.g., `is_core_action`), open a PR in `models/staging/segment/stg_segment__events.sql` — don’t hard-code it in your report.\n\n**Bottom line**: Start from `analytics.stg_segment__events`. It’s tested, documented, and the single source of truth for event-level work.",
+          "checks": [
+            {
+              "label": "flags it as deprecated",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "points to the replacement",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "recommends it without warning",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 3,
+          "toolCalls": [],
+          "durationMs": 38955
+        },
+        {
+          "id": "active-users-table",
+          "category": "health-trap",
+          "question": "I need to count 28-day active users. Which table should I query?",
+          "answer": "**Table:** `fact_user_activity` (owned by **Data Engineering**, maintained by **@data-eng-team**)\n\n**Why this table:**  \nIt’s the single source of truth for *any* user action (login, page_view, purchase, email_click, etc.) — one row per event, with a `user_id` and `event_ts`. All downstream “active user” definitions roll up from here.\n\n**Key columns**\n| Column | Type | Notes |\n|--------|------|-------|\n| `user_id` | `bigint` | FK to `dim_user.id` |\n| `event_ts` | `timestamptz` | UTC, indexed |\n| `event_type` | `varchar` | e.g., `'login'`, `'purchase'`, `'page_view'` |\n| `platform` | `varchar` | `'web'`, `'ios'`, `'android'` |\n\n**28-day active user definition (Northbeam standard)**  \nA user is “28-day active” if they have **≥ 1 event of any type** in the trailing 28 days *ending on the reporting date*.\n\n**SQL you can drop into a dashboard / dbt model**\n```sql\n-- 28-day active users as of a given reporting date\n-- Replace :reporting_date with your date (e.g., CURRENT_DATE - 1 for \"yesterday\")\nwith params as (\n    select date '{{ var(\"reporting_date\") }}' as reporting_date\n),\nactivity_window as (\n    select distinct user_id\n    from fact_user_activity f\n    cross join params p\n    where f.event_ts >= p.reporting_date - interval '27 days'\n      and f.event_ts <= p.reporting_date\n)\nselect count(*) as dau_28\nfrom activity_window;\n```\n\n**If you need it per day (time-series)**  \n```sql\nselect\n    d.reporting_date,\n    count(distinct f.user_id) as active_users_28d\nfrom (\n    select generate_series(\n               (select min(event_ts)::date from fact_user_activity),\n               current_date,\n               interval '1 day'\n           )::date as reporting_date\n) d\nleft join fact_user_activity f\n  on f.event_ts between d.reporting_date - interval '27 days' and d.reporting_date\ngroup by 1\norder by 1;\n```\n\n**Gotchas**\n- `fact_user_activity` is partitioned by `event_ts` (daily) — the window filter above prunes partitions efficiently.\n- Do **not** use `dim_user.last_seen_at` — it’s only updated nightly and lags 24 h.\n- If you need “active *subscribers* only”, join `dim_user` and filter `subscription_status = 'active'`.",
+          "checks": [
+            {
+              "label": "routes to events_sessionized",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "references the active-user marker or definition",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 17507
+        },
+        {
+          "id": "payments-open-incident",
+          "category": "health-trap",
+          "question": "Any reason to be careful using the payments table right now?",
+          "answer": "**Yes — there's a known data quality issue** with the payments table right now.\n\n### ⚠️ Active Issue\n- **Problem**: `payments` has **duplicate rows** for Stripe charges where `payment_method_type = 'card'` and `status = 'succeeded'` — roughly **3–5% of rows** in the last 60 days.\n- **Root cause**: A Stripe webhook retry bug (fixed in prod 2024-06-12) that caused double-inserts for a subset of events.\n- **Impact**: Summing `amount` or counting `id` overcounts revenue and transaction volume.\n\n### What to do instead\n| If you need… | Use this instead |\n|--------------|------------------|\n| Clean, deduplicated payments | `analytics.fct_payments` (owned by **Data Engineering**, maintained by @data-eng) |\n| Revenue recognition | `analytics.fct_revenue` (owned by **Finance Analytics**, @finance-analytics) |\n| Subscription MRR/ARR | `analytics.fct_subscriptions` (owned by **Product Analytics**, @product-analytics) |\n\n### Quick deduplication pattern (if you must query raw `payments`)\n```sql\nSELECT DISTINCT ON (stripe_charge_id)\n  id,\n  stripe_charge_id,\n  customer_id,\n  amount,\n  currency,\n  status,\n  payment_method_type,\n  created_at\nFROM raw.stripe_payments\nWHERE status = 'succeeded'\n  AND payment_method_type = 'card'\nORDER BY stripe_charge_id, created_at DESC;\n```\n> `stripe_charge_id` is the idempotency key — keep the latest row per charge.\n\n### Owners to ping\n- **Data Engineering** (Slack: `#data-engineering`) — owns the raw → analytics pipeline fix\n- **Finance Analytics** (Slack: `#finance-analytics`) — validates revenue numbers\n\n**Bottom line**: For any production metric or dashboard, use `analytics.fct_payments` or `analytics.fct_revenue`. Avoid raw `raw.stripe_payments` until the backfill completes (ETA: 2024-07-15).",
+          "checks": [
+            {
+              "label": "surfaces the open incident",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 1,
+          "maxScore": 1,
+          "toolCalls": [],
+          "durationMs": 14279
+        },
+        {
+          "id": "payment-health-freshness",
+          "category": "health-trap",
+          "question": "Is payment_health_daily reliable right now? I want to use it for an on-call check.",
+          "answer": "I don't have any information about a `payment_health_daily` table in the current warehouse documentation — it’s not listed among the core tables, metrics, or data quality notes.\n\nBefore using it for an on-call check:\n\n1. **Verify it exists**  \n   ```sql\n   SELECT * FROM information_schema.tables \n   WHERE table_schema = 'analytics' \n     AND table_name = 'payment_health_daily';\n   ```\n\n2. **Check freshness & ownership**  \n   If it exists, run:\n   ```sql\n   SELECT \n     MAX(partition_date) AS latest_partition,\n     COUNT(*) AS row_count\n   FROM analytics.payment_health_daily;\n   ```\n   Then ask in `#data-engineering` or check the table’s `meta.owner` tag (dbt) / `TABLES` view for the owner.\n\n3. **Look for data-quality flags**  \n   - Any `data_quality_warnings` column or associated `data_quality` schema table?  \n   - Recent incidents in the on-call runbook or `#data-alerts`?\n\nIf you can’t confirm freshness < 4 h and a clear owner, **don’t rely on it for paging decisions** — fall back to the core tables (`orders`, `refunds`, `subscription_events`) with the join patterns in the docs.",
+          "checks": [
+            {
+              "label": "flags the failing assertion or staleness",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "declares it healthy",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 10630
+        },
+        {
+          "id": "payments-learn-first",
+          "category": "usage",
+          "question": "I just joined the Payments team. Which table should I learn first, and why that one?",
+          "answer": "**Start with `core.fct_transactions` — it’s the single source of truth for every payment event that touches Northbeam.**\n\nWhy this one first\n- **Covers the full lifecycle**: authorization → capture → refund → chargeback → payout.  \n- **One row per financial event** (not per order), so you can reconcile to Stripe, Adyen, Braintree, and bank statements without joining through orders or subscriptions.  \n- **All downstream Payments metrics** (net revenue, refund rate, chargeback ratio, payout latency, MRR waterfall) are built on top of this table.  \n- **Owned by Payments Engineering** (Slack `#payments-eng`, on-call rotation `payments-oncall`); schema changes go through their RFC process.\n\nKey columns you’ll use daily\n| Column | Grain / Meaning |\n|--------|-----------------|\n| `transaction_id` | PK — unique per event (Stripe `ch_…`, Adyen `pspReference`, etc.) |\n| `event_type` | `authorization`, `capture`, `refund`, `chargeback`, `chargeback_reversal`, `payout` |\n| `status` | `succeeded`, `failed`, `pending`, `cancelled` |\n| `amount_cents` | Signed: positive for inbound, negative for outbound |\n| `currency` | ISO-4217 |\n| `merchant_account_id` | Maps to PSP merchant account (needed for payout reconciliation) |\n| `order_id` / `subscription_id` | FK to `core.dim_orders` / `core.dim_subscriptions` (nullable for standalone payouts) |\n| `processed_at` | Event timestamp in UTC (use for daily/hourly aggregations) |\n| `settled_at` | When funds actually moved (null until settled) |\n| `fee_cents` | PSP fee broken out separately |\n| `risk_score` | Internal fraud score (0–100) |\n| `idempotency_key` | Your deduplication key for retries |\n\nQuick “hello world” query\n```sql\n-- Daily net revenue (captures − refunds − chargebacks) in USD\nSELECT\n  DATE(processed_at) AS day,\n  SUM(CASE WHEN event_type = 'capture'       THEN amount_cents ELSE 0 END) / 100.0 AS gross_captured_usd,\n  SUM(CASE WHEN event_type = 'refund'        THEN amount_cents ELSE 0 END) / 100.0 AS refunded_usd,\n  SUM(CASE WHEN event_type = 'chargeback'    THEN amount_cents ELSE 0 END) / 100.0 AS charged_back_usd,\n  SUM(CASE WHEN event_type IN ('capture','refund','chargeback') THEN amount_cents ELSE 0 END) / 100.0 AS net_revenue_usd\nFROM core.fct_transactions\nWHERE currency = 'USD'\n  AND status = 'succeeded'\n  AND processed_at >= DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)\nGROUP BY 1\nORDER BY 1;\n```\n\nNext tables to bookmark (once you’re comfortable)\n1. `core.dim_merchant_accounts` — PSP credentials, settlement schedules, fee tiers.  \n2. `core.fct_payouts` — Bank-level payout batches (reconcile `merchant_account_id` + `settled_at`).  \n3. `core.fct_chargeback_cases` — Evidence submission, win/loss, arbitration status.  \n4. `analytics.mart_mrr_waterfall` — Final MRR movements (built on `fct_transactions` + subscriptions).\n\nAsk `#payments-eng` for the **“Payments Data Dictionary”** Confluence page — it has the full enum list for `event_type`, `status`, and the fee-calculation logic.",
+          "checks": [
+            {
+              "label": "picks a genuinely high-traffic table",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "justifies with real query volume",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "leads with a low-traffic staging model",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 2,
+          "maxScore": 3,
+          "toolCalls": [],
+          "durationMs": 15201
+        },
+        {
+          "id": "stg-payments-importance",
+          "category": "usage",
+          "question": "Is stg_payments an important table for me to know?",
+          "answer": "**Yes — `stg_payments` is a core staging table** you'll use constantly. It's the cleaned, typed, and deduplicated version of raw payment events (Stripe, Braintree, PayPal, manual invoices) and the **single source of truth for revenue recognition** downstream.\n\n---\n\n### What it contains (key columns)\n\n| column | type | notes |\n|--------|------|-------|\n| `payment_id` | string | PK — stable across sources |\n| `customer_id` | string | FK → `stg_customers.customer_id` |\n| `subscription_id` | string | FK → `stg_subscriptions.subscription_id` (nullable for one-off) |\n| `amount_usd` | numeric(12,2) | **always USD**, converted at transaction FX rate |\n| `currency` | string | original currency |\n| `fx_rate` | numeric(10,6) | rate used for USD conversion |\n| `status` | enum | `succeeded`, `failed`, `refunded`, `disputed`, `pending` |\n| `type` | enum | `subscription_charge`, `one_time`, `refund`, `dispute`, `credit_note` |\n| `occurred_at` | timestamp_tz | when the money moved (not when we ingested it) |\n| `source` | enum | `stripe`, `braintree`, `paypal`, `manual` |\n| `source_invoice_id` | string | for reconciliation to invoices |\n| `metadata` | jsonb | raw provider payload (kept for audits) |\n\n---\n\n### Why it matters for you\n- **All revenue models** (`fct_mrr`, `fct_arr`, `fct_revenue`, `fct_cash_flow`) build on this.\n- **Churn / expansion / contraction** logic lives in `int_subscription_events`, which joins `stg_payments` → `stg_subscriptions`.\n- **Finance reconciliation** (`finance.monthly_revenue_recognition`) expects `stg_payments` to be complete and deduplicated.\n\n---\n\n### Ownership & SLAs\n| aspect | owner |\n|--------|-------|\n| Table definition / dbt model | **Data Engineering** (`@de-platform` slack) |\n| Business logic (what counts as revenue) | **Revenue Accounting** (`#finance-revenue` slack) |\n| Freshness SLA | **< 15 min** after payment webhook lands (Airflow DAG `payments_stg_hourly`) |\n| Data quality tests | `unique_payment_id`, `not_null_customer_id`, `amount_usd > 0` for succeeded |\n\n---\n\n### Common gotchas\n1. **Refunds are separate rows** (negative `amount_usd`, `type = 'refund'`). Don’t filter them out unless you explicitly want *net* revenue.\n2. **Disputes** appear as `status = 'disputed'` with positive amount; the reversal comes later as a refund row.\n3. **Manual invoices** (`source = 'manual'`) have no webhook — they’re upserted via a daily CSV drop. Check `metadata.manual_entry_by` if something looks off.\n4. **FX rates** are snapshotted at `occurred_at` from `ref_fx_rates_daily`. Do **not** re-convert — use `amount_usd`.\n\n---\n\n### Minimal useful query (your “hello world”)\n\n```sql\n-- Net successful revenue by month (USD)\nSELECT\n    date_trunc('month', occurred_at)::date AS month,\n    SUM(amount_usd) AS net_revenue_usd\nFROM analytics.stg_payments\nWHERE status = 'succeeded'\n  AND type IN ('subscription_charge', 'one_time')\nGROUP BY 1\nORDER BY 1;\n```\n\n---\n\n### Where to look next\n- **dbt docs** → `models/staging/stg_payments.sql` (lineage, tests, column descriptions)\n- **Data Dictionary** (Notion) → “Payments” page — business definitions for each `type`/`status`\n- **Slack** → `#data-warehouse` for “why does this payment look weird?” questions\n\n---\n\n**Bottom line:** Treat `stg_payments` as the *fact table* for anything money-related. If you’re writing a model that touches revenue, start here.",
+          "checks": [
+            {
+              "label": "characterizes it as staging/intermediate",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "grounds in low usage or points to the fact table",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 35000
+        },
+        {
+          "id": "mrr-definition",
+          "category": "glossary",
+          "question": "How do we calculate MRR here?",
+          "answer": "**MRR Definition at Northbeam**  \n*Owner: Finance (verified by Data team)*  \n*Source of truth: `finance.mrr_daily` (materialized view, refreshed hourly)*  \n\n---\n\n### **Core Logic**\nMRR = Sum of **monthly-normalized recurring revenue** from **active, non-trial subscriptions** as of each day.  \n\nKey rules:\n- **Excludes**: trials, one-time charges, paused/canceled subs, usage-based overages\n- **Includes**: discounts (coupons, volume), prorated mid-cycle changes\n- **Multi-currency**: converted to USD at **daily spot rate** (`finance.fx_rates_daily`)\n- **Billing cycles**: monthly, quarterly, annual → all normalized to monthly\n\n---\n\n### **Primary Tables**\n| Table | Purpose |\n|-------|---------|\n| `billing.subscriptions` | Subscription lifecycle (status, plan, dates) |\n| `billing.subscription_items` | Line items (price, quantity, billing_cycle) |\n| `billing.plans` | Plan metadata (interval, amount, currency) |\n| `finance.fx_rates_daily` | Daily FX rates (base: USD) |\n\n---\n\n### **SQL: Recreate Daily MRR (for backfill/audit)**\n```sql\nWITH active_subs AS (\n  SELECT\n    s.id AS subscription_id,\n    s.customer_id,\n    s.status,\n    s.started_at,\n    s.canceled_at,\n    si.plan_id,\n    si.quantity,\n    si.unit_amount,           -- in plan currency\n    si.currency,\n    p.billing_interval,       -- 'month', 'quarter', 'year'\n    p.amount AS plan_amount,  -- redundant with si.unit_amount, but canonical\n    DATE_TRUNC('day', d.dt)::DATE AS mrr_date\n  FROM billing.subscriptions s\n  JOIN billing.subscription_items si ON si.subscription_id = s.id\n  JOIN billing.plans p ON p.id = si.plan_id\n  CROSS JOIN LATERAL generate_series(\n    GREATEST(s.started_at, '2023-01-01'::DATE),\n    COALESCE(s.canceled_at, CURRENT_DATE),\n    INTERVAL '1 day'\n  ) AS d(dt)\n  WHERE s.status IN ('active', 'past_due')      -- excludes 'trialing', 'paused', 'canceled'\n    AND si.unit_amount > 0\n),\nnormalized AS (\n  SELECT\n    mrr_date,\n    subscription_id,\n    customer_id,\n    (unit_amount * quantity) / \n      CASE billing_interval\n        WHEN 'month'  THEN 1\n        WHEN 'quarter' THEN 3\n        WHEN 'year'   THEN 12\n      END AS mrr_plan_currency,\n    currency\n  FROM active_subs\n),\nusd AS (\n  SELECT\n    mrr_date,\n    SUM(mrr_plan_currency * fx.rate) AS mrr_usd\n  FROM normalized n\n  JOIN finance.fx_rates_daily fx \n    ON fx.currency = n.currency \n   AND fx.dt = n.mrr_date\n  GROUP BY mrr_date\n)\nSELECT * FROM usd ORDER BY mrr_date;\n```\n\n---\n\n### **Common Pitfalls**\n| Issue | Fix |\n|-------|-----|\n| Using `invoices` instead of subscriptions | Invoices include one-time, usage, failed payments — **don’t** |\n| Forgetting FX conversion | Always join `finance.fx_rates_daily` on `dt = mrr_date` |\n| Counting trial conversions early | Trials excluded until `status = 'active'` (webhook from Stripe) |\n| Mid-cycle plan changes | Proration handled in `subscription_items.unit_amount` at change time |\n\n---\n\n### **Quick Reference**\n| Need | Use |\n|------|-----|\n| Current MRR | `SELECT mrr_usd FROM finance.mrr_daily WHERE mrr_date = CURRENT_DATE - 1;` |\n| MRR by plan | Group by `plan_id` in `normalized` CTE above |\n| Net New MRR | `finance.mrr_movements` (breaks into new, expansion, contraction, churn) |\n| ARR | `mrr_usd * 12` from `finance.mrr_daily` |\n\n---\n\n**Validate**: Compare your query output to `finance.mrr_daily` for last 7 days — should match within $1 (rounding).",
+          "checks": [
+            {
+              "label": "grounds in the catalog's MRR term or table",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "relates it to a neighbouring term",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 40277
+        },
+        {
+          "id": "mrr-vs-arr",
+          "category": "glossary",
+          "question": "What's the difference between MRR and ARR in our metrics?",
+          "answer": "Northbeam defines **MRR (Monthly Recurring Revenue)** and **ARR (Annual Recurring Revenue)** as normalized, point-in-time metrics on the **account** level. They live in the **`metrics.arr_account_daily`** table (owned by the Data Platform team; source-of-truth for all recurring-revenue reporting).\n\n---\n\n### 1. Core difference\n\n| Metric | Formula | Grain | Typical use |\n|--------|---------|-------|-------------|\n| **MRR** | Sum of each active subscription’s **monthly** recurring charge | Account × day | Operational dashboards, cohort retention, CSM quota |\n| **ARR** | `MRR × 12` | Account × day | Board decks, investor updates, valuation multiples |\n\n> **Rule of thumb:** *ARR is always exactly 12 × MRR for the same account on the same day.* No separate annual contracts or upsell logic—just a straight multiplication.\n\n---\n\n### 2. Where the numbers come from\n\n| Table | Key columns | Notes |\n|-------|-------------|-------|\n| `metrics.arr_account_daily` | `account_id`, `date`, `mrr_usd`, `arr_usd`, `currency`, `status` | Partitioned by `date`; updated nightly by the **`dbt_arr_account_daily`** model (owner: @data-platform). |\n| `stripe.subscriptions` (raw) | `subscription_id`, `account_id`, `plan_interval`, `plan_amount_cents`, `status`, `current_period_start`, `current_period_end` | Source of truth for plan-level amounts; the dbt model normalizes to monthly. |\n\n**Normalization logic (simplified from the dbt model):**\n```sql\n-- monthly amount per subscription\nCASE\n  WHEN plan_interval = 'month'  THEN plan_amount_cents / 100.0\n  WHEN plan_interval = 'year'   THEN plan_amount_cents / 100.0 / 12\n  WHEN plan_interval = 'quarter' THEN plan_amount_cents / 100.0 / 3\n  ELSE 0\nEND AS mrr_usd\n```\nOnly subscriptions with `status IN ('active','trialing')` are included. Paused, canceled, or past_due subs are excluded the day they enter that state.\n\n---\n\n### 3. Common query patterns\n\n**Latest MRR/ARR per account (today):**\n```sql\nSELECT account_id,\n       mrr_usd,\n       arr_usd\nFROM metrics.arr_account_daily\nWHERE date = (SELECT max(date) FROM metrics.arr_account_daily)\n  AND status = 'active';\n```\n\n**Company-wide MRR trend (last 30 days):**\n```sql\nSELECT date,\n       SUM(mrr_usd) AS total_mrr_usd,\n       SUM(arr_usd) AS total_arr_usd\nFROM metrics.arr_account_daily\nWHERE date >= CURRENT_DATE - INTERVAL '30 days'\nGROUP BY 1\nORDER BY 1;\n```\n\n**Net-new MRR in a month (expansion – contraction – churn):**\n```sql\nWITH daily AS (\n  SELECT date,\n         account_id,\n         mrr_usd,\n         LAG(mrr_usd) OVER (PARTITION BY account_id ORDER BY date) AS prev_mrr\n  FROM metrics.arr_account_daily\n  WHERE date BETWEEN '2024-06-01' AND '2024-06-30'\n)\nSELECT date,\n       SUM(CASE WHEN mrr_usd > prev_mrr THEN mrr_usd - prev_mrr ELSE 0 END) AS expansion_mrr,\n       SUM(CASE WHEN mrr_usd < prev_mrr THEN prev_mrr - mrr_usd ELSE 0 END) AS contraction_mrr,\n       SUM(CASE WHEN prev_mrr > 0 AND mrr_usd = 0 THEN prev_mrr ELSE 0 END) AS churned_mrr\nFROM daily\nGROUP BY 1\nORDER BY 1;\n```\n\n---\n\n### 4. Gotchas to know\n\n| Issue | Resolution |\n|-------|------------|\n| **Multi-currency accounts** | `mrr_usd` / `arr_usd` are already FX-converted at the **daily spot rate** (from `fx.rates_daily`). Do not re-convert. |\n| **Mid-cycle plan changes** | Stripe sends a new `subscription` row; the dbt model picks it up the next daily run. MRR/ARR reflect the new amount from the change date forward. |\n| **Trial conversions** | While `status = 'trialing'`, MRR = $0. The day it flips to `active`, the full plan amount appears. |\n| **Backfills** | If Stripe webhooks are delayed, the nightly job backfills up to 7 days. Always filter `date < CURRENT_DATE` for final numbers. |\n\n---\n\n### 5. Who to ping\n\n| Need | Slack / Owner |\n|------|---------------|\n| Schema change / new column in `arr_account_daily` | **#data-platform** → @data-platform-oncall |\n| Business logic question (e.g., “should paused subs count?”) | **#revops-analytics** → @revops-lead |\n| Stripe webhook / raw data issues | **#eng-payments** → @payments-oncall |\n\n---\n\n**TL;DR:** Use `metrics.arr_account_daily.mrr_usd` for monthly operating metrics; multiply by 12 (or read `arr_usd`) for annualized views. Both are maintained by Data Platform and refreshed nightly.",
+          "checks": [
+            {
+              "label": "states the ×12 relationship",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "grounds in the real column or table",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 27754
+        },
+        {
+          "id": "churn-sql",
+          "category": "sql",
+          "question": "Show me the SQL people here use for churn analysis.",
+          "answer": "select * from `northbeam-core.northbeam_docs.analyses` where title like '%churn%' limit 5",
+          "checks": [
+            {
+              "label": "uses the churn fact table",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "uses the real column",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 1904
+        },
+        {
+          "id": "revenue-by-country-sql",
+          "category": "sql",
+          "question": "How do I pull net revenue by customer country?",
+          "answer": "**Tables to use**\n- `core.fct_orders` — one row per order; has `net_revenue` (USD, after discounts/returns) and `customer_id`\n- `core.dim_customers` — one row per customer; has `country` (ISO-2 code) and `customer_id`\n\n**Owner**: `core` schema is owned by the **Analytics Engineering** team (Slack #analytics-eng).\n\n**SQL**\n\n```sql\nSELECT\n    c.country,\n    SUM(o.net_revenue) AS net_revenue_usd\nFROM core.fct_orders AS o\nJOIN core.dim_customers AS c\n    ON o.customer_id = c.customer_id\nWHERE o.is_net_revenue_valid  -- excludes test / voided orders\nGROUP BY c.country\nORDER BY net_revenue_usd DESC;\n```\n\n**Notes**\n- `net_revenue` is already net of discounts, refunds, and taxes.\n- If you need the customer’s *billing* country instead of shipping country, use `c.billing_country` (same table).\n- For large scans, add `WHERE o.ordered_at >= DATEADD(month, -12, CURRENT_DATE)` or partition prune on `ordered_at`.",
+          "checks": [
+            {
+              "label": "uses the net column",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "joins the customer dim",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "sums the gross column as revenue",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 2,
+          "maxScore": 3,
+          "toolCalls": [],
+          "durationMs": 7321
+        },
+        {
+          "id": "fake-marketing-table",
+          "category": "hallucination",
+          "question": "What columns are in our marketing_attribution table?",
+          "answer": "There isn't a table named exactly `marketing_attribution` in the warehouse. The attribution data lives across several tables in the **Attribution** domain (owned by **Navin**), primarily:\n\n| Table | Key Columns | Notes |\n|-------|-------------|-------|\n| `attribution_customer_journey` | `journey_id`, `customer_id`, `touchpoint_count`, `first_touch_at`, `last_touch_at`, `conversion_at`, `total_revenue`, `attribution_model` | One row per converting customer journey |\n| `attribution_touchpoints` | `touchpoint_id`, `journey_id`, `sequence_number`, `channel`, `source`, `medium`, `campaign`, `content`, `term`, `clicked_at`, `cost`, `impressions`, `clicks` | Individual touchpoints per journey |\n| `attribution_channel_performance` | `date`, `channel`, `source`, `medium`, `campaign`, `touchpoints`, `conversions`, `revenue`, `cost`, `roas`, `cpa` | Daily aggregated channel metrics |\n| `attribution_model_comparison` | `model_name`, `channel`, `attributed_revenue`, `attributed_conversions`, `weight` | Side-by-side model comparison |\n\n**Common pattern:** Join `attribution_touchpoints` → `attribution_customer_journey` on `journey_id` to get full path + conversion info.\n\nIf you need a specific slice (e.g., \"last-click revenue by campaign last 30 days\"), I can write the exact query.",
+          "checks": [
+            {
+              "label": "admits it is not in the catalog",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "invents a schema",
+              "kind": "must-not-include",
+              "passed": false,
+              "offender": "attribution_model"
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 11942
+        },
+        {
+          "id": "fake-feature-store",
+          "category": "hallucination",
+          "question": "Who owns the ml_feature_store dataset?",
+          "answer": "This information isn't in the provided context docs.\n\n**Where to check:**\n1. **Data catalog / governance tool** (e.g., Atlan, Alation, DataHub) — search for `ml_feature_store` and look for the \"Owner\" or \"Steward\" field.\n2. **dbt `meta` or `config`** — if the dataset is built with dbt, check `models/ml/` or `models/feature_store/` for `owner:` in `meta` or `config(meta={owner: \"...\"})`.\n3. **BigQuery/Information Schema** — run:\n   ```sql\n   SELECT\n     table_catalog, table_schema, table_name,\n     option_value AS owner\n   FROM `project_id`.region-us.INFORMATION_SCHEMA.TABLE_OPTIONS\n   WHERE table_schema = 'ml_feature_store'\n     AND option_name = 'labels'\n     AND option_value LIKE '%owner%';\n   ```\n4. **Ask in Slack** — `#data-engineering` or `#ml-platform` usually knows.\n\nIf you find the owner, add it to the dbt `meta` so it’s discoverable next time.",
+          "checks": [
+            {
+              "label": "admits it is not in the catalog",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "invents an owner",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 13606
+        }
+      ],
+      "casesPassed": 5,
+      "checksPassed": 21,
+      "checksTotal": 44,
+      "toolCalls": 0,
+      "durationMs": 360147
+    }
+  ]
+}
