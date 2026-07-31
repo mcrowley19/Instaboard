@@ -105,6 +105,54 @@ export interface HandoffStep {
   sql?: string;
 }
 
+/**
+ * The catalog facts a runbook step leaned on, captured when it was written.
+ * Re-reading these later is how instaboard knows a runbook has gone stale.
+ */
+export interface EntitySnapshot {
+  urn: string;
+  name?: string;
+  exists: boolean;
+  fields: string[];
+  owners: string[];
+  deprecated: boolean;
+  openIncidents: number;
+  failingAssertions: number;
+  capturedAt: string;
+}
+
+export type DecaySeverity = "ok" | "warning" | "broken";
+
+export type DecayKind =
+  | "entity-missing"
+  | "column-missing"
+  | "newly-deprecated"
+  | "deprecated"
+  | "new-incident"
+  | "failing-assertion"
+  | "owner-changed";
+
+export interface DecayFinding {
+  stepIndex: number;
+  stepTitle: string;
+  urn: string;
+  severity: DecaySeverity;
+  kind: DecayKind;
+  detail: string;
+  remedy?: string;
+}
+
+export interface DecayReport {
+  handoffId: string;
+  checkedAt: string;
+  severity: DecaySeverity;
+  stepsChecked: number;
+  entitiesChecked: number;
+  /** False for runbooks written before snapshotting — absolute checks only. */
+  hadSnapshot: boolean;
+  findings: DecayFinding[];
+}
+
 export interface Handoff {
   id: string;
   title: string;
@@ -116,6 +164,10 @@ export interface Handoff {
   createdAt: string;
   sample?: boolean;
   datahub?: { saved: boolean; detail?: string };
+  /** Catalog state at record time, keyed by URN — the decay baseline. */
+  snapshots?: Record<string, EntitySnapshot>;
+  /** Result of the most recent validation run against live DataHub. */
+  decay?: DecayReport;
 }
 
 export interface CreateHandoffBody {

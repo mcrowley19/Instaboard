@@ -1,55 +1,109 @@
 # ⚡ instaboard
 
-**Turn your DataHub catalog into a personal tutor for new data hires.**
+**When a data engineer leaves, their knowledge leaves with them. instaboard captures
+it into DataHub — and tells you when it goes stale.**
 
-When someone joins a data team, they don't know which tables matter, who owns the
-pipelines, or how metrics are defined. instaboard is an AI onboarding copilot that
-answers those questions from your organization's **live DataHub catalog** — not
-generic docs — via the official [DataHub MCP Server](https://github.com/acryldata/mcp-server-datahub).
+Every data team has the same two failures. Someone joins and spends three weeks
+finding out which of the four revenue tables is the real one. Someone leaves and
+takes with them the reason step 2 exists — the thing that was never in any doc.
 
-It ships as two surfaces sharing one backend:
+instaboard is a DataHub-native agent for both halves of that problem:
 
-- **Web app (the brain)** — chat, learning paths, lineage explainer, progress, settings
-- **Chrome extension (the coach)** — a side panel that follows you *inside* DataHub,
-  detects the entity on screen, and answers "explain this table" in place
-  ([install instructions](extension/README.md))
+- **Capture** — someone leaving hits ● Record and just *does the task* in DataHub.
+  Every page becomes a step; they annotate the "why." The agent enriches each step
+  from the live catalog (owners, real SQL, lineage, health) and writes the finished
+  runbook back into DataHub via `save_document`.
+- **Inherit** — someone joining replays it step by step in a side panel *next to
+  DataHub*, with a live "you're on this page" indicator and per-step "ask the coach."
+- **Validate** — and because captured knowledge rots, instaboard re-checks every
+  runbook against live DataHub: columns that vanished, tables since deprecated,
+  assertions now failing, owners who no longer own the thing. Findings are written
+  back to the catalog so the staleness is visible where the runbook lives.
 
-> *"What tables do we use for revenue?"* → real dataset names, owners, lineage,
-> sample SQL, and URNs, with every DataHub call visible in a collapsible trace.
+That last loop is the point. Institutional knowledge that can't tell you it's wrong
+is a liability, and it's the part every "write it to the wiki" workflow gets wrong.
+
+---
+
+## Does grounding in DataHub actually help? We measured it.
+
+`evals/` holds a 20-question onboarding benchmark — the questions a real new hire
+asks in week 1 — scored **deterministically** against the catalog. Every check is a
+substring match on facts that live in DataHub (real URNs, real owners, real columns).
+No LLM judge, no partial credit: a case passes only if every one of its checks passes.
+
+The same 20 cases run twice through the **identical agent loop** (`lib/agent.ts`).
+The only variable is whether the DataHub MCP tools are in the tool list:
+
+```bash
+DEMO_MODE=true npm run eval      # no DataHub, no Docker
+```
+
+Results are committed at [`evals/results/scorecard.md`](evals/results/scorecard.md),
+with every raw answer in `latest.json` so any check can be audited by hand.
+
+The control arm is deliberately **not** a strawman — it gets a neutral, capable-assistant
+prompt asking for specific tables, owners, and SQL. It's the honest counterfactual:
+an off-the-shelf chatbot, which is what a new hire actually reaches for today. Both
+prompts are in `evals/run.ts`.
+
+What the catalog buys you, by category:
+
+| Category | What it tests |
+| --- | --- |
+| `grounding` | Does it name the real table, with the real URN? |
+| `ownership` | The actual owner, or a plausible-sounding invention? |
+| `lineage` | The real blast radius of a column change |
+| `health-trap` | The obvious answer is a **deprecated** table. Does it notice? |
+| `usage` | Ranks by real 30-day query volume, not catalog structure |
+| `glossary` | *This company's* MRR definition, not the textbook one |
+| `sql` | The saved query analysts run, not a plausible reconstruction |
+| `hallucination` | Asked about a table that doesn't exist — does it say so? |
+
+`EVAL_MIN_PASS=n npm run eval` exits non-zero below a threshold, so it works as a CI gate.
+
+---
+
+## Two surfaces, one backend
+
+- **Web app** — chat, learning paths, lineage explainer, handoffs, progress
+- **Chrome side panel** — follows you *inside* DataHub, detects the entity on
+  screen, records handoffs, replays them ([install](extension/README.md))
 
 ## Features
 
-- **💬 Chat assistant** — plain-English Q&A grounded in DataHub metadata. The agent
-  calls `search`, `get_entities`, `get_lineage`, `get_dataset_queries`, and schema
-  tools as needed, and every MCP call is shown in an expandable tool trace.
-- **🗺️ Week-1 learning path generator** — pick a role + domain, get a structured
-  5-day plan (core tables → metrics & glossary → pipelines & lineage → SQL
-  patterns → people to know) built from live catalog exploration, with real URNs.
-- **📤 Write-back to DataHub** — one click saves the generated path into DataHub
-  via the MCP `save_document` tool, so the *next* hire finds it in the catalog.
-- **🔀 Lineage explainer** — search a dataset, get upstream sources, downstream
-  consumers, and an "impact if changed" briefing with owners to talk to.
-- **✅ Progress tracker** — check off learning-path items as you ramp (localStorage).
-- **🧩 Chrome side panel** — context-aware coaching next to DataHub itself: the
-  extension captures the URL/URN/selection of the page you're on and offers
-  one-click actions ("Explain this table", "Who owns this?", "Show lineage",
-  "Common SQL for this"). Thin client — no keys in the extension.
-- **🔁 Handoffs** — the headline feature. Someone *leaving* hits ● Record in the
-  side panel and just does their task in DataHub; every page they visit becomes
-  a step, and they annotate each one with the "why" that never makes it into
-  docs. The agent then enriches every step from the live catalog (owners, real
-  SQL, lineage, tags), producing a runbook that is saved locally **and written
-  back into DataHub via `save_document`**, linked to the datasets it touches.
-  Someone *joining* inherits it in the same panel: guided step-by-step replay
-  with "Open this page", a live "📍 You're on this page" indicator when their
-  current DataHub tab matches the step's entity, per-step "Ask the coach", and
-  tracked progress. Also browsable in the web app at `/handoffs`.
+- **🔁 Handoffs** — the headline. Record a task by doing it; the agent turns the
+  trail plus your notes into a catalog-grounded runbook, saved locally **and
+  written back into DataHub**, linked to the datasets it touches. Replayed
+  step-by-step by whoever inherits it.
+- **🕰️ Runbook decay detection** — one click re-validates a runbook against live
+  DataHub. Deterministic: a schema diff plus a health read, no LLM guessing, so a
+  "this is broken" verdict is something you can confirm in the DataHub UI in ten
+  seconds. Detects vanished entities, **removed columns the runbook's SQL actually
+  references**, newly-deprecated tables, new incidents, newly-failing assertions,
+  and owners who have moved on. Drift is written back to the catalog as a note.
+- **💬 Chat assistant** — plain-English Q&A grounded in DataHub metadata, with
+  every MCP call visible in an expandable tool trace.
+- **🩺 Data health awareness** — checks `get_dataset_health` before recommending a
+  table, and leads with ⚠️ plus the safe alternative instead of confidently
+  answering from a dead one.
+- **📈 Usage-aware ranking** — `get_usage_stats` lets the agent prefer tables
+  people actually query over ones that merely exist in the domain.
+- **🕸️ Glossary graph** — metrics explained in relation to each other (MRR ↔ ARR ↔
+  Churn Rate) via `relatedTerms`, not in isolation.
+- **✍️ Documentation gap write-back** — when a description is missing or too thin,
+  the agent drafts one from the schema/lineage/usage it already fetched and files
+  it as a `DescriptionProposal` for an owner to review.
+- **🗺️ Week-1 learning path generator** — role + domain → a 5-day plan built from
+  live catalog exploration and real usage stats, with deprecated tables excluded.
+  One click writes it back to DataHub so the *next* hire finds it.
+- **🔀 Lineage explainer** — upstream, downstream, health summary, and an "impact
+  if changed" briefing with owners to talk to.
+- **✅ Progress tracker** — check off items as you ramp.
 
 ## Quick start
 
-### 0. Fastest path: demo mode (no DataHub needed)
-
-Want to see everything working in under a minute? Skip Docker entirely:
+### Fastest path: demo mode (no DataHub needed)
 
 ```bash
 npm install
@@ -58,83 +112,60 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000), paste an LLM key in
-**Settings** (Anthropic / OpenRouter / Gemini), and ask *"How do we calculate
-MRR?"*. Demo mode answers every DataHub tool call from a built-in fixture of
-the same Northbeam catalog the seed script creates — same datasets, owners,
-lineage, glossary, and saved SQL — so the full agent loop, tool traces,
-learning paths, and lineage explainer all work with zero infrastructure.
-The sidebar pill shows **Demo catalog** so you always know which mode you're in.
+**Settings** (Anthropic / OpenRouter / Gemini), and ask *"How do we calculate MRR?"*
 
-For the real thing against a live DataHub, continue below.
+Demo mode answers every DataHub tool call from a built-in fixture of the same
+Northbeam catalog the seed script creates — same datasets, owners, lineage,
+glossary, health signals, and saved SQL. The full agent loop, tool traces, learning
+paths, lineage explainer, handoff replay, and **the eval harness** all work with
+zero infrastructure. The sidebar pill shows **Demo catalog** so the mode is never
+ambiguous.
 
-### 1. Install
+**Try the decay loop in demo mode:** open `/handoffs` → the sample runbook →
+**Validate against DataHub**. It flags step 1: `payment_health_daily`'s freshness
+assertion started failing *after* Priya recorded the runbook, so following that
+step as written would mislead you. That finding is then written back to DataHub.
 
-```bash
-npm install
-```
+### Against a real DataHub
 
-You'll also need [uv](https://docs.astral.sh/uv/getting-started/installation/)
-(`curl -LsSf https://astral.sh/uv/install.sh | sh`) — it runs the DataHub MCP
-server and the seed script; no manual Python setup required.
+<details>
+<summary>Full local setup (Docker + seeded catalog)</summary>
 
-### 2. Run DataHub locally (Docker)
+**1. Install** — `npm install`, plus [uv](https://docs.astral.sh/uv/getting-started/installation/)
+(`curl -LsSf https://astral.sh/uv/install.sh | sh`) which runs the DataHub MCP
+server and the seed script.
 
-```bash
-npm run datahub:up        # wraps: datahub docker quickstart
-```
+**2. Run DataHub** — `npm run datahub:up` (wraps `datahub docker quickstart`;
+GMS on `:8080`, UI on `:9002`). First run pulls several images.
 
-This starts the full DataHub stack (GMS on `:8080`, UI on `:9002`). First run
-downloads several images — give it a few minutes. Docs:
-[DataHub quickstart](https://docs.datahub.com/docs/quickstart).
-
-### 3. Seed the demo catalog
-
-```bash
-npm run seed
-```
-
-Seeds **Northbeam**, a fictional subscription-commerce company: 14 datasets across
-postgres + snowflake with full schemas and docs, 4 owners, 3 domains, PII/Tier1/
-Finance tags, a metrics glossary (MRR, ARR, Churn Rate, GMV, Active User),
+**3. Seed the demo catalog** — `npm run seed`. Seeds **Northbeam**, a fictional
+subscription-commerce company: 14 datasets across postgres + snowflake with full
+schemas and docs, 4 owners, 3 domains, PII/Tier1/Finance tags, a metrics glossary,
 lineage across 4 pipelines, and 5 saved SQL queries. Verify at
-[http://localhost:9002](http://localhost:9002) (login `datahub` / `datahub`).
+[http://localhost:9002](http://localhost:9002) (`datahub` / `datahub`).
 
-### 4. Configure environment
+**4. Configure** — `cp .env.example .env.local`. Defaults work for a local
+quickstart; set `DATAHUB_GMS_TOKEN` if your DataHub requires auth.
 
-```bash
-cp .env.example .env.local
-```
+**5. Add an LLM key** — in **Settings** in the app (stored in browser localStorage,
+forwarded to your own server per request), or `LLM_PROVIDER` / `LLM_API_KEY` in
+`.env.local`. No keys are hardcoded or committed.
 
-The defaults work for a local quickstart. If your DataHub requires auth, set
-`DATAHUB_GMS_TOKEN` to a personal access token.
+**6. Run** — `npm run dev`. Run the benchmark against live DataHub with
+`npm run eval -- --live`.
 
-### 5. Add an LLM API key
-
-No keys are hardcoded — bring your own, either way:
-
-- **In the app (recommended):** click **Settings** in the sidebar and paste a key
-  for Anthropic (Claude), OpenRouter, or Google Gemini. Stored only in your
-  browser's localStorage and sent to your own server per-request.
-- **Or in `.env.local`:** set `LLM_PROVIDER` and `LLM_API_KEY`.
-
-### 6. Run
-
-```bash
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000) and ask:
-*“How do we calculate MRR?”*
+</details>
 
 ## Try these
 
 | Ask | What happens |
 | --- | --- |
 | What tables do we use for revenue? | `search` → `get_entities` → cites `fct_revenue`, `mrr_monthly` with owners & URNs |
-| Who owns the payments pipeline? | fetches entities and reports actual owners (Priya Patel et al.) |
-| How is customer_id defined? | schema-field lookup across `dim_customers` and sources |
-| Show me SQL for churn analysis | `get_dataset_queries` returns the real saved query on `fct_churn` |
+| Who owns the payments pipeline? | reports actual owners (Priya Patel et al.) |
 | What breaks if I change users.email? | `get_lineage` downstream walk → impacted marts + who to warn |
+| Is it safe to build a report on the raw events table? | `get_dataset_health` → ⚠️ deprecated, points to `events_sessionized` |
+| Which Payments tables should I learn first? | `get_usage_stats` ranks by real 30-day query volume |
+| What columns are in our marketing_attribution table? | says it isn't in the catalog instead of inventing a schema |
 
 ## Architecture
 
@@ -142,18 +173,18 @@ Open [http://localhost:3000](http://localhost:3000) and ask:
 ┌──────────────────────────────┐   ┌────────────────────────────────┐
 │  Next.js UI (light, streamed)│   │  Chrome extension (side panel) │
 │  chat · path · lineage ·     │   │  context capture on DataHub ·  │
-│  progress                    │   │  quick actions · same chat     │
+│  handoffs · progress         │   │  record / replay · same chat   │
 └──────────────┬───────────────┘   └───────────────┬────────────────┘
                │ fetch (NDJSON event stream)       │ fetch + {message, context}
 ┌──────────────▼───────────────────────────────────▼───────┐
 │  API routes (app/api/*)                                  │
 │  /chat · /learning-path · /lineage · /handoffs ·         │
-│  /save-document · /health — CORS-enabled for extension   │
-│  ┌────────────────────────┐                              │
-│  │ Agent loop (lib/agent) │  LLM ⇄ tools until answered  │
-│  └───┬───────────────┬────┘                              │
-│  LLM providers   MCP client (singleton, stdio)           │
-│  (Claude / OpenRouter / Gemini — keys server-side only)  │
+│  /handoffs/[id]/verify · /save-document · /health        │
+│  ┌────────────────────────┐  ┌─────────────────────────┐ │
+│  │ Agent loop (lib/agent) │  │ Decay engine (lib/decay)│ │
+│  │ LLM ⇄ tools until done │  │ deterministic diff      │ │
+│  └───┬────────────────────┘  └───────────┬─────────────┘ │
+│  LLM providers (retry/backoff)   MCP client (singleton)  │
 └──────────────────────┼───────────────────────────────────┘
                        │ spawns: uvx mcp-server-datahub
             ┌──────────▼──────────┐
@@ -161,17 +192,18 @@ Open [http://localhost:3000](http://localhost:3000) and ask:
             └──────────┬──────────┘  get_dataset_queries · save_document …
                        │ GraphQL/REST
             ┌──────────▼──────────┐
-            │  DataHub GMS :8080  │  (docker quickstart)
+            │  DataHub GMS :8080  │
             └─────────────────────┘
 ```
 
-- The MCP server is spawned once per server process (`uvx mcp-server-datahub`)
-  with `TOOLS_IS_MUTATION_ENABLED=true` so `save_document` write-back works.
-- The agent loop hands the LLM the **live** MCP tool list, executes every tool
-  call against DataHub, and streams `tool_call` / `tool_result` / `text` events
-  to the UI — which is what renders the collapsible trace.
-- Learning paths are generated as structured JSON from real catalog exploration,
-  rendered as a checklist, and written back with `save_document`.
+- The MCP server is spawned once per server process with
+  `TOOLS_IS_MUTATION_ENABLED=true` so write-back works.
+- The agent loop hands the LLM the **live** MCP tool list, executes every call
+  against DataHub, and streams `tool_call` / `tool_result` / `text` events.
+- Provider calls retry transient 429/5xx with exponential backoff and jitter.
+- **The decay engine deliberately does not use an LLM.** Detection is a schema diff
+  plus a health read against snapshots captured at record time, so every finding is
+  independently verifiable.
 
 ## Scripts
 
@@ -179,35 +211,40 @@ Open [http://localhost:3000](http://localhost:3000) and ask:
 | --- | --- |
 | `npm run dev` | start the app on :3000 |
 | `npm run build` / `npm start` | production build / serve |
-| `npm test` | vitest smoke tests (MCP mocked — runtime always hits real DataHub) |
+| `npm test` | vitest suite (44 tests, MCP mocked) |
+| `npm run eval` | the 20-case onboarding benchmark, both arms |
 | `npm run seed` | seed the Northbeam demo catalog into DataHub |
 | `npm run datahub:up` / `datahub:down` | start / stop the local DataHub stack |
 
 ## Project layout
 
 ```
-app/            pages (chat, path, lineage, progress) + API routes
+app/            page.tsx (landing) · (app)/ signed-in pages · api/ routes
 components/     Sidebar, ToolTrace, Markdown, SettingsModal
-lib/            mcp.ts (MCP client) · agent.ts (loop) · providers.ts (LLMs) · prompts.ts
+lib/            mcp.ts (MCP client) · agent.ts (loop) · decay.ts (validation)
+                providers.ts (LLMs) · prompts.ts · demo-catalog.ts · demo-mcp.ts
+evals/          benchmark.ts (20 cases) · score.ts · run.ts · results/
+extension/      Chrome side panel
 scripts/        seed_datahub.py — demo catalog ingestion
-tests/          vitest smoke tests
-examples/       sample generated learning path, SQL snippets, saved document
+tests/          vitest suite
 ```
 
 ## Security notes
 
-- `.env`, `.env.local`, `*.key`, and `credentials.json` are gitignored; the repo
-  ships only `.env.example` with placeholders.
+- `.env*`, `*.key`, and `credentials.json` are gitignored; the repo ships only
+  `.env.example` with placeholders.
 - API keys pasted in the UI live in browser localStorage and are forwarded as
-  request headers to *your own* Next.js server only.
+  request headers to *your own* Next.js server only. Nothing is sent anywhere else.
 
 ## Troubleshooting
 
-- **Sidebar says "DataHub offline"** — GMS isn't reachable. Check
-  `docker ps`, then `curl http://localhost:8080/health`. The status pill polls
-  every 30s.
+- **Sidebar says "DataHub offline"** — GMS isn't reachable. Check `docker ps`, then
+  `curl http://localhost:8080/health`. The status pill polls every 30s.
 - **"No LLM configured"** — add a key in Settings or `.env.local`.
-- **Learning path comes back empty** — the catalog probably has no data for that
-  domain. Run `npm run seed` and try domain "Payments".
-- **First MCP call is slow** — `uvx` resolves `mcp-server-datahub` on first use;
-  subsequent calls are warm.
+- **`npm run eval` exits immediately** — it needs `LLM_PROVIDER` and `LLM_API_KEY`
+  in `.env.local` (the UI's localStorage key isn't visible to the CLI).
+- **First MCP call is slow** — `uvx` resolves `mcp-server-datahub` on first use.
+
+## License
+
+[Apache 2.0](LICENSE).

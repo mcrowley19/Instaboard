@@ -9,6 +9,7 @@
     "start": "next start",
     "test": "vitest run",
     "test:watch": "vitest",
+    "eval": "tsx evals/run.ts",
     "seed": "uv run --with acryl-datahub scripts/seed_datahub.py",
     "datahub:up": "uv run --with acryl-datahub datahub docker quickstart",
     "datahub:down": "uv run --with acryl-datahub datahub docker quickstart --stop"
@@ -26,6 +27,7 @@
     "@types/node": "^22.15.0",
     "@types/react": "^19.1.0",
     "@types/react-dom": "^19.1.0",
+    "tsx": "^4.23.1",
     "typescript": "^5.8.0",
     "vitest": "^3.2.0"
   }

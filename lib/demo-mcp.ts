@@ -74,16 +74,41 @@ export const DEMO_TOOLS: ToolDef[] = [
   {
     name: "save_document",
     description:
-      "Save a document (note, learning path, runbook) into the DataHub catalog so others can find it.",
+      "Save a document into the DataHub catalog so others can find it. document_type is one of: Note, LearningPath, Runbook, DescriptionProposal (use DescriptionProposal when you drafted a description/definition to fill a documentation gap you noticed — set subject_urn to the entity it's about).",
     inputSchema: {
       type: "object",
       properties: {
-        document_type: { type: "string", description: "Document subtype, e.g. Note." },
+        document_type: { type: "string", description: "Document subtype, e.g. Note, DescriptionProposal." },
         title: { type: "string" },
         content: { type: "string", description: "Markdown content." },
         topics: { type: "array", items: { type: "string" } },
+        subject_urn: { type: "string", description: "URN of the entity this document is about, if any (required for DescriptionProposal)." },
       },
       required: ["document_type", "title", "content"],
+    },
+  },
+  {
+    name: "get_dataset_health",
+    description:
+      "Get data-quality signals for a dataset: open incidents, assertion (freshness/volume) pass/fail status, and deprecation status. Check this before recommending a table, and always check it when asked if a table is reliable/healthy/safe to use.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        urn: { type: "string", description: "Dataset URN." },
+      },
+      required: ["urn"],
+    },
+  },
+  {
+    name: "get_usage_stats",
+    description:
+      "Get query usage stats for a dataset over the last 30 days: query count, top users, and trend. Use this to judge how central a table actually is — real usage is a stronger signal of importance than catalog structure alone.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        urn: { type: "string", description: "Dataset URN." },
+      },
+      required: ["urn"],
     },
   },
 ];
@@ -94,6 +119,7 @@ interface DemoDocument {
   title: string;
   content: string;
   topics: string[];
+  subjectUrn?: string;
 }
 
 // Documents saved during the demo session — survives dev-mode module reloads.
@@ -118,6 +144,18 @@ function datasetSummary(d: DemoDataset) {
     owners: d.owners.map(ownerLine),
     tags: d.tags,
     glossaryTerms: d.terms,
+    ...(d.deprecated
+      ? {
+          deprecated: {
+            since: d.deprecated.since,
+            reason: d.deprecated.reason,
+            ...(d.deprecated.replacement ? { replacement: d.deprecated.replacement } : {}),
+          },
+        }
+      : {}),
+    ...(d.incidents?.some((i) => i.status === "open")
+      ? { openIncidents: d.incidents.filter((i) => i.status === "open") }
+      : {}),
   };
 }
 
@@ -185,6 +223,7 @@ function demoSearch(args: Record<string, unknown>): unknown {
           type: "glossaryTerm",
           name: term.name,
           definition: term.definition,
+          relatedTerms: term.related ?? [],
         });
       }
     }
@@ -232,7 +271,14 @@ function demoGetEntities(args: Record<string, unknown>): unknown {
 
       const termKey = urn.replace("urn:li:glossaryTerm:", "");
       if (urn.startsWith("urn:li:glossaryTerm:") && DEMO_TERMS[termKey]) {
-        return { urn, type: "glossaryTerm", ...DEMO_TERMS[termKey] };
+        const term = DEMO_TERMS[termKey];
+        return {
+          urn,
+          type: "glossaryTerm",
+          name: term.name,
+          definition: term.definition,
+          relatedTerms: term.related ?? [],
+        };
       }
 
       const username = urn.replace("urn:li:corpuser:", "");
@@ -315,18 +361,43 @@ function demoGetDatasetQueries(args: Record<string, unknown>): unknown {
 
 function demoSaveDocument(args: Record<string, unknown>): unknown {
   const title = String(args.title ?? "");
+  const subjectUrn = args.subject_urn ? String(args.subject_urn) : undefined;
   const doc: DemoDocument = {
     urn: `urn:li:document:demo-${savedDocs.length + 1}-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40)}`,
     documentType: String(args.document_type ?? "Note"),
     title,
     content: String(args.content ?? ""),
     topics: Array.isArray(args.topics) ? args.topics.map(String) : [],
+    ...(subjectUrn ? { subjectUrn } : {}),
   };
   savedDocs.push(doc);
   return {
     success: true,
     urn: doc.urn,
-    message: `Saved "${doc.title}" to the catalog (demo mode: kept in memory, discoverable via search).`,
+    message: `Saved "${doc.title}" to the catalog (demo mode: kept in memory, discoverable via search)${subjectUrn ? `, linked to ${subjectUrn}` : ""}.`,
+  };
+}
+
+function demoGetDatasetHealth(args: Record<string, unknown>): unknown {
+  const urn = String(args.urn ?? "");
+  const d = byUrn.get(urn);
+  if (!d) return { urn, error: "Dataset not found in catalog." };
+  return {
+    urn,
+    deprecated: d.deprecated ?? null,
+    incidents: d.incidents ?? [],
+    assertions: d.assertions ?? [],
+    healthy: !d.deprecated && !(d.incidents ?? []).some((i) => i.status === "open") && !(d.assertions ?? []).some((a) => a.status === "fail"),
+  };
+}
+
+function demoGetUsageStats(args: Record<string, unknown>): unknown {
+  const urn = String(args.urn ?? "");
+  const d = byUrn.get(urn);
+  if (!d) return { urn, error: "Dataset not found in catalog." };
+  return {
+    urn,
+    usage: d.usage ?? { queryCount30d: 0, topUsers: [], trend: "flat" },
   };
 }
 
@@ -351,6 +422,12 @@ export function callDemoTool(
         break;
       case "save_document":
         result = demoSaveDocument(args);
+        break;
+      case "get_dataset_health":
+        result = demoGetDatasetHealth(args);
+        break;
+      case "get_usage_stats":
+        result = demoGetUsageStats(args);
         break;
       default:
         return { content: `Unknown tool: ${name}`, isError: true };

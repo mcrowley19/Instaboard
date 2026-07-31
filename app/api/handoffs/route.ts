@@ -1,4 +1,5 @@
 import { llmConfigFromRequest, runAgent } from "@/lib/agent";
+import { snapshotHandoff } from "@/lib/decay";
 import { handoffToMarkdown, listHandoffs, newHandoffId, saveHandoff } from "@/lib/handoff-store";
 import { callDataHubTool } from "@/lib/mcp";
 import { handoffSystemPrompt } from "@/lib/prompts";
@@ -83,6 +84,10 @@ export async function POST(req: Request) {
           return;
         }
 
+        // Baseline the catalog facts these steps depend on, so we can tell
+        // later whether the runbook has gone stale (see lib/decay.ts).
+        const snapshots = await snapshotHandoff(runbook.steps);
+
         const handoff: Handoff = {
           id: newHandoffId(title),
           title: runbook.title || title,
@@ -92,6 +97,7 @@ export async function POST(req: Request) {
           steps: runbook.steps,
           recorded,
           createdAt: new Date().toISOString(),
+          snapshots,
         };
 
         // Write-back: the handoff lives in the DataHub catalog for the next hire.

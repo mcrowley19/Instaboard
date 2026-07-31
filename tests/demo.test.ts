@@ -78,4 +78,64 @@ describe("demo mode tool surface", () => {
     expect(DEMO_DATASETS).toHaveLength(14);
     expect(Object.keys(DEMO_LINEAGE)).toHaveLength(8);
   });
+
+  it("exposes get_dataset_health and get_usage_stats", () => {
+    const names = DEMO_TOOLS.map((t) => t.name);
+    expect(names).toContain("get_dataset_health");
+    expect(names).toContain("get_usage_stats");
+  });
+
+  it("get_dataset_health flags a deprecated table and an open incident", () => {
+    const eventsHealth = call("get_dataset_health", { urn: pgUrn("events") });
+    expect(eventsHealth.deprecated?.replacement).toBe(sfUrn("events_sessionized"));
+    expect(eventsHealth.healthy).toBe(false);
+
+    const paymentsHealth = call("get_dataset_health", { urn: pgUrn("payments") });
+    expect(paymentsHealth.incidents.length).toBeGreaterThan(0);
+    expect(paymentsHealth.healthy).toBe(false);
+
+    const healthyHealth = call("get_dataset_health", { urn: sfUrn("dim_customers") });
+    expect(healthyHealth.healthy).toBe(true);
+  });
+
+  it("get_dataset_health surfaces failing assertions", () => {
+    const { assertions, healthy } = call("get_dataset_health", { urn: sfUrn("payment_health_daily") });
+    expect(assertions.some((a: { status: string }) => a.status === "fail")).toBe(true);
+    expect(healthy).toBe(false);
+  });
+
+  it("get_usage_stats returns query volume and top users", () => {
+    const { usage } = call("get_usage_stats", { urn: sfUrn("mrr_monthly") });
+    expect(usage.queryCount30d).toBeGreaterThan(0);
+    expect(usage.topUsers.length).toBeGreaterThan(0);
+  });
+
+  it("search and get_entities surface related glossary terms", () => {
+    const { results } = call("search", { query: "MRR", entity_type: "glossaryTerm" });
+    const mrr = results.find((r: { urn: string }) => r.urn === "urn:li:glossaryTerm:MRR");
+    expect(mrr.relatedTerms).toContain("ARR");
+
+    const { entities } = call("get_entities", { urns: ["urn:li:glossaryTerm:MRR"] });
+    expect(entities[0].relatedTerms).toContain("ARR");
+  });
+
+  it("deprecated datasets surface inline on search and get_entities, undeprecated ones don't", () => {
+    const { results } = call("search", { query: "event firehose" });
+    const eventsResult = results.find((r: { urn: string }) => r.urn === pgUrn("events"));
+    expect(eventsResult.deprecated).toBeTruthy();
+
+    const { entities } = call("get_entities", { urns: [sfUrn("dim_customers")] });
+    expect(entities[0].deprecated).toBeUndefined();
+  });
+
+  it("save_document accepts a DescriptionProposal linked to a subject entity", () => {
+    const saved = call("save_document", {
+      document_type: "DescriptionProposal",
+      title: "Proposed description for payment_health_daily.provider",
+      content: "stripe | paypal — the payment processor for this row.",
+      subject_urn: sfUrn("payment_health_daily"),
+    });
+    expect(saved.success).toBe(true);
+    expect(saved.message).toContain(sfUrn("payment_health_daily"));
+  });
 });

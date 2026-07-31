@@ -7,9 +7,22 @@ export const DEFAULT_MODELS: Record<string, string> = {
   gemini: "gemini-2.5-flash",
 };
 
+const MAX_ATTEMPTS = 4;
+
+/** Rate limits and provider hiccups are transient — retry them, don't surface them. */
+function isRetryable(err: unknown): boolean {
+  const status = (err as { status?: number })?.status;
+  if (status === 429 || (typeof status === "number" && status >= 500)) return true;
+  const message = err instanceof Error ? err.message : String(err);
+  return /\b(429|5\d\d)\b|rate.?limit|overloaded|timeout|ECONNRESET|fetch failed/i.test(message);
+}
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
  * Run one LLM turn: given the conversation so far and the DataHub tool set,
  * return either a final text answer or a batch of tool calls to execute.
+ * Retries transient provider failures with exponential backoff and jitter.
  */
 export async function runLLMTurn(
   config: LLMConfig,
@@ -18,10 +31,21 @@ export async function runLLMTurn(
   tools: ToolDef[]
 ): Promise<LLMTurn> {
   const model = config.model || DEFAULT_MODELS[config.provider];
-  if (config.provider === "anthropic") {
-    return anthropicTurn(config.apiKey, model, system, turns, tools);
+
+  let lastError: unknown;
+  for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+    try {
+      return config.provider === "anthropic"
+        ? await anthropicTurn(config.apiKey, model, system, turns, tools)
+        : await openAICompatTurn(config, model, system, turns, tools);
+    } catch (err) {
+      lastError = err;
+      if (attempt === MAX_ATTEMPTS - 1 || !isRetryable(err)) throw err;
+      // 1s, 2s, 4s — plus jitter so parallel callers don't retry in lockstep.
+      await sleep(2 ** attempt * 1000 + Math.random() * 500);
+    }
   }
-  return openAICompatTurn(config, model, system, turns, tools);
+  throw lastError;
 }
 
 /* ── Anthropic (official SDK) ─────────────────────────────────────────── */

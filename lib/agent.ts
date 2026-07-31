@@ -1,8 +1,17 @@
 import { callDataHubTool, listDataHubTools } from "./mcp";
 import { runLLMTurn } from "./providers";
-import type { AgentEvent, AgentTurn, ChatMessage, LLMConfig } from "./types";
+import type { AgentEvent, AgentTurn, ChatMessage, LLMConfig, ToolDef } from "./types";
 
 const MAX_ITERATIONS = 10;
+
+export interface AgentOptions {
+  /**
+   * Override the tool set handed to the LLM. Used by the eval harness to run
+   * the ungrounded control arm (`tools: []`) through this exact same loop, so
+   * the only variable between arms is DataHub access.
+   */
+  tools?: ToolDef[];
+}
 
 /**
  * The agent loop: hand the LLM the DataHub MCP tool set, execute every tool
@@ -13,9 +22,10 @@ export async function runAgent(
   config: LLMConfig,
   system: string,
   history: ChatMessage[],
-  emit: (event: AgentEvent) => void
+  emit: (event: AgentEvent) => void,
+  opts: AgentOptions = {}
 ): Promise<string> {
-  const tools = await listDataHubTools();
+  const tools = opts.tools ?? (await listDataHubTools());
 
   const turns: AgentTurn[] = history.map((m) =>
     m.role === "user"

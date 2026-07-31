@@ -27,17 +27,41 @@ from datahub.emitter.mce_builder import (
 )
 from datahub.emitter.mcp import MetadataChangeProposalWrapper
 from datahub.emitter.rest_emitter import DatahubRestEmitter
+from datahub.emitter.mce_builder import make_assertion_urn
 from datahub.metadata.schema_classes import (
+    AssertionInfoClass,
+    AssertionResultClass,
+    AssertionResultTypeClass,
+    AssertionRunEventClass,
+    AssertionRunStatusClass,
+    AssertionStdAggregationClass,
+    AssertionStdOperatorClass,
+    AssertionStdParameterClass,
+    AssertionStdParametersClass,
+    AssertionStdParameterTypeClass,
+    AssertionTypeClass,
     AuditStampClass,
+    CalendarIntervalClass,
     CorpUserInfoClass,
+    DatasetAssertionInfoClass,
+    DatasetAssertionScopeClass,
     DatasetLineageTypeClass,
     DatasetPropertiesClass,
+    DatasetUsageStatisticsClass,
+    DatasetUserUsageCountsClass,
+    DeprecationClass,
     DomainPropertiesClass,
     DomainsClass,
     GlobalTagsClass,
     GlossaryTermAssociationClass,
     GlossaryTermInfoClass,
     GlossaryTermsClass,
+    IncidentInfoClass,
+    IncidentSourceClass,
+    IncidentSourceTypeClass,
+    IncidentStateClass,
+    IncidentStatusClass,
+    IncidentTypeClass,
     NumberTypeClass,
     OtherSchemaClass,
     OwnerClass,
@@ -56,6 +80,7 @@ from datahub.metadata.schema_classes import (
     TagAssociationClass,
     TagPropertiesClass,
     TimeTypeClass,
+    TimeWindowSizeClass,
     UpstreamClass,
     UpstreamLineageClass,
 )
@@ -443,6 +468,80 @@ QUERIES = [
 ]
 
 
+# ── deprecation ───────────────────────────────────────────────────────────
+# urn -> (note, replacement urn)
+DEPRECATIONS = {
+    pg("events"): (
+        "Superseded by events_sessionized for all activation/engagement analysis — "
+        "this raw firehose is kept only for pipeline debugging.",
+        sf("events_sessionized"),
+    ),
+}
+
+# ── open incidents ───────────────────────────────────────────────────────
+# (id, dataset urn, title)
+INCIDENTS = [
+    (
+        "payments-webhook-duplicates",
+        pg("payments"),
+        "Stripe webhook retry storms are producing duplicate payment rows during provider outages",
+    ),
+]
+
+# ── data quality assertions ─────────────────────────────────────────────
+# (id, dataset urn, description, scope kwargs, result type)
+ASSERTIONS = [
+    (
+        "fct-revenue-row-count",
+        sf("fct_revenue"),
+        "Row count should not drop more than 20% day over day.",
+        dict(
+            scope=DatasetAssertionScopeClass.DATASET_ROWS,
+            operator=AssertionStdOperatorClass.GREATER_THAN,
+            aggregation=AssertionStdAggregationClass.ROW_COUNT,
+            parameters=AssertionStdParametersClass(
+                value=AssertionStdParameterClass(value="0", type=AssertionStdParameterTypeClass.NUMBER)
+            ),
+        ),
+        AssertionResultTypeClass.SUCCESS,
+    ),
+    (
+        "payment-health-freshness",
+        sf("payment_health_daily"),
+        "Latest date column should be within 1 day of today.",
+        dict(
+            scope=DatasetAssertionScopeClass.DATASET_COLUMN,
+            fields=["date"],
+            operator=AssertionStdOperatorClass.GREATER_THAN_OR_EQUAL_TO,
+            aggregation=AssertionStdAggregationClass.MAX,
+            parameters=AssertionStdParametersClass(
+                value=AssertionStdParameterClass(value="yesterday", type=AssertionStdParameterTypeClass.STRING)
+            ),
+        ),
+        AssertionResultTypeClass.FAILURE,
+    ),
+]
+
+# ── usage stats (last 30 days) ───────────────────────────────────────────
+# urn -> (totalSqlQueries, [top user usernames])
+USAGE_STATS = {
+    pg("users"): (412, ["mike.rodriguez", "james.okafor"]),
+    pg("orders"): (268, ["mike.rodriguez"]),
+    pg("payments"): (356, ["priya.patel", "mike.rodriguez"]),
+    pg("subscriptions"): (301, ["priya.patel", "mike.rodriguez"]),
+    pg("events"): (74, ["james.okafor"]),
+    pg("refunds"): (58, ["priya.patel"]),
+    sf("stg_users"): (22, ["mike.rodriguez"]),
+    sf("stg_payments"): (19, ["mike.rodriguez"]),
+    sf("dim_customers"): (587, ["mike.rodriguez", "priya.patel", "james.okafor"]),
+    sf("fct_revenue"): (743, ["priya.patel", "mike.rodriguez", "james.okafor"]),
+    sf("fct_churn"): (189, ["priya.patel", "mike.rodriguez"]),
+    sf("mrr_monthly"): (812, ["priya.patel", "james.okafor"]),
+    sf("events_sessionized"): (233, ["james.okafor"]),
+    sf("payment_health_daily"): (96, ["priya.patel"]),
+}
+
+
 def main() -> None:
     print(f"Seeding DataHub at {GMS} …")
 
@@ -541,6 +640,75 @@ def main() -> None:
             QuerySubjectsClass(subjects=[QuerySubjectClass(entity=s) for s in subjects]),
         )
     print(f"  ✓ {len(QUERIES)} saved queries")
+
+    # deprecation
+    for urn, (note, replacement) in DEPRECATIONS.items():
+        emit(
+            urn,
+            DeprecationClass(
+                deprecated=True,
+                note=note,
+                actor=make_user_urn("sarah.chen"),
+                replacement=replacement,
+            ),
+        )
+    print(f"  ✓ {len(DEPRECATIONS)} deprecation notice(s)")
+
+    # open incidents
+    for incident_id, urn, title in INCIDENTS:
+        emit(
+            f"urn:li:incident:{incident_id}",
+            IncidentInfoClass(
+                type=IncidentTypeClass.OPERATIONAL,
+                entities=[urn],
+                status=IncidentStatusClass(state=IncidentStateClass.ACTIVE, lastUpdated=NOW),
+                created=NOW,
+                title=title,
+                source=IncidentSourceClass(type=IncidentSourceTypeClass.MANUAL),
+            ),
+        )
+    print(f"  ✓ {len(INCIDENTS)} open incident(s)")
+
+    # data quality assertions + their latest run result
+    for assertion_id, urn, description, dataset_assertion_kwargs, result_type in ASSERTIONS:
+        assertion_urn = make_assertion_urn(assertion_id)
+        emit(
+            assertion_urn,
+            AssertionInfoClass(
+                type=AssertionTypeClass.DATASET,
+                datasetAssertion=DatasetAssertionInfoClass(dataset=urn, **dataset_assertion_kwargs),
+                description=description,
+            ),
+        )
+        emit(
+            assertion_urn,
+            AssertionRunEventClass(
+                timestampMillis=NOW.time,
+                runId=f"{assertion_id}-{NOW.time}",
+                asserteeUrn=urn,
+                status=AssertionRunStatusClass.COMPLETE,
+                assertionUrn=assertion_urn,
+                result=AssertionResultClass(type=result_type),
+            ),
+        )
+    print(f"  ✓ {len(ASSERTIONS)} assertions (with latest run result)")
+
+    # usage stats (last 30 days)
+    for urn, (total_queries, top_users) in USAGE_STATS.items():
+        per_user = max(total_queries // len(top_users), 1)
+        emit(
+            urn,
+            DatasetUsageStatisticsClass(
+                timestampMillis=NOW.time,
+                eventGranularity=TimeWindowSizeClass(unit=CalendarIntervalClass.DAY, multiple=30),
+                uniqueUserCount=len(top_users),
+                totalSqlQueries=total_queries,
+                userCounts=[
+                    DatasetUserUsageCountsClass(user=make_user_urn(u), count=per_user) for u in top_users
+                ],
+            ),
+        )
+    print(f"  ✓ usage stats for {len(USAGE_STATS)} datasets")
 
     print("\nDone. Open http://localhost:9002 and search for 'revenue' to verify.")
 

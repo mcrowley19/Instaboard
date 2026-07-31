@@ -151,6 +151,56 @@ export function ensureSampleHandoff(): void {
       { url: entity(fctRevenue), urn: fctRevenue, title: "fct_revenue", note: "net_amount_usd, never gross." },
       { url: entity(mrrMonthly), urn: mrrMonthly, title: "mrr_monthly", note: "Saved query has the exact board cut." },
     ],
+    // Catalog state on the day Priya recorded this (2026-07-01). Everything was
+    // green then. Running "Validate against DataHub" replays these three
+    // entities against the catalog as it is now — which is how the app knows
+    // step 1 has since gone stale.
+    snapshots: {
+      [paymentHealth]: {
+        urn: paymentHealth,
+        name: "payment_health_daily",
+        exists: true,
+        fields: ["date", "provider", "attempts", "success_rate"],
+        owners: ["Priya Patel (Payments Data Lead, urn:li:corpuser:priya.patel)"],
+        deprecated: false,
+        openIncidents: 0,
+        failingAssertions: 0,
+        capturedAt: "2026-07-01T09:00:00.000Z",
+      },
+      [fctRevenue]: {
+        urn: fctRevenue,
+        name: "fct_revenue",
+        exists: true,
+        fields: [
+          "revenue_id",
+          "customer_id",
+          "order_id",
+          "gross_amount_usd",
+          "net_amount_usd",
+          "is_recurring",
+          "revenue_date",
+        ],
+        owners: [
+          "Priya Patel (Payments Data Lead, urn:li:corpuser:priya.patel)",
+          "Mike Rodriguez (Analytics Engineer, urn:li:corpuser:mike.rodriguez)",
+        ],
+        deprecated: false,
+        openIncidents: 0,
+        failingAssertions: 0,
+        capturedAt: "2026-07-01T09:00:00.000Z",
+      },
+      [mrrMonthly]: {
+        urn: mrrMonthly,
+        name: "mrr_monthly",
+        exists: true,
+        fields: ["month", "plan", "mrr_usd", "arr_usd", "net_new_mrr_usd"],
+        owners: ["Priya Patel (Payments Data Lead, urn:li:corpuser:priya.patel)"],
+        deprecated: false,
+        openIncidents: 0,
+        failingAssertions: 0,
+        capturedAt: "2026-07-01T09:00:00.000Z",
+      },
+    },
     datahub: { saved: false, detail: "Sample handoff — regenerate to write back." },
   };
 

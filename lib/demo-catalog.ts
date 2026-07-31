@@ -13,6 +13,32 @@ export interface DemoField {
   terms?: string[];
 }
 
+export interface DemoDeprecation {
+  since: string;
+  reason: string;
+  replacement?: string;
+}
+
+export interface DemoIncident {
+  severity: "critical" | "warning";
+  title: string;
+  openedAt: string;
+  status: "open" | "resolved";
+}
+
+export interface DemoAssertion {
+  type: "freshness" | "volume";
+  description: string;
+  status: "pass" | "fail";
+  lastCheckedAt: string;
+}
+
+export interface DemoUsage {
+  queryCount30d: number;
+  topUsers: string[];
+  trend: "up" | "down" | "flat";
+}
+
 export interface DemoDataset {
   urn: string;
   name: string;
@@ -23,6 +49,10 @@ export interface DemoDataset {
   tags: string[];
   terms: string[];
   fields: DemoField[];
+  deprecated?: DemoDeprecation;
+  incidents?: DemoIncident[];
+  assertions?: DemoAssertion[];
+  usage?: DemoUsage;
 }
 
 export interface DemoQuery {
@@ -47,28 +77,33 @@ export const DEMO_TAGS: Record<string, string> = {
   Finance: "Used in financial reporting. Changes require sign-off from the Payments data lead.",
 };
 
-export const DEMO_TERMS: Record<string, { name: string; definition: string }> = {
+export const DEMO_TERMS: Record<string, { name: string; definition: string; related?: string[] }> = {
   MRR: {
     name: "Monthly Recurring Revenue",
     definition:
       "Sum of all active subscription amounts normalized to a monthly value. Computed in analytics.mrr_monthly from fct_revenue, excluding one-time fees and refunds. Annual plans are divided by 12.",
+    related: ["ARR", "ChurnRate", "GMV"],
   },
   ARR: {
     name: "Annual Recurring Revenue",
     definition: "MRR × 12. Reported to the board monthly; sourced from analytics.mrr_monthly.",
+    related: ["MRR"],
   },
   ChurnRate: {
     name: "Churn Rate",
     definition:
       "Percentage of subscribers who cancel in a period: churned_subscribers / subscribers_at_period_start. Computed in analytics.fct_churn; the canonical definition uses calendar months.",
+    related: ["MRR"],
   },
   GMV: {
     name: "Gross Merchandise Value",
     definition: "Total value of orders before refunds, fees, and discounts. Sourced from app orders.",
+    related: ["MRR"],
   },
   ActiveUser: {
     name: "Active User",
     definition: "A user with at least one product event in the trailing 28 days (see analytics.events_sessionized).",
+    related: [],
   },
 };
 
@@ -97,6 +132,7 @@ export const DEMO_DATASETS: DemoDataset[] = [
     owners: ["sarah.chen"],
     tags: ["Tier1"],
     terms: [],
+    usage: { queryCount30d: 412, topUsers: ["mike.rodriguez", "james.okafor"], trend: "flat" },
     fields: [
       { fieldPath: "id", nativeDataType: "bigint", description: "Primary key. Referenced everywhere as user_id / customer_id." },
       { fieldPath: "email", nativeDataType: "varchar", description: "Login email. Unique. Used for billing receipts and lifecycle emails.", pii: true },
@@ -115,6 +151,7 @@ export const DEMO_DATASETS: DemoDataset[] = [
     owners: ["sarah.chen"],
     tags: ["Tier1"],
     terms: ["GMV"],
+    usage: { queryCount30d: 268, topUsers: ["mike.rodriguez"], trend: "flat" },
     fields: [
       { fieldPath: "id", nativeDataType: "bigint", description: "Primary key." },
       { fieldPath: "user_id", nativeDataType: "bigint", description: "FK → users.id." },
@@ -133,6 +170,15 @@ export const DEMO_DATASETS: DemoDataset[] = [
     owners: ["priya.patel", "sarah.chen"],
     tags: ["Tier1", "Finance"],
     terms: [],
+    incidents: [
+      {
+        severity: "warning",
+        title: "Stripe webhook retry storms are producing duplicate payment rows during provider outages",
+        openedAt: "2026-07-18",
+        status: "open",
+      },
+    ],
+    usage: { queryCount30d: 356, topUsers: ["priya.patel", "mike.rodriguez"], trend: "flat" },
     fields: [
       { fieldPath: "id", nativeDataType: "bigint", description: "Primary key." },
       { fieldPath: "order_id", nativeDataType: "bigint", description: "FK → orders.id." },
@@ -153,6 +199,7 @@ export const DEMO_DATASETS: DemoDataset[] = [
     owners: ["priya.patel"],
     tags: ["Tier1", "Finance"],
     terms: ["MRR", "ChurnRate"],
+    usage: { queryCount30d: 301, topUsers: ["priya.patel", "mike.rodriguez"], trend: "up" },
     fields: [
       { fieldPath: "id", nativeDataType: "bigint", description: "Primary key." },
       { fieldPath: "user_id", nativeDataType: "bigint", description: "FK → users.id." },
@@ -173,6 +220,12 @@ export const DEMO_DATASETS: DemoDataset[] = [
     owners: ["james.okafor", "sarah.chen"],
     tags: [],
     terms: ["ActiveUser"],
+    deprecated: {
+      since: "2025-11-01",
+      reason: "Superseded by events_sessionized for all activation/engagement analysis — this raw firehose is kept only for pipeline debugging.",
+      replacement: sfUrn("events_sessionized"),
+    },
+    usage: { queryCount30d: 74, topUsers: ["james.okafor"], trend: "down" },
     fields: [
       { fieldPath: "event_id", nativeDataType: "uuid", description: "Unique event id." },
       { fieldPath: "user_id", nativeDataType: "bigint", description: "FK → users.id; null for anonymous traffic." },
@@ -190,6 +243,7 @@ export const DEMO_DATASETS: DemoDataset[] = [
     owners: ["priya.patel"],
     tags: ["Finance"],
     terms: [],
+    usage: { queryCount30d: 58, topUsers: ["priya.patel"], trend: "flat" },
     fields: [
       { fieldPath: "id", nativeDataType: "bigint", description: "Primary key." },
       { fieldPath: "payment_id", nativeDataType: "bigint", description: "FK → payments.id." },
@@ -208,6 +262,7 @@ export const DEMO_DATASETS: DemoDataset[] = [
     owners: ["mike.rodriguez"],
     tags: [],
     terms: [],
+    usage: { queryCount30d: 22, topUsers: ["mike.rodriguez"], trend: "flat" },
     fields: [
       { fieldPath: "user_id", nativeDataType: "number", description: "users.id passthrough." },
       { fieldPath: "email", nativeDataType: "varchar", description: "Lowercased login email.", pii: true },
@@ -226,6 +281,7 @@ export const DEMO_DATASETS: DemoDataset[] = [
     owners: ["mike.rodriguez", "priya.patel"],
     tags: ["Finance"],
     terms: [],
+    usage: { queryCount30d: 19, topUsers: ["mike.rodriguez"], trend: "flat" },
     fields: [
       { fieldPath: "payment_id", nativeDataType: "number", description: "payments.id passthrough." },
       { fieldPath: "order_id", nativeDataType: "number", description: "FK → orders.id." },
@@ -244,6 +300,7 @@ export const DEMO_DATASETS: DemoDataset[] = [
     owners: ["mike.rodriguez"],
     tags: ["Tier1"],
     terms: [],
+    usage: { queryCount30d: 587, topUsers: ["mike.rodriguez", "priya.patel", "james.okafor"], trend: "up" },
     fields: [
       { fieldPath: "customer_id", nativeDataType: "number", description: "= users.id. Canonical customer key across all marts." },
       { fieldPath: "email", nativeDataType: "varchar", description: "Login email.", pii: true },
@@ -263,6 +320,15 @@ export const DEMO_DATASETS: DemoDataset[] = [
     owners: ["priya.patel", "mike.rodriguez"],
     tags: ["Tier1", "Finance"],
     terms: ["MRR", "GMV"],
+    assertions: [
+      {
+        type: "volume",
+        description: "Row count should not drop more than 20% day over day.",
+        status: "pass",
+        lastCheckedAt: "2026-07-31T04:10:00Z",
+      },
+    ],
+    usage: { queryCount30d: 743, topUsers: ["priya.patel", "mike.rodriguez", "james.okafor"], trend: "up" },
     fields: [
       { fieldPath: "revenue_id", nativeDataType: "varchar", description: "Surrogate key." },
       { fieldPath: "customer_id", nativeDataType: "number", description: "FK → dim_customers.customer_id." },
@@ -282,6 +348,7 @@ export const DEMO_DATASETS: DemoDataset[] = [
     owners: ["mike.rodriguez"],
     tags: ["Finance"],
     terms: ["ChurnRate"],
+    usage: { queryCount30d: 189, topUsers: ["priya.patel", "mike.rodriguez"], trend: "flat" },
     fields: [
       { fieldPath: "month", nativeDataType: "date", description: "Calendar month." },
       { fieldPath: "plan", nativeDataType: "varchar", description: "Plan slug." },
@@ -300,6 +367,15 @@ export const DEMO_DATASETS: DemoDataset[] = [
     owners: ["priya.patel"],
     tags: ["Tier1", "Finance"],
     terms: ["MRR", "ARR"],
+    assertions: [
+      {
+        type: "freshness",
+        description: "Expected to land by 06:00 UTC daily, before the board deck refresh.",
+        status: "pass",
+        lastCheckedAt: "2026-07-31T06:02:00Z",
+      },
+    ],
+    usage: { queryCount30d: 812, topUsers: ["priya.patel", "james.okafor"], trend: "flat" },
     fields: [
       { fieldPath: "month", nativeDataType: "date", description: "Calendar month." },
       { fieldPath: "plan", nativeDataType: "varchar", description: "Plan slug." },
@@ -318,6 +394,7 @@ export const DEMO_DATASETS: DemoDataset[] = [
     owners: ["james.okafor"],
     tags: [],
     terms: ["ActiveUser"],
+    usage: { queryCount30d: 233, topUsers: ["james.okafor"], trend: "up" },
     fields: [
       { fieldPath: "session_id", nativeDataType: "varchar", description: "Surrogate session key." },
       { fieldPath: "user_id", nativeDataType: "number", description: "FK → users.id." },
@@ -335,6 +412,15 @@ export const DEMO_DATASETS: DemoDataset[] = [
     owners: ["priya.patel"],
     tags: [],
     terms: [],
+    assertions: [
+      {
+        type: "freshness",
+        description: "Expected to land by 05:00 UTC daily.",
+        status: "fail",
+        lastCheckedAt: "2026-07-29T05:00:00Z",
+      },
+    ],
+    usage: { queryCount30d: 96, topUsers: ["priya.patel"], trend: "flat" },
     fields: [
       { fieldPath: "date", nativeDataType: "date", description: "Calendar day." },
       { fieldPath: "provider", nativeDataType: "varchar", description: "stripe | paypal." },

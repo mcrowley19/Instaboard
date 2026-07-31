@@ -1,9 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { Handoff } from "@/lib/types";
+import type { DecayReport, Handoff } from "@/lib/types";
 
 const PROGRESS_KEY = "instaboard.handoff-progress";
+
+const SEVERITY_STYLE: Record<DecayReport["severity"], { color: string; icon: string; label: string }> = {
+  ok: { color: "var(--green)", icon: "✅", label: "Still accurate" },
+  warning: { color: "var(--amber, #b7791f)", icon: "⚠️", label: "Needs attention" },
+  broken: { color: "var(--red)", icon: "🛑", label: "Out of date" },
+};
 
 function loadProgress(): Record<string, Record<number, boolean>> {
   try {
@@ -18,6 +24,26 @@ export default function HandoffsPage() {
   const [selected, setSelected] = useState<Handoff | null>(null);
   const [progress, setProgress] = useState<Record<string, Record<number, boolean>>>({});
   const [error, setError] = useState<string | null>(null);
+  const [validating, setValidating] = useState(false);
+  const [writtenBack, setWrittenBack] = useState(false);
+
+  const validate = async (id: string) => {
+    setValidating(true);
+    setWrittenBack(false);
+    try {
+      const res = await fetch(`/api/handoffs/${id}/verify`, { method: "POST" });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      setWrittenBack(Boolean(data.writtenBack));
+      const report = data.report as DecayReport;
+      setSelected((prev) => (prev && prev.id === id ? { ...prev, decay: report } : prev));
+      setHandoffs((prev) => prev?.map((h) => (h.id === id ? { ...h, decay: report } : h)) ?? prev);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setValidating(false);
+    }
+  };
 
   useEffect(() => {
     setProgress(loadProgress());
@@ -63,6 +89,53 @@ export default function HandoffsPage() {
             <p style={{ color: "var(--text-dim)" }}>{selected.summary}</p>
           </div>
 
+          {/* Knowledge decay: a runbook is only as good as the catalog it assumed. */}
+          <div className="card" style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <button className="btn" onClick={() => validate(selected.id)} disabled={validating}>
+                {validating ? "Checking DataHub…" : "Validate against DataHub"}
+              </button>
+              <span className="check-detail" style={{ margin: 0 }}>
+                Re-reads every entity this runbook depends on and reports what has drifted since{" "}
+                {selected.createdAt.slice(0, 10)}.
+              </span>
+            </div>
+
+            {selected.decay && (
+              <div style={{ marginTop: 14 }}>
+                <div
+                  style={{
+                    display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap",
+                    fontWeight: 650, color: SEVERITY_STYLE[selected.decay.severity].color,
+                  }}
+                >
+                  <span>{SEVERITY_STYLE[selected.decay.severity].icon}</span>
+                  <span>{SEVERITY_STYLE[selected.decay.severity].label}</span>
+                  <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>
+                    · {selected.decay.stepsChecked} steps · {selected.decay.entitiesChecked} entities
+                    {selected.decay.findings.length > 0 && ` · ${selected.decay.findings.length} finding${
+                      selected.decay.findings.length === 1 ? "" : "s"
+                    }`}
+                  </span>
+                  {writtenBack && <span className="tag">✓ flagged in DataHub</span>}
+                </div>
+
+                {!selected.decay.hadSnapshot && (
+                  <p className="check-detail" style={{ marginTop: 6 }}>
+                    No baseline was recorded for this runbook, so only current-state checks ran
+                    (deprecation, incidents, assertions, owners) — not schema drift.
+                  </p>
+                )}
+
+                {selected.decay.findings.length === 0 && (
+                  <p className="check-detail" style={{ marginTop: 6 }}>
+                    Every table, column, and owner this runbook relies on still checks out.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
             <div className="col-label" style={{ margin: 0 }}>
               {done}/{selected.steps.length} steps done ({pct}%)
@@ -84,6 +157,26 @@ export default function HandoffsPage() {
                 </div>
               </label>
               <div style={{ paddingLeft: 25, marginTop: 8 }}>
+                {(selected.decay?.findings ?? [])
+                  .filter((f) => f.stepIndex === i)
+                  .map((f, k) => (
+                    <div
+                      key={k}
+                      style={{
+                        borderLeft: `3px solid ${SEVERITY_STYLE[f.severity].color}`,
+                        background: "#fffaf2", borderRadius: 6,
+                        padding: "8px 12px", marginBottom: 10, fontSize: 13,
+                      }}
+                    >
+                      <strong style={{ color: SEVERITY_STYLE[f.severity].color }}>
+                        {SEVERITY_STYLE[f.severity].icon} {f.kind}
+                      </strong>{" "}
+                      {f.detail}
+                      {f.remedy && (
+                        <div style={{ color: "var(--text-dim)", marginTop: 4 }}>{f.remedy}</div>
+                      )}
+                    </div>
+                  ))}
                 <p style={{ marginBottom: 8 }}>{step.instruction}</p>
                 <p className="check-detail" style={{ marginBottom: 8 }}>
                   <strong>Why:</strong> {step.why}
@@ -158,6 +251,11 @@ export default function HandoffsPage() {
                   <span style={{ fontWeight: 650 }}>{h.title}</span>
                   {h.sample && <span className="tag warn">sample</span>}
                   {h.datahub?.saved && <span className="tag">✓ in DataHub</span>}
+                  {h.decay && h.decay.severity !== "ok" && (
+                    <span className="tag warn">
+                      {SEVERITY_STYLE[h.decay.severity].icon} {h.decay.findings.length} drifted
+                    </span>
+                  )}
                 </div>
                 <div className="check-detail" style={{ marginTop: 4 }}>
                   {h.author}{h.role ? ` · ${h.role}` : ""} · {h.steps.length} steps
