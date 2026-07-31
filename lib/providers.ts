@@ -7,7 +7,7 @@ export const DEFAULT_MODELS: Record<string, string> = {
   gemini: "gemini-2.5-flash",
 };
 
-const MAX_ATTEMPTS = 4;
+const MAX_ATTEMPTS = Number(process.env.LLM_MAX_ATTEMPTS || 5);
 
 /** Rate limits and provider hiccups are transient — retry them, don't surface them. */
 function isRetryable(err: unknown): boolean {
@@ -15,6 +15,22 @@ function isRetryable(err: unknown): boolean {
   if (status === 429 || (typeof status === "number" && status >= 500)) return true;
   const message = err instanceof Error ? err.message : String(err);
   return /\b(429|5\d\d)\b|rate.?limit|overloaded|timeout|ECONNRESET|fetch failed/i.test(message);
+}
+
+/**
+ * A hard spend limit or exhausted daily quota is NOT transient — retrying just
+ * burns minutes to arrive at the same 403. Fail fast and say why.
+ */
+export function isQuotaExhausted(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /\b40[23]\b/.test(message) && /limit exceeded|quota|insufficient|billing|credit/i.test(message);
+}
+
+/** Providers tell us how long to wait — honour it rather than guessing. */
+function retryAfterMs(err: unknown): number | null {
+  const message = err instanceof Error ? err.message : String(err);
+  const seconds = message.match(/retry[- ]after["':\s]+(\d+)/i)?.[1];
+  return seconds ? Number(seconds) * 1000 : null;
 }
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -40,9 +56,12 @@ export async function runLLMTurn(
         : await openAICompatTurn(config, model, system, turns, tools);
     } catch (err) {
       lastError = err;
+      // Out of quota is terminal — don't spend minutes rediscovering that.
+      if (isQuotaExhausted(err)) throw err;
       if (attempt === MAX_ATTEMPTS - 1 || !isRetryable(err)) throw err;
-      // 1s, 2s, 4s — plus jitter so parallel callers don't retry in lockstep.
-      await sleep(2 ** attempt * 1000 + Math.random() * 500);
+      // Honour Retry-After when given; otherwise 2s, 4s, 8s, 16s with jitter.
+      // Free tiers meter per minute, so the backoff has to reach past 60s.
+      await sleep(retryAfterMs(err) ?? 2 ** (attempt + 1) * 1000 + Math.random() * 1000);
     }
   }
   throw lastError;

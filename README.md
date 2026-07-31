@@ -42,6 +42,20 @@ DEMO_MODE=true npm run eval      # no DataHub, no Docker
 Results are committed at [`evals/results/scorecard.md`](evals/results/scorecard.md),
 with every raw answer in `latest.json` so any check can be audited by hand.
 
+**It runs on a free API key.** A full run is ~80 LLM calls — more than most free
+daily quotas allow in one sitting — so every completed case is cached and a re-run
+resumes where it stopped. Hitting a quota wall pauses the run instead of losing it.
+
+```bash
+# free, tool-calling capable, no card required
+LLM_PROVIDER=openrouter  LLM_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free
+# or Google AI Studio's free tier
+LLM_PROVIDER=gemini      LLM_MODEL=gemini-2.5-flash
+```
+
+Add `--concurrency=1` if your provider is strict about requests per minute, and
+`--fresh` to ignore the cache. `npm run eval -- --arm=grounded` runs one arm.
+
 The control arm is deliberately **not** a strawman — it gets a neutral, capable-assistant
 prompt asking for specific tables, owners, and SQL. It's the honest counterfactual:
 an off-the-shelf chatbot, which is what a new hire actually reaches for today. Both

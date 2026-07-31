@@ -1,24 +1,33 @@
 /**
  * instaboard eval harness.
  *
- *   npm run eval              # both arms, demo catalog (zero setup)
+ *   npm run eval                    # both arms, demo catalog (zero setup)
  *   npm run eval -- --arm=grounded
- *   npm run eval -- --live    # run against a real DataHub via MCP
+ *   npm run eval -- --live          # run against a real DataHub via MCP
+ *   npm run eval -- --concurrency=1 # gentler on a rate-limited free tier
+ *   npm run eval -- --fresh         # ignore the resume cache
  *
  * Runs the 20-case onboarding benchmark twice through the *same* agent loop:
  * once with the DataHub MCP tool set, once with the tool list emptied. The only
  * variable between arms is DataHub access, so the gap between the two scores is
  * a clean measurement of what the catalog is worth.
  *
+ * Designed to complete on a FREE API tier. A full run is ~80 LLM calls, which
+ * exceeds most free daily quotas in one go, so every completed case is cached to
+ * `results/cache.json` and a re-run resumes where it stopped. Hitting a quota
+ * wall is therefore not a lost run — it's a pause. Re-run tomorrow and it picks
+ * up the remaining cases.
+ *
  * Writes evals/results/scorecard.md (human-readable) and
  * evals/results/latest.json (every raw answer, for auditing a disputed check).
  */
 
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { runAgent } from "../lib/agent";
 import { listDataHubTools } from "../lib/mcp";
 import { CHAT_SYSTEM_PROMPT } from "../lib/prompts";
+import { isQuotaExhausted } from "../lib/providers";
 import type { AgentEvent, LLMConfig } from "../lib/types";
 import { BENCHMARK, CATEGORIES, type Category, type EvalCase } from "./benchmark";
 import { scoreCase, summarizeCase, type CaseResult } from "./score";
@@ -66,16 +75,72 @@ function llmConfig(): LLMConfig {
   return { provider, apiKey, model: process.env.LLM_MODEL || undefined };
 }
 
-/* ── Runner ───────────────────────────────────────────────────────────── */
+/* ── Resume cache ─────────────────────────────────────────────────────── */
 
 type Arm = "grounded" | "blind";
+
+/**
+ * What a completed case produced. Scoring is re-applied on load, so tightening a
+ * check in benchmark.ts re-scores cached answers for free rather than forcing a
+ * full re-run — the expensive part is the LLM call, not the string match.
+ */
+interface CachedRun {
+  answer: string;
+  toolCalls: string[];
+  durationMs: number;
+}
+
+type Cache = Record<string, CachedRun>;
+
+const CACHE_PATH = path.join(process.cwd(), "evals", "results", "cache.json");
+
+const cacheKey = (model: string, arm: Arm, id: string) => `${model}|${arm}|${id}`;
+
+function loadCache(fresh: boolean): Cache {
+  if (fresh || !existsSync(CACHE_PATH)) return {};
+  try {
+    return JSON.parse(readFileSync(CACHE_PATH, "utf8")) as Cache;
+  } catch {
+    return {};
+  }
+}
+
+function saveCache(cache: Cache): void {
+  writeFileSync(CACHE_PATH, JSON.stringify(cache, null, 2));
+}
+
+/* ── Runner ───────────────────────────────────────────────────────────── */
+
+/** Thrown to unwind the run when the provider says we're out of quota. */
+class QuotaExhausted extends Error {}
+
+function scored(evalCase: EvalCase, run: CachedRun, error?: string): CaseResult {
+  const checks = scoreCase(evalCase, run.answer);
+  return {
+    id: evalCase.id,
+    category: evalCase.category,
+    question: evalCase.question,
+    answer: run.answer,
+    checks,
+    ...summarizeCase(checks),
+    toolCalls: run.toolCalls,
+    durationMs: run.durationMs,
+    ...(error ? { error } : {}),
+  };
+}
 
 async function runOne(
   evalCase: EvalCase,
   arm: Arm,
   config: LLMConfig,
-  groundedTools: Awaited<ReturnType<typeof listDataHubTools>>
-): Promise<CaseResult> {
+  groundedTools: Awaited<ReturnType<typeof listDataHubTools>>,
+  cache: Cache,
+  model: string
+): Promise<CaseResult & { cached?: boolean }> {
+  const key = cacheKey(model, arm, evalCase.id);
+  const hit = cache[key];
+  if (hit) return { ...scored(evalCase, hit), cached: true };
+
   const toolCalls: string[] = [];
   const started = Date.now();
   let answer = "";
@@ -95,23 +160,19 @@ async function runOne(
       { tools: arm === "grounded" ? groundedTools : [] }
     );
   } catch (err) {
+    if (isQuotaExhausted(err)) throw new QuotaExhausted(err instanceof Error ? err.message : String(err));
     error = err instanceof Error ? err.message : String(err);
   }
 
-  const checks = scoreCase(evalCase, answer);
-  const summary = summarizeCase(checks);
+  const run: CachedRun = { answer, toolCalls, durationMs: Date.now() - started };
 
-  return {
-    id: evalCase.id,
-    category: evalCase.category,
-    question: evalCase.question,
-    answer,
-    checks,
-    ...summary,
-    toolCalls,
-    durationMs: Date.now() - started,
-    ...(error ? { error } : {}),
-  };
+  // Only bank a clean result — a case that errored should be retried next run.
+  if (!error && answer) {
+    cache[key] = run;
+    saveCache(cache);
+  }
+
+  return scored(evalCase, run, error);
 }
 
 /** Small concurrency pool — keeps the full run under a couple of minutes. */
@@ -239,8 +300,13 @@ function scorecard(arms: ArmSummary[], meta: { model: string; mode: string; at: 
     "- **The control is not a strawman.** It gets a neutral, capable-assistant prompt",
     "  asking for specific tables, owners, and SQL — the counterfactual is an",
     "  off-the-shelf chatbot, not a crippled one. Both prompts are in `run.ts`.",
+    "- **Runs on a free API tier.** A full run is ~80 LLM calls, more than most free",
+    "  daily quotas allow at once, so each completed case is cached and a re-run",
+    "  resumes where it stopped. A score may therefore be assembled across sessions —",
+    "  always on the one model named above, never mixed.",
     "- **Reproduce:** `DEMO_MODE=true npm run eval` — no DataHub, no Docker.",
-    "  Add `--live` to run the same benchmark against a seeded DataHub instance.",
+    "  Add `--live` to run the same benchmark against a seeded DataHub instance,",
+    "  or `--concurrency=1` if your provider is strict about requests per minute.",
     ""
   );
 
@@ -258,26 +324,57 @@ async function main() {
 
   const armArg = argv.find((a) => a.startsWith("--arm="))?.split("=")[1] as Arm | undefined;
   const arms: Arm[] = armArg ? [armArg] : ["grounded", "blind"];
+  const concurrency = Number(argv.find((a) => a.startsWith("--concurrency="))?.split("=")[1] || 2);
+  const fresh = argv.includes("--fresh");
 
   const config = llmConfig();
   const model = config.model || `${config.provider} default`;
   const groundedTools = await listDataHubTools();
+  const cache = loadCache(fresh);
+
+  const alreadyDone = arms.reduce(
+    (n, arm) => n + BENCHMARK.filter((c) => cache[cacheKey(model, arm, c.id)]).length,
+    0
+  );
 
   console.log(`\n  instaboard onboarding benchmark`);
   console.log(`  ${BENCHMARK.length} cases · model ${model} · ${live ? "live DataHub" : "demo catalog"}`);
-  console.log(`  ${groundedTools.length} DataHub MCP tools available to the grounded arm\n`);
+  console.log(`  ${groundedTools.length} DataHub MCP tools available to the grounded arm`);
+  if (alreadyDone) console.log(`  resuming — ${alreadyDone}/${BENCHMARK.length * arms.length} case-runs already cached`);
+  console.log();
 
   const summaries: ArmSummary[] = [];
+  let quotaHit: string | null = null;
+
   for (const arm of arms) {
+    if (quotaHit) break;
     process.stdout.write(`  ${arm === "grounded" ? "with DataHub" : "control (no DataHub)"} `);
-    const cases = await mapPool(BENCHMARK, 4, async (evalCase) => {
-      const result = await runOne(evalCase, arm, config, groundedTools);
-      process.stdout.write(result.passed ? "." : "x");
-      return result;
-    });
+    let cases: (CaseResult & { cached?: boolean })[] = [];
+    try {
+      cases = await mapPool(BENCHMARK, concurrency, async (evalCase) => {
+        const result = await runOne(evalCase, arm, config, groundedTools, cache, model);
+        process.stdout.write(result.cached ? "·" : result.passed ? "." : "x");
+        return result;
+      });
+    } catch (err) {
+      if (!(err instanceof QuotaExhausted)) throw err;
+      quotaHit = err.message;
+      break;
+    }
     const summary = summarizeArm(arm, cases);
     summaries.push(summary);
     console.log(`  ${summary.casesPassed}/${BENCHMARK.length}`);
+  }
+
+  if (quotaHit) {
+    const banked = Object.keys(cache).filter((k) => k.startsWith(`${model}|`)).length;
+    console.error(
+      `\n\n  Provider quota exhausted — stopping before spending more time on retries.\n` +
+        `  ${quotaHit.slice(0, 200)}\n\n` +
+        `  ${banked}/${BENCHMARK.length * arms.length} case-runs are banked in evals/results/cache.json.\n` +
+        `  Re-run \`npm run eval\` when the quota resets and it resumes from there.\n`
+    );
+    process.exit(2);
   }
 
   const at = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";

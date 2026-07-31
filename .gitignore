@@ -35,3 +35,6 @@ tsconfig.tsbuildinfo
 
 # runtime user data (handoffs)
 data/
+
+# Eval resume cache (regenerated locally)
+evals/results/cache.json
