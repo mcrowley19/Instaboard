@@ -12,13 +12,20 @@
  * unattended. Knowledge gets re-verified on a schedule, and the warnings land in
  * the catalog where the runbooks live.
  *
- * Drift is written back at two levels:
- *   1. a **drift-note Document**, carrying the full report and linked to the
- *      drifted datasets;
- *   2. **native primitives**, meaning a `Stale Runbook` tag on every drifted
- *      dataset and a real Incident on any dataset where a step would now fail.
- *      That second level surfaces the finding in workflows a data team already
- *      watches instead of in a document somebody has to open.
+ * Drift is written back at four levels:
+ *   1. a **drift-note Document**, carrying the full report and its provenance
+ *      chain, linked to the drifted datasets;
+ *   2. **structured state**, meaning a custom assertion that fails while the
+ *      runbook is stale and structured properties recording the status, the
+ *      specific change that broke it, and the version each claim was validated
+ *      against. Filterable and machine-readable, not prose;
+ *   3. **native primitives**, meaning a `Stale Runbook` tag on every drifted
+ *      dataset and a real Incident, assigned to whoever owns the dataset today,
+ *      on any dataset where a step would now fail. That surfaces the finding in
+ *      workflows a data team already watches instead of in a document somebody
+ *      has to open;
+ *   4. a **proposed correction** derived from the catalog, written to
+ *      `proposals/` by `npm run propose` for a human to approve.
  */
 
 import { sweepRunbooks } from "../lib/sweep";
@@ -47,8 +54,30 @@ async function main() {
           r.stepsChecked
         } step${r.stepsChecked === 1 ? "" : "s"}${wb}`
       );
+      console.log(
+        `    ${r.claims.holds}/${r.claims.total} catalog claims still hold` +
+          `${r.claims.broken ? `, ${r.claims.broken} broken` : ""}` +
+          `${r.claims.unverified ? `, ${r.claims.unverified} unverified` : ""}`
+      );
       for (const f of r.findings) {
         console.log(`    ${f.severity === "broken" ? "🛑" : "⚠️"} step ${f.stepIndex + 1} · ${f.kind}: ${f.detail}`);
+      }
+      if (r.structured?.attempted) {
+        for (const a of r.structured.assertions) {
+          console.log(`    📋 assertion ${a.result === "FAILURE" ? "FAILING" : "passing"}: ${a.urn}`);
+          console.log(`         on ${a.datasetUrn}`);
+        }
+        for (const p of r.structured.properties) {
+          console.log(`    🔖 ${p.status} · ${p.driftValues} drift value(s), ${p.pins} provenance pin(s)`);
+        }
+        for (const e of r.structured.errors) console.log(`    ⚠️  ${e}`);
+      }
+      if (r.proposal) {
+        console.log(
+          `    ✎ correction proposed: ${r.proposal.edits.length} edit(s), ${r.proposal.unresolved.length} left for a person` +
+            `${r.proposal.reviewers.length ? ` · reviewers: ${r.proposal.reviewers.join(", ")}` : ""}`
+        );
+        console.log("       run `npm run propose` to write it out, `npm run propose -- --pr` to open it as a PR");
       }
       if (r.native?.attempted) {
         if (r.native.tagged.length) {
@@ -57,6 +86,7 @@ async function main() {
         for (const inc of r.native.incidents) {
           console.log(`    🚨 ${inc.reused ? "incident already open" : "incident raised"}: ${inc.urn}`);
           console.log(`         on ${inc.datasetUrn}`);
+          if (inc.assignees.length) console.log(`         assigned to ${inc.assignees.join(", ")}`);
         }
         for (const e of r.native.errors) console.log(`    ⚠️  ${e}`);
       }

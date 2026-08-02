@@ -26,6 +26,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { snapshotHandoff } from "../lib/decay";
 import { datahubGraphQL } from "../lib/datahub-graphql";
+import { readAspect, writeAspect } from "../lib/gms-aspects";
 import { callDataHubTool, isDemoMode } from "../lib/mcp";
 import { saveHandoff, deleteHandoff } from "../lib/handoff-store";
 import { sweepRunbooks } from "../lib/sweep";
@@ -208,32 +209,6 @@ interface Manifest {
     /** Everything needed to put it back. */
     undo: Record<string, unknown>;
   }[];
-}
-
-async function readAspect(urn: string, aspect: string): Promise<Record<string, unknown> | null> {
-  const res = await fetch(`${GMS()}/openapi/v3/entity/dataset/${encodeURIComponent(urn)}/${aspect}`, {
-    headers: process.env.DATAHUB_GMS_TOKEN ? { Authorization: `Bearer ${process.env.DATAHUB_GMS_TOKEN}` } : {},
-    signal: AbortSignal.timeout(20_000),
-  });
-  if (!res.ok) return null;
-  const body = (await res.json()) as { value?: Record<string, unknown> };
-  return body.value ?? null;
-}
-
-async function writeAspect(urn: string, aspect: string, value: Record<string, unknown>): Promise<void> {
-  const res = await fetch(
-    `${GMS()}/openapi/v3/entity/dataset/${encodeURIComponent(urn)}/${aspect}?createIfNotExists=false`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(process.env.DATAHUB_GMS_TOKEN ? { Authorization: `Bearer ${process.env.DATAHUB_GMS_TOKEN}` } : {}),
-      },
-      body: JSON.stringify({ value }),
-      signal: AbortSignal.timeout(20_000),
-    }
-  );
-  if (!res.ok) throw new Error(`writeAspect ${aspect} on ${urn}: ${res.status} ${await res.text()}`);
 }
 
 const UPDATE_DEPRECATION = `

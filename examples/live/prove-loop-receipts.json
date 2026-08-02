@@ -1,0 +1,377 @@
+{
+  "startedAt": "2026-08-02T17:58:46.516Z",
+  "finishedAt": "2026-08-02T17:59:50.935Z",
+  "gms": "http://localhost:8080",
+  "catalog": "the sample Northbeam catalog ingested by scripts/seed_datahub.py",
+  "method": "A runbook was captured against the live catalog and snapshotted through the same code path the app uses. The catalog was then changed through DataHub's own write APIs: a column renamed in schemaMetadata, a table deprecated via updateDeprecation, an owner removed via the MCP server's remove_owners. The decay engine was told none of it.",
+  "breakingChanges": [
+    {
+      "kind": "column-renamed",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+      "detail": "Renamed fct_revenue.net_amount_usd to net_revenue_usd — the column step 2's SQL sums."
+    },
+    {
+      "kind": "deprecated",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+      "detail": "Deprecated mrr_monthly, which step 3 tells you to reconcile against."
+    },
+    {
+      "kind": "owner-removed",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+      "detail": "Removed Mike Rodriguez as an owner of fct_revenue, whom step 2 tells you to ping."
+    }
+  ],
+  "checks": [
+    {
+      "phase": "datahub",
+      "what": "DataHub is up",
+      "passed": true,
+      "detail": "GMS answering at http://localhost:8080"
+    },
+    {
+      "phase": "ingest",
+      "what": "sample catalog is in the catalog",
+      "passed": true,
+      "detail": "fct_revenue resolves in DataHub"
+    },
+    {
+      "phase": "capture",
+      "what": "runbook captured with a catalog baseline",
+      "passed": true,
+      "detail": "3 entities snapshotted, 3 resolved"
+    },
+    {
+      "phase": "capture",
+      "what": "every snapshot carries a recomputable version",
+      "passed": true,
+      "detail": "payment_health_daily@dd3723f5adec, fct_revenue@ab36daad91f3, mrr_monthly@c05ace3f0aaa"
+    },
+    {
+      "phase": "validate",
+      "what": "no drift reported",
+      "passed": true,
+      "detail": "1 runbook checked, 0 drifted"
+    },
+    {
+      "phase": "validate",
+      "what": "every catalog claim holds",
+      "passed": true,
+      "detail": "17/17 claims hold"
+    },
+    {
+      "phase": "validate",
+      "what": "the runbook's assertion is passing in DataHub",
+      "passed": true,
+      "detail": "a1306fa23998=SUCCESS, 97b752e0b2ce=SUCCESS, 1b4acb4707a6=SUCCESS"
+    },
+    {
+      "phase": "validate",
+      "what": "validated-against pins are written to the catalog",
+      "passed": true,
+      "detail": "5 pins, 7 pins, 5 pins"
+    },
+    {
+      "phase": "break",
+      "what": "breaking changes applied through DataHub's own APIs",
+      "passed": true,
+      "detail": "3/3 applied"
+    },
+    {
+      "phase": "revalidate",
+      "what": "the runbook is reported broken",
+      "passed": true,
+      "detail": "1 broken of 1"
+    },
+    {
+      "phase": "revalidate",
+      "what": "the renamed column is caught",
+      "passed": true,
+      "detail": "Column `net_amount_usd` is referenced by this step but no longer exists on fct_revenue."
+    },
+    {
+      "phase": "revalidate",
+      "what": "the deprecation is caught",
+      "passed": true,
+      "detail": "mrr_monthly has been deprecated since this runbook was written."
+    },
+    {
+      "phase": "revalidate",
+      "what": "the owner change is caught",
+      "passed": true,
+      "detail": "This step says to contact Mike Rodriguez, who no longer owns fct_revenue."
+    },
+    {
+      "phase": "revalidate",
+      "what": "every finding names the claim it broke",
+      "passed": true,
+      "detail": "3/3 findings carry a claim id"
+    },
+    {
+      "phase": "revalidate",
+      "what": "broken claims moved the aspect they were pinned to",
+      "passed": true,
+      "detail": "3 of 17 claims broken, 14 still hold"
+    },
+    {
+      "phase": "write-back",
+      "what": "a drift note is in the catalog",
+      "passed": true,
+      "detail": "urn:li:document:shared-758db031-4ca5-4074-8622-321f4fc2d938"
+    },
+    {
+      "phase": "write-back",
+      "what": "the runbook's assertion is now FAILING in DataHub",
+      "passed": true,
+      "detail": "a1306fa23998=SUCCESS, 97b752e0b2ce=FAILURE, 1b4acb4707a6=FAILURE"
+    },
+    {
+      "phase": "write-back",
+      "what": "the specific catalog change is recorded as structured state",
+      "passed": true,
+      "detail": "0 drift value(s), 2 drift value(s), 1 drift value(s)"
+    },
+    {
+      "phase": "write-back",
+      "what": "drifted datasets are tagged",
+      "passed": true,
+      "detail": "2 tagged"
+    },
+    {
+      "phase": "write-back",
+      "what": "an incident is raised and assigned to the current owner",
+      "passed": true,
+      "detail": "88bdde80effa → urn:li:corpuser:priya.patel; 58b16698a813 → urn:li:corpuser:priya.patel"
+    },
+    {
+      "phase": "propose",
+      "what": "a correction is proposed for the renamed column",
+      "passed": true,
+      "detail": "net_amount_usd→net_revenue_usd, Mike Rodriguez→Priya Patel, mrr_monthly→analytics.marts.mrr_monthly_v2"
+    },
+    {
+      "phase": "propose",
+      "what": "a correction is proposed for the departed owner",
+      "passed": true,
+      "detail": "Mike Rodriguez → Priya Patel"
+    },
+    {
+      "phase": "propose",
+      "what": "the deprecated table is repointed at its named replacement",
+      "passed": true,
+      "detail": "analytics.marts.mrr_monthly_v2"
+    },
+    {
+      "phase": "propose",
+      "what": "the correction comes out as a reviewable diff",
+      "passed": true,
+      "detail": "42 diff lines"
+    },
+    {
+      "phase": "propose",
+      "what": "the review goes to whoever owns the data now",
+      "passed": true,
+      "detail": "Priya Patel"
+    },
+    {
+      "phase": "restore",
+      "what": "no drift reported",
+      "passed": true,
+      "detail": "1 runbook checked, 0 drifted"
+    },
+    {
+      "phase": "restore",
+      "what": "every catalog claim holds",
+      "passed": true,
+      "detail": "17/17 claims hold"
+    },
+    {
+      "phase": "restore",
+      "what": "the runbook's assertion is passing in DataHub",
+      "passed": true,
+      "detail": "a1306fa23998=SUCCESS, 97b752e0b2ce=SUCCESS, 1b4acb4707a6=SUCCESS"
+    },
+    {
+      "phase": "restore",
+      "what": "validated-against pins are written to the catalog",
+      "passed": true,
+      "detail": "5 pins, 7 pins, 5 pins"
+    }
+  ],
+  "summary": {
+    "total": 29,
+    "passed": 29,
+    "failed": 0
+  },
+  "validations": {
+    "before": {
+      "severity": "ok",
+      "claims": {
+        "total": 17,
+        "holds": 17,
+        "broken": 0,
+        "unverified": 0
+      },
+      "findings": []
+    },
+    "after": {
+      "severity": "broken",
+      "claims": {
+        "total": 17,
+        "holds": 14,
+        "broken": 3,
+        "unverified": 0
+      },
+      "findings": [
+        {
+          "stepIndex": 1,
+          "stepTitle": "Pull net revenue for the month",
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "claimId": "column-exists:c1d447df18e7",
+          "severity": "broken",
+          "kind": "column-missing",
+          "detail": "Column `net_amount_usd` is referenced by this step but no longer exists on fct_revenue.",
+          "remedy": "Check whether net_amount_usd was renamed, and update this step's SQL and instructions."
+        },
+        {
+          "stepIndex": 1,
+          "stepTitle": "Pull net revenue for the month",
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "claimId": "owner-current:bce2665ac899",
+          "severity": "warning",
+          "kind": "owner-changed",
+          "detail": "This step says to contact Mike Rodriguez, who no longer owns fct_revenue.",
+          "remedy": "Current owner: Priya Patel."
+        },
+        {
+          "stepIndex": 2,
+          "stepTitle": "Reconcile against the MRR rollup",
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "claimId": "not-deprecated:0b5f61f855a7",
+          "severity": "broken",
+          "kind": "newly-deprecated",
+          "detail": "mrr_monthly has been deprecated since this runbook was written.",
+          "remedy": "Point this step at the replacement dataset named in DataHub."
+        }
+      ],
+      "documentUrn": "urn:li:document:shared-758db031-4ca5-4074-8622-321f4fc2d938",
+      "assertions": [
+        {
+          "urn": "urn:li:assertion:instaboard-f80ab7b3a1306fa23998",
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+          "result": "SUCCESS"
+        },
+        {
+          "urn": "urn:li:assertion:instaboard-55e12c2097b752e0b2ce",
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "result": "FAILURE"
+        },
+        {
+          "urn": "urn:li:assertion:instaboard-e9dc08241b4acb4707a6",
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "result": "FAILURE"
+        }
+      ],
+      "structuredProperties": [
+        {
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+          "status": "prove-monthly-revenue-close: validated (checked 2026-08-02)",
+          "driftValues": 0,
+          "pins": 5
+        },
+        {
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "status": "prove-monthly-revenue-close: stale (checked 2026-08-02)",
+          "driftValues": 2,
+          "pins": 7
+        },
+        {
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "status": "prove-monthly-revenue-close: stale (checked 2026-08-02)",
+          "driftValues": 1,
+          "pins": 5
+        }
+      ],
+      "incidents": [
+        {
+          "urn": "urn:li:incident:57ff45c3-e9b7-497a-be98-88bdde80effa",
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "reused": true,
+          "assignees": [
+            "urn:li:corpuser:priya.patel"
+          ]
+        },
+        {
+          "urn": "urn:li:incident:0da3de32-4a98-4ba1-9cfa-58b16698a813",
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "reused": true,
+          "assignees": [
+            "urn:li:corpuser:priya.patel"
+          ]
+        }
+      ],
+      "tagged": [
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)"
+      ],
+      "proposal": {
+        "edits": [
+          {
+            "stepIndex": 1,
+            "stepTitle": "Pull net revenue for the month",
+            "kind": "column-rename",
+            "from": "net_amount_usd",
+            "to": "net_revenue_usd",
+            "rationale": "`net_revenue_usd` is on fct_revenue now and was not when this runbook was recorded, and it is the closest match to `net_amount_usd` (0.64).",
+            "confidence": "medium",
+            "claimId": "column-exists:c1d447df18e7",
+            "occurrences": 3
+          },
+          {
+            "stepIndex": 1,
+            "stepTitle": "Pull net revenue for the month",
+            "kind": "owner-update",
+            "from": "Mike Rodriguez",
+            "to": "Priya Patel",
+            "rationale": "DataHub lists Priya Patel as the owner today. Pronouns referring to Mike Rodriguez were repointed to Priya; check the prose reads right.",
+            "confidence": "medium",
+            "claimId": "owner-current:bce2665ac899",
+            "occurrences": 1
+          },
+          {
+            "stepIndex": 2,
+            "stepTitle": "Reconcile against the MRR rollup",
+            "kind": "dataset-replacement",
+            "from": "mrr_monthly",
+            "to": "analytics.marts.mrr_monthly_v2",
+            "rationale": "DataHub's deprecation note on mrr_monthly names it: \"Rebuilt with plan-level grain at the FY close. Use analytics.marts.mrr_monthly_v2 instead.\".",
+            "confidence": "high",
+            "claimId": "not-deprecated:0b5f61f855a7",
+            "occurrences": 2
+          }
+        ],
+        "unresolved": [
+          {
+            "stepIndex": 2,
+            "stepTitle": "Reconcile against the MRR rollup",
+            "kind": "newly-deprecated",
+            "detail": "mrr_monthly has been deprecated since this runbook was written.",
+            "needsHuman": "The deprecation note names `analytics.marts.mrr_monthly_v2`, which is a table name rather than a URN, so this step's entity link still points at the deprecated dataset. Repoint it once the replacement is in the catalog."
+          }
+        ],
+        "reviewers": [
+          "Priya Patel"
+        ],
+        "diff": "--- a/runbooks/prove-monthly-revenue-close.md\n+++ b/runbooks/prove-monthly-revenue-close.md\n@@ -18,31 +18,33 @@\n \n ## Step 2: Pull net revenue for the month\n \n-Sum net_amount_usd from fct_revenue for the close month. Use net_amount_usd, never gross_amount_usd — gross is before refunds and will not tie to the bank.\n+Sum net_revenue_usd from fct_revenue for the close month. Use net_revenue_usd, never gross_amount_usd — gross is before refunds and will not tie to the bank.\n \n **Why:** Finance reconciles to settled cash, so refunds have to be out before the number leaves this step.\n \n **Entity:** `urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)`\n \n ```sql\n-SELECT DATE_TRUNC('month', revenue_date) AS month, SUM(net_amount_usd) AS net_revenue\n+SELECT DATE_TRUNC('month', revenue_date) AS month, SUM(net_revenue_usd) AS net_revenue\n FROM analytics.marts.fct_revenue\n GROUP BY 1 ORDER BY 1 DESC;\n ```\n \n-**Tips:** If the total looks short, ping Mike Rodriguez — he owns the dbt job that loads this table.\n+**Tips:** If the total looks short, ping Priya Patel — Priya owns the dbt job that loads this table.\n \n ## Step 3: Reconcile against the MRR rollup\n \n-Compare the recurring slice of the number above against mrr_usd in mrr_monthly for the same month. They should agree to within rounding; if they don't, the rollup ran before the fact finished loading.\n+Compare the recurring slice of the number above against mrr_usd in analytics.marts.mrr_monthly_v2 for the same month. They should agree to within rounding; if they don't, the rollup ran before the fact finished loading.\n \n **Why:** The board deck quotes MRR and finance quotes net revenue. If those two disagree in public it is a bad month.\n \n **Entity:** `urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)`\n \n ```sql\n-SELECT month, SUM(mrr_usd) AS mrr FROM analytics.marts.mrr_monthly GROUP BY 1 ORDER BY 1 DESC LIMIT 12;\n+SELECT month, SUM(mrr_usd) AS mrr FROM analytics.marts.mrr_monthly_v2 GROUP BY 1 ORDER BY 1 DESC LIMIT 12;\n ```\n \n+**Tips:** mrr_monthly was deprecated after this runbook was recorded; DataHub's deprecation note points here instead.\n+\n ---\n _Recorded with instaboard. Open the instaboard extension beside DataHub to replay this handoff step by step._\n"
+      }
+    },
+    "afterRestore": {
+      "severity": "ok",
+      "claims": {
+        "total": 17,
+        "holds": 17,
+        "broken": 0,
+        "unverified": 0
+      }
+    }
+  }
+}

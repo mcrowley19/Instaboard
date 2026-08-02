@@ -1,6 +1,5 @@
-import { detectDecay, writeBackDecay, type WriteBackReceipt } from "@/lib/decay";
-import { writeBackNative, type NativeWriteBackReceipt } from "@/lib/native-writeback";
-import { getHandoff, saveHandoff } from "@/lib/handoff-store";
+import { getHandoff } from "@/lib/handoff-store";
+import { validateRunbook } from "@/lib/sweep";
 
 export { corsPreflight as OPTIONS } from "@/lib/cors";
 
@@ -11,16 +10,17 @@ export const maxDuration = 120;
  * Re-validate a runbook against live DataHub.
  *
  * Detection is deterministic. It diffs the schema and reads health, with no LLM
- * anywhere in it, so a "broken" verdict is something an on-call engineer can
- * confirm in the DataHub UI inside ten seconds. Findings are persisted onto the handoff and,
- * when anything has drifted, written back to the catalog so the staleness is
- * visible to whoever finds the runbook there rather than only in this app.
+ * anywhere in it, so a "broken" verdict is something an on-call engineer can confirm in the
+ * DataHub UI inside ten seconds. Every claim the runbook makes is pinned to the version of
+ * the catalog aspect it was validated against, so the verdict is reproducible rather than
+ * asserted.
  *
- * Write-back happens at two levels: a drift note Document (the full report), and
- * DataHub's native primitives, meaning a `Stale Runbook` tag on every drifted
- * dataset plus a real Incident on any dataset where a step would now fail. That
- * second level puts the finding in front of a data team without anyone having to
- * open a document.
+ * This runs the same `validateRunbook` the unattended sweep runs, rather than a parallel
+ * path — pressing Validate and running the cron job have to do the same thing, or the demo
+ * shows something the nightly pass doesn't. That covers the write-back at every level: the
+ * drift-note Document, the runbook-validity assertion and structured properties, the
+ * `Stale Runbook` tag, an Incident assigned to whoever owns the dataset today, and a
+ * proposed correction for a human to approve.
  */
 export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -28,25 +28,17 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   if (!handoff) return Response.json({ error: "Handoff not found" }, { status: 404 });
 
   try {
-    const report = await detectDecay(handoff);
-    handoff.decay = report;
-    saveHandoff(handoff);
-
-    // Only write back when there's something worth telling the catalog. The
-    // receipt carries the document URN DataHub reports, so the write-back is
-    // verifiable in the catalog rather than just claimed by this response.
-    let receipt: WriteBackReceipt | null = null;
-    let native: NativeWriteBackReceipt | null = null;
-    if (report.severity !== "ok") {
-      receipt = await writeBackDecay(handoff, report);
-      native = await writeBackNative(handoff, report, receipt.documentUrn);
-    }
-
-    return Response.json({ report, writtenBack: Boolean(receipt?.written), receipt, native });
+    const { row, report } = await validateRunbook(handoff);
+    return Response.json({
+      report,
+      claims: row.claims,
+      writtenBack: Boolean(row.receipt?.written),
+      receipt: row.receipt,
+      native: row.native,
+      structured: row.structured,
+      proposal: row.proposal,
+    });
   } catch (err) {
-    return Response.json(
-      { error: err instanceof Error ? err.message : String(err) },
-      { status: 500 }
-    );
+    return Response.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 }

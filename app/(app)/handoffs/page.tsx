@@ -26,15 +26,23 @@ export default function HandoffsPage() {
   const [error, setError] = useState<string | null>(null);
   const [validating, setValidating] = useState(false);
   const [writtenBack, setWrittenBack] = useState(false);
+  // "18 of 19 claims still hold" is a more useful verdict than "stale": it says
+  // the runbook is followable apart from one named thing.
+  const [claims, setClaims] = useState<{ total: number; holds: number } | null>(null);
+  const [proposedEdits, setProposedEdits] = useState(0);
 
   const validate = async (id: string) => {
     setValidating(true);
     setWrittenBack(false);
+    setClaims(null);
+    setProposedEdits(0);
     try {
       const res = await fetch(`/api/handoffs/${id}/verify`, { method: "POST" });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       setWrittenBack(Boolean(data.writtenBack));
+      setClaims(data.claims ?? null);
+      setProposedEdits(data.proposal?.edits?.length ?? 0);
       const report = data.report as DecayReport;
       setSelected((prev) => (prev && prev.id === id ? { ...prev, decay: report } : prev));
       setHandoffs((prev) => prev?.map((h) => (h.id === id ? { ...h, decay: report } : h)) ?? prev);
@@ -117,7 +125,17 @@ export default function HandoffsPage() {
                       selected.decay.findings.length === 1 ? "" : "s"
                     }`}
                   </span>
+                  {claims && claims.total > 0 && (
+                    <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>
+                      · {claims.holds}/{claims.total} catalog claims still hold
+                    </span>
+                  )}
                   {writtenBack && <span className="tag">✓ flagged in DataHub</span>}
+                  {proposedEdits > 0 && (
+                    <span className="tag">
+                      ✎ {proposedEdits} correction{proposedEdits === 1 ? "" : "s"} proposed
+                    </span>
+                  )}
                 </div>
 
                 {!selected.decay.hadSnapshot && (
@@ -175,6 +193,26 @@ export default function HandoffsPage() {
                       {f.remedy && (
                         <div style={{ color: "var(--text-dim)", marginTop: 4 }}>{f.remedy}</div>
                       )}
+                      {/* The provenance chain: which claim broke, what it was validated
+                          against, and what that aspect reads now. Recomputable from the
+                          catalog, which is what makes the verdict checkable. */}
+                      {(() => {
+                        const claim = selected.decay?.claims?.find((c) => c.id === f.claimId);
+                        const pinned = claim?.validatedAgainst;
+                        if (!pinned) return null;
+                        const now = selected.decay?.versions?.[f.urn]?.aspects[pinned.aspect];
+                        return (
+                          <div
+                            style={{
+                              color: "var(--text-dim)", marginTop: 6,
+                              fontFamily: "var(--mono)", fontSize: 11,
+                            }}
+                          >
+                            validated {pinned.at.slice(0, 10)} against {pinned.aspect}@{pinned.aspectVersion} →
+                            now {pinned.aspect}@{now ?? "unreadable"}
+                          </div>
+                        );
+                      })()}
                     </div>
                   ))}
                 <p style={{ marginBottom: 8 }}>{step.instruction}</p>
