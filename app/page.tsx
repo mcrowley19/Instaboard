@@ -21,6 +21,11 @@ const CAPABILITIES: [string, string, string][] = [
   ["Why is there no description here?", "save_document", "a proposal drafted from the schema and lineage it just read, filed for an owner to approve"],
 ];
 
+const BENCH: { label: string; sub: string; score: number; kind: "sig" | "mute" }[] = [
+  { label: "with DataHub", sub: "same agent, MCP tools on", score: 19, kind: "sig" },
+  { label: "without", sub: "same agent, no catalog", score: 5, kind: "mute" },
+];
+
 const PHASES = [
   {
     who: "leaving",
@@ -80,6 +85,8 @@ export default function Landing() {
   const tableRef = useReveal<HTMLTableElement>();
   const rulerRef = useReveal<HTMLDivElement>();
   const extRef = useReveal<HTMLDivElement>();
+  const decayRef = useReveal<HTMLDivElement>();
+  const benchRef = useReveal<HTMLDivElement>();
 
   // Step through the tool trace once, when it first scrolls into view.
   useEffect(() => {
@@ -131,6 +138,9 @@ export default function Landing() {
           </a>
           <a href="#handoffs" className="hide-sm">
             handoffs
+          </a>
+          <a href="#proof" className="hide-sm">
+            proof
           </a>
           <a href="#start">install</a>
           <Link className="go" href="/chat">
@@ -354,6 +364,113 @@ export default function Landing() {
             <p className="lp-note">
               The finished runbook is saved back into DataHub through <code>save_document</code> and
               linked to the datasets it touches.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="band" id="decay">
+        <div className="band-grid">
+          <div className="band-rail">validating</div>
+          <div>
+            <h2 className="lp-h2">Runbooks rot. The catalog notices.</h2>
+            <p className="lp-sub">
+              Six months on, the column is renamed, the table is deprecated, the owner has moved
+              on — and the runbook reads exactly as confidently as the day it was written. So
+              instaboard re-checks every step against live DataHub: a schema diff and a health
+              read, no LLM, every verdict confirmable in the DataHub UI in ten seconds.
+            </p>
+
+            <div className="lp-decay lp-reveal" ref={decayRef}>
+              <div className="lp-trace-head">
+                <span className="dot warn" />
+                <span>runbook validation</span>
+                <span className="grow">monthly MRR report · recorded 2026-07-01 by Priya Patel</span>
+              </div>
+              <div className="lp-decay-body">
+                <div className="lp-decay-row">
+                  <span className="lp-decay-badge">step 1</span>
+                  <div>
+                    <b>failing-assertion</b> — <code>payment_health_daily</code> has a failing
+                    freshness assertion. It was passing when the runbook was recorded.
+                    <span className="lp-decay-remedy">
+                      The table may be stale. Confirm it has loaded before trusting this step.
+                    </span>
+                  </div>
+                </div>
+                <div className="lp-decay-row ok">
+                  <span className="lp-decay-badge">steps 2–3</span>
+                  <div>
+                    <b>checks out</b> — schemas, owners and health match what the recording
+                    captured.
+                  </div>
+                </div>
+              </div>
+              <div className="lp-decay-foot">
+                <span className="tick">●</span>
+                written back to DataHub as a note on the dataset — the warning lives where the
+                runbook lives
+                <span className="grow">save_document</span>
+              </div>
+            </div>
+
+            <p className="lp-note">
+              Detection diffs the catalog facts each step depended on at record time against the
+              catalog now: vanished columns the step&rsquo;s SQL references, tables deprecated
+              since, newly failing assertions, owners who no longer own the thing.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="band" id="proof">
+        <div className="band-grid">
+          <div className="band-rail">measured</div>
+          <div>
+            <h2 className="lp-h2">Does the catalog actually help? We measured it.</h2>
+            <p className="lp-sub">
+              Twenty questions a new hire asks in week one, scored deterministically against the
+              catalog — real table names, real owners, real URNs, no LLM judge. The same agent
+              runs both arms; the only difference is whether the DataHub MCP tools are in the
+              tool list.
+            </p>
+
+            <div className="lp-bench" ref={benchRef}>
+              {BENCH.map((arm) => (
+                <div className={`lp-arm ${arm.kind}`} key={arm.label}>
+                  <div className="lp-arm-head">
+                    <b>{arm.label}</b>
+                    <span className="key">{arm.sub}</span>
+                  </div>
+                  <div className="lp-arm-dots" role="img" aria-label={`${arm.score} of 20 cases passed`}>
+                    {Array.from({ length: 20 }, (_, i) => (
+                      <span
+                        key={i}
+                        className={i < arm.score ? "on" : ""}
+                        style={{ transitionDelay: `${0.2 + i * 0.045}s` }}
+                      />
+                    ))}
+                  </div>
+                  <div className="lp-arm-score">
+                    {arm.score}
+                    <span>/20</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <p className="lp-note">
+              A case passes only if every check passes — asked about a table that doesn&rsquo;t
+              exist, the grounded agent says so; the control invents a schema. Every raw answer is
+              committed, so any check can be audited by hand.{" "}
+              <a
+                href="https://github.com/mcrowley19/Instaboard/blob/main/evals/results/scorecard.md"
+                target="_blank"
+                rel="noreferrer"
+              >
+                Read the scorecard
+              </a>{" "}
+              or run it yourself: <code>DEMO_MODE=true npm run eval</code>.
             </p>
           </div>
         </div>
