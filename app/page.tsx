@@ -150,8 +150,6 @@ export default function Landing() {
       </header>
 
       <section className="lp-head">
-        <div className="rule" />
-
         <div className="lp-head-hero">
           <h1>
             <span className="lp-line">
@@ -359,7 +357,6 @@ export default function Landing() {
             </p>
 
             <div className="lp-ruler" ref={rulerRef}>
-              <div className="lp-ruler-line" />
               <div className="lp-phases">
                 {PHASES.map((p) => (
                   <div className="lp-phase" key={p.title}>
