@@ -288,60 +288,20 @@
   border-color: var(--sig);
 }
 
-/* the logo mark, rebuilt: a recording dot over stacked runbook steps */
+/* the logo mark, set large, sat on the headline's baseline */
 .lp-glyph {
-  --gw: clamp(42px, 4.4vw, 68px);
   align-self: end;
   justify-self: end;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: calc(var(--gw) * 0.3);
-  padding-bottom: calc(var(--gw) * 0.12);
+  font-family: var(--sans);
+  font-size: clamp(150px, 21vw, 330px);
+  font-weight: 800;
+  line-height: 0.74;
+  letter-spacing: -0.04em;
+  color: var(--sig);
   user-select: none;
-}
-
-.lp-glyph-dot {
-  width: var(--gw);
-  height: var(--gw);
-  border-radius: 50%;
-  background: var(--sig);
+  margin-bottom: 0.055em;
   opacity: 0;
-  animation:
-    lp-glyph-in 0.9s cubic-bezier(0.16, 0.9, 0.28, 1) 0.5s forwards,
-    lp-glyph-pulse 3.4s ease-out 1.8s infinite;
-}
-
-.lp-glyph-stem {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: calc(var(--gw) * 0.13);
-}
-
-.lp-glyph-stem i {
-  width: var(--gw);
-  border-radius: calc(var(--gw) * 0.24);
-  opacity: 0;
-  animation: lp-glyph-in 0.9s cubic-bezier(0.16, 0.9, 0.28, 1) forwards;
-}
-
-.lp-glyph-stem i:nth-child(1) {
-  height: calc(var(--gw) * 0.6);
-  background: var(--sig-strong);
-  animation-delay: 0.42s;
-}
-
-.lp-glyph-stem i:nth-child(2) {
-  height: calc(var(--gw) * 0.95);
-  background: var(--sig);
-  animation-delay: 0.52s;
-}
-
-.lp-glyph-stem i:nth-child(3) {
-  height: calc(var(--gw) * 1.35);
-  background: color-mix(in srgb, var(--sig) 45%, var(--sig-dim));
-  animation-delay: 0.62s;
+  animation: lp-glyph-in 1.1s cubic-bezier(0.16, 0.9, 0.28, 1) 0.34s forwards;
 }
 
 @keyframes lp-glyph-in {
@@ -355,16 +315,6 @@
   }
 }
 
-@keyframes lp-glyph-pulse {
-  0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--sig) 32%, transparent);
-  }
-  70%,
-  100% {
-    box-shadow: 0 0 0 calc(var(--gw) * 0.38) transparent;
-  }
-}
-
 @media (max-width: 900px) {
   .lp-head-hero {
     grid-template-columns: minmax(0, 1fr);
@@ -375,8 +325,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .lp-glyph-dot,
-  .lp-glyph-stem i {
+  .lp-glyph {
     opacity: 1;
     animation: none;
   }

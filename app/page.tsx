@@ -171,12 +171,7 @@ export default function Landing() {
           </h1>
 
           <div className="lp-glyph" aria-hidden="true">
-            <span className="lp-glyph-dot" />
-            <span className="lp-glyph-stem">
-              <i />
-              <i />
-              <i />
-            </span>
+            i
           </div>
         </div>
 
