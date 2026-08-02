@@ -27,7 +27,7 @@ from datahub.emitter.mce_builder import (
 )
 from datahub.emitter.mcp import MetadataChangeProposalWrapper
 from datahub.emitter.rest_emitter import DatahubRestEmitter
-from datahub.emitter.mce_builder import make_assertion_urn
+from datahub.emitter.mce_builder import make_assertion_urn, make_schema_field_urn
 from datahub.metadata.schema_classes import (
     AssertionInfoClass,
     AssertionResultClass,
@@ -672,11 +672,17 @@ def main() -> None:
     # data quality assertions + their latest run result
     for assertion_id, urn, description, dataset_assertion_kwargs, result_type in ASSERTIONS:
         assertion_urn = make_assertion_urn(assertion_id)
+        kwargs = dict(dataset_assertion_kwargs)
+        # GMS validates fields as schemaField urns — bare column names are rejected.
+        if "fields" in kwargs:
+            kwargs["fields"] = [
+                f if f.startswith("urn:") else make_schema_field_urn(urn, f) for f in kwargs["fields"]
+            ]
         emit(
             assertion_urn,
             AssertionInfoClass(
                 type=AssertionTypeClass.DATASET,
-                datasetAssertion=DatasetAssertionInfoClass(dataset=urn, **dataset_assertion_kwargs),
+                datasetAssertion=DatasetAssertionInfoClass(dataset=urn, **kwargs),
                 description=description,
             ),
         )

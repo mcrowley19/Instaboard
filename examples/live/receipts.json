@@ -1,0 +1,748 @@
+{
+  "capturedAt": "2026-08-02T11:59:51.639Z",
+  "gms": "http://localhost:8080",
+  "mode": "live DataHub via mcp-server-datahub (stdio)",
+  "allPassed": true,
+  "steps": [
+    {
+      "step": "mcp-handshake",
+      "ok": true,
+      "evidence": {
+        "toolCount": 20,
+        "tools": [
+          "search",
+          "get_lineage",
+          "get_dataset_queries",
+          "get_entities",
+          "list_schema_fields",
+          "get_lineage_paths_between",
+          "search_documents",
+          "grep_documents",
+          "add_tags",
+          "remove_tags",
+          "add_terms",
+          "remove_terms",
+          "add_owners",
+          "remove_owners",
+          "set_domains",
+          "remove_domains",
+          "update_description",
+          "add_structured_properties",
+          "remove_structured_properties",
+          "save_document"
+        ]
+      }
+    },
+    {
+      "step": "search:revenue",
+      "ok": true,
+      "evidence": {
+        "start": 0,
+        "count": 10,
+        "total": 10,
+        "searchResults": [
+          {
+            "entity": {
+              "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+              "properties": {
+                "name": "fct_revenue"
+              }
+            }
+          },
+          {
+            "entity": {
+              "urn": "urn:li:glossaryTerm:MRR",
+              "properties": {
+                "name": "Monthly Recurring Revenue"
+              }
+            }
+          },
+          {
+            "entity": {
+              "urn": "urn:li:glossaryTerm:ARR",
+              "properties": {
+                "name": "Annual Recurring Revenue"
+              }
+            }
+          },
+          {
+            "entity": {
+              "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.refunds,PROD)",
+              "properties": {
+                "name": "refunds"
+              }
+            }
+          },
+          {
+            "entity": {
+              "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.dim_customers,PROD)",
+              "properties": {
+                "name": "dim_customers"
+              }
+            }
+          },
+          {
+            "entity": {
+              "urn": "urn:li:domain:Payments",
+              "properties": {
+                "name": "Payments"
+              }
+            }
+          },
+          {
+            "entity": {
+              "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+              "properties": {
+                "name": "mrr_monthly"
+              }
+            }
+          },
+          {
+            "entity": {
+              "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.payments,PROD)",
+              "properties": {
+                "name": "payments"
+              }
+            }
+          },
+          {
+            "entity": {
+              "urn": "urn:li:document:shared-03983a35-62eb-47f6-bd90-a39283fbc31a"
+            }
+          },
+          {
+            "entity": {
+              "urn": "urn:li:document:shared-2734bf94-92b5-415a-a369-877d38ff8db2"
+            }
+          }
+        ],
+        "facets": [
+          {
+            "field": "_entityType␞typeNames",
+            "displayName": "Type␞Sub Type",
+            "aggregations": [
+              {
+                "value": "DATASET",
+                "count": 5
+              },
+              {
+                "value": "DOCUMENT␞Note",
+                "count": 2
+              },
+              {
+                "value": "DOCUMENT",
+                "count": 2
+              },
+              {
+                "value": "GLOSSARY_TERM",
+                "count": 2
+              },
+              {
+                "value": "DOMAIN",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "field": "_entityType",
+            "displayName": "Type",
+            "aggregations": [
+              {
+                "value": "DATASET",
+                "count": 5
+              },
+              {
+                "value": "DOCUMENT",
+                "count": 2
+              },
+              {
+                "value": "GLOSSARY_TERM",
+                "count": 2
+              },
+              {
+                "value": "DOMAIN",
+                "count": 1
+              },
+              {
+                "value": "CORP_USER",
+                "count": 0
+              }
+            ]
+          },
+          {
+            "field": "origin",
+            "displayName": "Environment",
+            "aggregations": [
+              {
+                "value": "PROD",
+                "count": 5
+              }
+            ]
+          },
+          {
+            "field": "domains",
+            "displayName": "Domain",
+            "aggregations": [
+              {
+                "value": "urn:li:domain:Payments",
+                "count": 4
+              },
+              {
+                "value": "urn:li:domain:Core",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "field": "owners",
+            "displayName": "Owned By",
+            "aggregations": [
+              {
+                "value": "urn:li:corpuser:priya.patel",
+                "count": 4
+              },
+              {
+                "value": "urn:li:corpuser:__datahub_system",
+                "count": 2
+              },
+              {
+                "value": "urn:li:corpuser:mike.rodriguez",
+                "count": 2
+              },
+              {
+                "value": "urn:li:corpuser:sarah.chen",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "field": "hasActiveIncidents",
+            "displayName": "hasActiveIncidents",
+            "aggregations": [
+              {
+                "value": "true",
+                "count": 1
+              }
+            ]
+          },
+          {
+            "field": "platform",
+            "displayName": "Platform",
+            "aggregations": [
+              {
+                "value": "urn:li:dataPlatform:snowflake",
+                "count": 3
+              },
+              {
+                "value": "urn:li:dataPlatform:postgres",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "field": "tags",
+            "displayName": "Tagged With",
+            "aggregations": [
+              {
+                "value": "urn:li:tag:Tier1",
+                "count": 4
+              },
+              {
+                "value": "urn:li:tag:Finance",
+                "count": 4
+              },
+              {
+                "value": "urn:li:tag:handoff",
+                "count": 2
+              },
+              {
+                "value": "urn:li:tag:validation",
+                "count": 2
+              },
+              {
+                "value": "urn:li:tag:onboarding",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "field": "typeNames",
+            "displayName": "Sub Type",
+            "aggregations": [
+              {
+                "value": "Note",
+                "count": 2
+              }
+            ]
+          },
+          {
+            "field": "glossaryTerms",
+            "displayName": "Glossary Term",
+            "aggregations": [
+              {
+                "value": "urn:li:glossaryTerm:MRR",
+                "count": 2,
+                "entity": {
+                  "properties": {
+                    "name": "Monthly Recurring Revenue"
+                  }
+                }
+              },
+              {
+                "value": "urn:li:glossaryTerm:GMV",
+                "count": 1,
+                "entity": {
+                  "properties": {
+                    "name": "Gross Merchandise Value"
+                  }
+                }
+              },
+              {
+                "value": "urn:li:glossaryTerm:ARR",
+                "count": 1,
+                "entity": {
+                  "properties": {
+                    "name": "Annual Recurring Revenue"
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "field": "removed",
+            "displayName": "removed",
+            "aggregations": [
+              {
+                "value": "true",
+                "count": 0
+              }
+            ]
+          },
+          {
+            "field": "entity",
+            "displayName": "Type",
+            "aggregations": [
+              {
+                "value": "DATASET",
+                "count": 5
+              },
+              {
+                "value": "GLOSSARY_TERM",
+                "count": 2
+              },
+              {
+                "value": "DOCUMENT",
+                "count": 2
+              },
+              {
+                "value": "DOMAIN",
+                "count": 1
+              },
+              {
+                "value": "CORP_USER",
+                "count": 0
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "step": "get_entities:fct_revenue",
+      "ok": true,
+      "evidence": [
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "name": "fct_revenue",
+          "platform": {
+            "urn": "urn:li:dataPlatform:snowflake",
+            "name": "snowflake"
+          },
+          "properties": {
+            "name": "fct_revenue",
+            "description": "Revenue fact table: one row per successful payment, net of refunds. THE canonical source for all revenue reporting — finance dashboards and MRR both read from here."
+          },
+          "ownership": {
+            "owners": [
+              {
+                "owner": {
+                  "urn": "urn:li:corpuser:priya.patel",
+                  "properties": {
+                    "active": true,
+                    "displayName": "Priya Patel",
+                    "title": "Payments Data Lead",
+                    "email": "priya.patel@northbeam.io"
+                  }
+                },
+                "type": "TECHNICAL_OWNER",
+                "ownershipType": {
+                  "urn": "urn:li:ownershipType:__system__technical_owner",
+                  "type": "CUSTOM_OWNERSHIP_TYPE",
+                  "info": {
+                    "name": "Technical Owner",
+                    "description": "Involved in the production, maintenance, or distribution of the asset(s)."
+                  }
+                }
+              },
+              {
+                "owner": {
+                  "urn": "urn:li:corpuser:mike.rodriguez",
+                  "properties": {
+                    "active": true,
+                    "displayName": "Mike Rodriguez",
+                    "title": "Analytics Engineer",
+                    "email": "mike.rodriguez@northbeam.io"
+                  }
+                },
+                "type": "TECHNICAL_OWNER",
+                "ownershipType": {
+                  "urn": "urn:li:ownershipType:__system__technical_owner",
+                  "type": "CUSTOM_OWNERSHIP_TYPE",
+                  "info": {
+                    "name": "Technical Owner",
+                    "description": "Involved in the production, maintenance, or distribution of the asset(s)."
+                  }
+                }
+              }
+            ]
+          },
+          "tags": {
+            "tags": [
+              {
+                "tag": {
+                  "urn": "urn:li:tag:Tier1",
+                  "properties": {
+                    "name": "Tier1",
+                    "description": "Business-critical dataset. Breakage pages the on-call data engineer."
+                  }
+                }
+              },
+              {
+                "tag": {
+                  "urn": "urn:li:tag:Finance",
+                  "properties": {
+                    "name": "Finance",
+                    "description": "Used in financial reporting. Changes require sign-off from the Payments data lead."
+                  }
+                }
+              }
+            ]
+          },
+          "glossaryTerms": {
+            "terms": [
+              {
+                "term": {
+                  "urn": "urn:li:glossaryTerm:MRR",
+                  "hierarchicalName": "MRR",
+                  "properties": {
+                    "name": "Monthly Recurring Revenue",
+                    "description": "Sum of all active subscription amounts normalized to a monthly value. Computed in analytics.mrr_monthly from fct_revenue, excluding one-time fees and refunds. Annual plans are divided by 12.",
+                    "termSource": "INTERNAL"
+                  },
+                  "parentNodes": {
+                    "count": 0
+                  }
+                }
+              },
+              {
+                "term": {
+                  "urn": "urn:li:glossaryTerm:GMV",
+                  "hierarchicalName": "GMV",
+                  "properties": {
+                    "name": "Gross Merchandise Value",
+                    "description": "Total value of orders before refunds, fees, and discounts. Sourced from app orders.",
+                    "termSource": "INTERNAL"
+                  },
+                  "parentNodes": {
+                    "count": 0
+                  }
+                }
+              }
+            ]
+          },
+          "domain": {
+            "domain": {
+              "urn": "urn:li:domain:Payments",
+              "properties": {
+                "name": "Payments",
+                "description": "Billing, payment processing, revenue and finance reporting."
+              },
+              "parentDomains": {
+                "count": 0
+              },
+              "entities": {
+                "total": 8
+              },
+              "dataProducts": {
+                "total": 0
+              },
+              "children": {
+                "total": 0
+              }
+            }
+          },
+          "health": [
+            {
+              "type": "INCIDENTS",
+              "status": "PASS"
+            },
+            {
+              "type": "ASSERTIONS",
+              "status": "PASS",
+              "message": "All assertions are passing"
+            }
+          ],
+          "schemaMetadata": {
+            "name": "fct_revenue",
+            "platformUrn": "urn:li:dataPlatform:snowflake",
+            "fields": [
+              {
+                "fieldPath": "gross_amount_usd",
+                "nativeDataType": "number(12,2)",
+                "description": "Charged amount before refunds.",
+                "nullable": false,
+                "glossaryTerms": [
+                  "Gross Merchandise Value"
+                ]
+              },
+              {
+                "fieldPath": "is_recurring",
+                "nativeDataType": "boolean",
+                "description": "True when tied to a subscription renewal.",
+                "nullable": false,
+                "glossaryTerms": [
+                  "Monthly Recurring Revenue"
+                ]
+              },
+              {
+                "fieldPath": "customer_id",
+                "nativeDataType": "number",
+                "description": "FK → dim_customers.customer_id.",
+                "nullable": false
+              },
+              {
+                "fieldPath": "net_amount_usd",
+                "nativeDataType": "number(12,2)",
+                "description": "Charged amount minus refunds — use this for revenue.",
+                "nullable": false
+              },
+              {
+                "fieldPath": "order_id",
+                "nativeDataType": "number",
+                "description": "FK → orders.id.",
+                "nullable": false
+              },
+              {
+                "fieldPath": "revenue_date",
+                "nativeDataType": "date",
+                "description": "Settlement date.",
+                "nullable": false
+              },
+              {
+                "fieldPath": "revenue_id",
+                "nativeDataType": "varchar",
+                "description": "Surrogate key.",
+                "nullable": false
+              }
+            ]
+          },
+          "relatedDocuments": {
+            "start": 0,
+            "count": 10,
+            "total": 2,
+            "documents": [
+              {
+                "urn": "urn:li:document:shared-2734bf94-92b5-415a-a369-877d38ff8db2",
+                "type": "DOCUMENT",
+                "info": {
+                  "title": "Stale runbook: Monthly MRR report for the board deck"
+                }
+              },
+              {
+                "urn": "urn:li:document:shared-03983a35-62eb-47f6-bd90-a39283fbc31a",
+                "type": "DOCUMENT",
+                "info": {
+                  "title": "Stale runbook: Monthly MRR report for the board deck"
+                }
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "step": "health:payment_health_daily",
+      "ok": true,
+      "evidence": "\"health\":[{\"type\":\"INCIDENTS\",\"status\":\"PASS\"},{\"type\":\"ASSERTIONS\",\"status\":\"FAIL\",\"message\":\"1 of 1 assertions are failing\",\"causes\":[\"urn:li:assertion:payment-health-freshness\"]}],\"schemaMetadata\":{\"name\":\"payment_health_daily\",\"platformUrn\":\"urn:li:dataPla"
+    },
+    {
+      "step": "decay-detection:sample-runbook",
+      "ok": true,
+      "evidence": {
+        "severity": "warning",
+        "stepsChecked": 3,
+        "findings": [
+          {
+            "step": "Check payment pipeline health",
+            "kind": "failing-assertion",
+            "detail": "payment_health_daily has 1 failing assertion (freshness/volume) (was 0 when recorded)."
+          }
+        ]
+      }
+    },
+    {
+      "step": "write-back:save_document",
+      "ok": true,
+      "evidence": {
+        "written": true,
+        "documentUrn": "urn:li:document:shared-147cf125-30d0-43ad-b328-54e516cbc178",
+        "relatedAssets": [
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)"
+        ],
+        "at": "2026-08-02T11:59:47.519Z"
+      }
+    },
+    {
+      "step": "read-back:search(document)",
+      "ok": true,
+      "evidence": {
+        "start": 0,
+        "count": 10,
+        "total": 3,
+        "searchResults": [
+          {
+            "entity": {
+              "urn": "urn:li:document:shared-147cf125-30d0-43ad-b328-54e516cbc178"
+            }
+          },
+          {
+            "entity": {
+              "urn": "urn:li:document:shared-2734bf94-92b5-415a-a369-877d38ff8db2"
+            }
+          },
+          {
+            "entity": {
+              "urn": "urn:li:document:shared-03983a35-62eb-47f6-bd90-a39283fbc31a"
+            }
+          }
+        ],
+        "facets": [
+          {
+            "field": "_entityType␞typeNames",
+            "displayName": "Type␞Sub Type",
+            "aggregations": [
+              {
+                "value": "DOCUMENT␞Note",
+                "count": 3
+              },
+              {
+                "value": "DOCUMENT",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "field": "_entityType",
+            "displayName": "Type",
+            "aggregations": [
+              {
+                "value": "DOCUMENT",
+                "count": 3
+              },
+              {
+                "value": "DOMAIN",
+                "count": 0
+              },
+              {
+                "value": "CORP_USER",
+                "count": 0
+              },
+              {
+                "value": "DATASET",
+                "count": 0
+              },
+              {
+                "value": "GLOSSARY_TERM",
+                "count": 0
+              }
+            ]
+          },
+          {
+            "field": "owners",
+            "displayName": "Owned By",
+            "aggregations": [
+              {
+                "value": "urn:li:corpuser:__datahub_system",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "field": "tags",
+            "displayName": "Tagged With",
+            "aggregations": [
+              {
+                "value": "urn:li:tag:handoff",
+                "count": 3
+              },
+              {
+                "value": "urn:li:tag:validation",
+                "count": 3
+              },
+              {
+                "value": "urn:li:tag:onboarding",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "field": "typeNames",
+            "displayName": "Sub Type",
+            "aggregations": [
+              {
+                "value": "Note",
+                "count": 3
+              }
+            ]
+          },
+          {
+            "field": "removed",
+            "displayName": "removed",
+            "aggregations": [
+              {
+                "value": "true",
+                "count": 0
+              }
+            ]
+          },
+          {
+            "field": "entity",
+            "displayName": "Type",
+            "aggregations": [
+              {
+                "value": "DOCUMENT",
+                "count": 3
+              },
+              {
+                "value": "CORP_USER",
+                "count": 0
+              },
+              {
+                "value": "GLOSSARY_TERM",
+                "count": 0
+              },
+              {
+                "value": "DATASET",
+                "count": 0
+              },
+              {
+                "value": "DOMAIN",
+                "count": 0
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

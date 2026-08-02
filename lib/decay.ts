@@ -65,10 +65,33 @@ function countByStatus(node: unknown, key: string, status: string): number {
   for (const group of groups) {
     const items = Array.isArray(group) ? group : [group];
     for (const item of items) {
-      if (item && typeof item === "object" && (item as Record<string, unknown>).status === status) n++;
+      if (
+        item &&
+        typeof item === "object" &&
+        String((item as Record<string, unknown>).status ?? "").toLowerCase() === status.toLowerCase()
+      )
+        n++;
     }
   }
   return n;
+}
+
+/**
+ * Live DataHub inlines a summary `health` array on entities
+ * (`{type: "ASSERTIONS"|"INCIDENTS", status: "FAIL", causes: [urns]}`) instead
+ * of the per-assertion lists the demo fixture uses. Read both shapes.
+ */
+function applyHealthSummary(parsed: unknown, snapshot: EntitySnapshot): void {
+  const entries = collect(parsed, "health").flatMap((h) => (Array.isArray(h) ? h : [h]));
+  for (const entry of entries) {
+    if (!entry || typeof entry !== "object") continue;
+    const e = entry as Record<string, unknown>;
+    if (String(e.status ?? "").toUpperCase() !== "FAIL") continue;
+    const count = Array.isArray(e.causes) && e.causes.length > 0 ? e.causes.length : 1;
+    const type = String(e.type ?? "").toUpperCase();
+    if (type === "ASSERTIONS") snapshot.failingAssertions = Math.max(snapshot.failingAssertions, count);
+    if (type === "INCIDENTS") snapshot.openIncidents = Math.max(snapshot.openIncidents, count);
+  }
 }
 
 /**
@@ -101,16 +124,26 @@ export async function snapshotEntity(urn: string): Promise<EntitySnapshot> {
   if (notFound) return base;
 
   const names = flatStrings(collect(parsed, "name"));
+  // Owner identity nests differently per shape: demo inlines strings, live GMS
+  // nests {owner: {urn, username, ...}} — collect every identity string found.
+  const ownerNodes = collect(parsed, "owners");
+  const owners = [
+    ...new Set([
+      ...flatStrings(ownerNodes),
+      ...flatStrings(ownerNodes.flatMap((o) => [...collect(o, "username"), ...collect(o, "name"), ...collect(o, "urn")])),
+    ]),
+  ];
   const snapshot: EntitySnapshot = {
     ...base,
     exists: true,
     name: names[0],
     fields: [...new Set(flatStrings(collect(parsed, "fieldPath")))],
-    owners: [...new Set(flatStrings(collect(parsed, "owners")))],
+    owners,
     deprecated: collect(parsed, "deprecated").some((d) => d === true || (d && typeof d === "object")),
     openIncidents: countByStatus(parsed, "incidents", "open") + countByStatus(parsed, "openIncidents", "open"),
     failingAssertions: countByStatus(parsed, "assertions", "fail"),
   };
+  applyHealthSummary(parsed, snapshot);
 
   // A dedicated health tool, where one exists, is authoritative over whatever
   // happens to be inlined on the entity.
@@ -246,7 +279,10 @@ export async function detectDecay(handoff: Handoff): Promise<DecayReport> {
     const namedThen = then?.exists ? ownersNamedIn(step, then.owners) : [];
     for (const owner of namedThen) {
       const display = owner.split("(")[0].trim();
-      const stillOwns = now.owners.some((o) => o.includes(display));
+      // Live DataHub renders owners as usernames ("mike.rodriguez"), snapshots
+      // may hold display names ("Mike Rodriguez") — compare normalized.
+      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const stillOwns = now.owners.some((o) => norm(o).includes(norm(display)));
       if (!stillOwns) {
         findings.push({
           ...where,
