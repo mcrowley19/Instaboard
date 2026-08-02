@@ -13,6 +13,7 @@
     "eval:verify": "tsx evals/verify.ts",
     "eval:transcripts": "tsx evals/transcripts.ts",
     "prove": "tsx scripts/prove-loop.ts",
+    "draft": "tsx scripts/draft-runbooks.ts",
     "validate": "tsx scripts/validate-runbooks.ts",
     "propose": "tsx scripts/propose-fixes.ts",
     "examples": "tsx scripts/export-examples.ts",

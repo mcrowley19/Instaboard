@@ -1,6 +1,6 @@
 {
-  "startedAt": "2026-08-02T17:58:46.516Z",
-  "finishedAt": "2026-08-02T17:59:50.935Z",
+  "startedAt": "2026-08-02T20:43:50.752Z",
+  "finishedAt": "2026-08-02T20:45:00.761Z",
   "gms": "http://localhost:8080",
   "catalog": "the sample Northbeam catalog ingested by scripts/seed_datahub.py",
   "method": "A runbook was captured against the live catalog and snapshotted through the same code path the app uses. The catalog was then changed through DataHub's own write APIs: a column renamed in schemaMetadata, a table deprecated via updateDeprecation, an owner removed via the MCP server's remove_owners. The decay engine was told none of it.",
@@ -116,7 +116,7 @@
       "phase": "write-back",
       "what": "a drift note is in the catalog",
       "passed": true,
-      "detail": "urn:li:document:shared-758db031-4ca5-4074-8622-321f4fc2d938"
+      "detail": "urn:li:document:shared-056f4c81-9ffe-4a94-b477-7654b5c53bff"
     },
     {
       "phase": "write-back",
@@ -253,7 +253,7 @@
           "remedy": "Point this step at the replacement dataset named in DataHub."
         }
       ],
-      "documentUrn": "urn:li:document:shared-758db031-4ca5-4074-8622-321f4fc2d938",
+      "documentUrn": "urn:li:document:shared-056f4c81-9ffe-4a94-b477-7654b5c53bff",
       "assertions": [
         {
           "urn": "urn:li:assertion:instaboard-f80ab7b3a1306fa23998",

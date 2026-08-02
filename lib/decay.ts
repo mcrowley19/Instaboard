@@ -198,7 +198,7 @@ function isSelfWritten(urn: string): boolean {
  * retrieved", because incidents are not readable over MCP today. Demo mode has no
  * GMS behind the fixture, so the call fails fast and the counts are left alone.
  */
-async function discountSelfWrittenState(snapshot: EntitySnapshot): Promise<void> {
+export async function discountSelfWrittenState(snapshot: EntitySnapshot): Promise<void> {
   if (snapshot.openIncidents === 0 && snapshot.failingAssertions === 0) return;
 
   const res = await datahubGraphQL<{

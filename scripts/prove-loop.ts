@@ -31,6 +31,7 @@ import { readAspect, writeAspect } from "../lib/gms-aspects";
 import { callDataHubTool, isDemoMode } from "../lib/mcp";
 import { deleteHandoff, saveHandoff } from "../lib/handoff-store";
 import { sweepRunbooks, type SweepResult } from "../lib/sweep";
+import { resolveIncidentsFor } from "../lib/native-writeback";
 import { proposalToMarkdown } from "../lib/remediate";
 import type { Handoff } from "../lib/types";
 
@@ -42,6 +43,8 @@ const json = args.includes("--json");
 
 const UI = () => process.env.DATAHUB_UI_URL || "http://localhost:9002";
 const entityUrl = (urn: string) => `${UI()}/dataset/${encodeURIComponent(urn)}`;
+
+const shortName = (urn: string) => urn.match(/,([^,]+),[^,]*\)$/)?.[1]?.split(".").pop() ?? urn;
 
 const sf = (table: string) =>
   `urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.${table},PROD)`;
@@ -286,6 +289,12 @@ async function breakCatalog(): Promise<Change[]> {
 }
 
 async function restoreCatalog(): Promise<void> {
+  // Resolve the incidents this run raised before the runbook is deleted below.
+  // An orphaned incident cannot be closed by a later sweep — nothing left in the
+  // store matches its title — so it would sit on the dataset forever.
+  const resolved = await resolveIncidentsFor(runbook(), [FCT_REVENUE, MRR_MONTHLY, PAYMENT_HEALTH]);
+  for (const incident of resolved) say(`    ✓ resolved incident ${incident.urn.slice(-12)} on ${shortName(incident.datasetUrn)}`);
+
   const schema = await readAspect(FCT_REVENUE, "schemaMetadata");
   const fields = (schema?.fields ?? []) as Record<string, unknown>[];
   if (schema && fields.some((f) => f.fieldPath === "net_revenue_usd")) {

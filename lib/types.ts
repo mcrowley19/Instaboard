@@ -103,6 +103,13 @@ export interface HandoffStep {
   url?: string;
   tips?: string;
   sql?: string;
+  /**
+   * Where the `why` came from. `recorded` means a person said it, which is the
+   * only kind of why worth having. `inferred` means it was derived from catalog
+   * evidence by the drafter, and reads as evidence rather than as intent — a
+   * drafted runbook must never impersonate a colleague's judgement.
+   */
+  whySource?: "recorded" | "inferred";
 }
 
 /** The catalog aspects a runbook claim can be pinned to. */
@@ -227,6 +234,10 @@ export interface Handoff {
   recorded: RecordedStep[];
   createdAt: string;
   sample?: boolean;
+  /** `drafted` runbooks were derived from catalog evidence with nobody recording. */
+  source?: "recorded" | "drafted";
+  /** For drafts: what evidence the catalog held, shown to whoever reviews it. */
+  draftBasis?: string[];
   datahub?: { saved: boolean; detail?: string };
   /** Catalog state at record time, keyed by URN — the decay baseline. */
   snapshots?: Record<string, EntitySnapshot>;

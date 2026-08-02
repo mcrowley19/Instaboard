@@ -1,0 +1,164 @@
+{
+  "id": "draft-fct-revenue-msc9mnmi",
+  "title": "Working with fct_revenue",
+  "author": "instaboard (drafted from catalog evidence)",
+  "role": "drafted, not recorded",
+  "summary": "A first-pass runbook for fct_revenue, drafted from what the catalog already knows rather than from anyone's recording: 1 recorded query on the dataset, 3 direct upstreams, 1 direct downstream. Every step below is derived from catalog evidence and none of it carries the reason the original author would have given. Correct it, then it is a real runbook.",
+  "createdAt": "2026-08-02T20:41:23.226Z",
+  "steps": [
+    {
+      "title": "Check fct_revenue is healthy before you trust it",
+      "instruction": "Open fct_revenue in DataHub and read the health badge and the deprecation field before you run anything against it. Right now it has 1 open incident.",
+      "why": "The catalog is reporting 1 open incident on this dataset today, so a number pulled from it now may be wrong in a way that is invisible downstream.",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+      "whySource": "inferred",
+      "tips": "Owners on record: Priya Patel, Mike Rodriguez."
+    },
+    {
+      "title": "Confirm orders loaded first",
+      "instruction": "Check orders, which feeds fct_revenue, has today's data before you read anything downstream of it.",
+      "why": "DataHub records orders as a direct upstream of fct_revenue. A partial load there produces a plausible-looking but short number here, which is the failure mode that gets noticed last.",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.orders,PROD)",
+      "whySource": "inferred"
+    },
+    {
+      "title": "Confirm refunds loaded first",
+      "instruction": "Check refunds, which feeds fct_revenue, has today's data before you read anything downstream of it.",
+      "why": "DataHub records refunds as a direct upstream of fct_revenue. A partial load there produces a plausible-looking but short number here, which is the failure mode that gets noticed last.",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.refunds,PROD)",
+      "whySource": "inferred"
+    },
+    {
+      "title": "Net revenue by customer country (last 90 days)",
+      "instruction": "Run this against fct_revenue. It is a query the catalog has on record for this table, not a reconstruction.",
+      "why": "This is what people actually run here — the catalog has it recorded against this dataset. Reproducing an existing query is how you get a number that matches the one everyone else quotes.",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+      "sql": "SELECT c.country, SUM(r.net_amount_usd) AS net_revenue\nFROM analytics.marts.fct_revenue r\nJOIN analytics.marts.dim_customers c ON c.customer_id = r.customer_id\nWHERE r.revenue_date >= DATEADD(day, -90, CURRENT_DATE)\nGROUP BY 1 ORDER BY 2 DESC;",
+      "whySource": "inferred"
+    },
+    {
+      "title": "Know who breaks if this changes",
+      "instruction": "Before changing anything about fct_revenue, check its downstream lineage in DataHub. Today that is mrr_monthly.",
+      "why": "DataHub records 1 dataset depending on this one. The people to warn are the owners of those, not the owners of this.",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+      "whySource": "inferred"
+    }
+  ],
+  "recorded": [],
+  "source": "drafted",
+  "draftBasis": [
+    "1 recorded query on the dataset",
+    "3 direct upstreams",
+    "1 direct downstream",
+    "2 owners on record",
+    "glossary terms: Gross Merchandise Value, Monthly Recurring Revenue",
+    "not deprecated"
+  ],
+  "snapshots": {
+    "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)": {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+      "exists": true,
+      "fields": [
+        "gross_amount_usd",
+        "is_recurring",
+        "customer_id",
+        "net_amount_usd",
+        "order_id",
+        "revenue_date",
+        "revenue_id"
+      ],
+      "owners": [
+        "Priya Patel",
+        "priya.patel@northbeam.io",
+        "urn:li:corpuser:priya.patel",
+        "Mike Rodriguez",
+        "mike.rodriguez@northbeam.io",
+        "urn:li:corpuser:mike.rodriguez"
+      ],
+      "deprecated": false,
+      "openIncidents": 0,
+      "failingAssertions": 0,
+      "capturedAt": "2026-08-02T20:41:23.226Z",
+      "version": {
+        "entity": "ab36daad91f3",
+        "aspects": {
+          "schema": "89280579c9b0",
+          "ownership": "8e5f9dd13d08",
+          "deprecation": "ea9a6f4c3e7f",
+          "health": "6f3f70fb7154"
+        }
+      },
+      "name": "fct_revenue",
+      "ownerUrns": [
+        "urn:li:corpuser:priya.patel",
+        "urn:li:corpuser:mike.rodriguez"
+      ]
+    },
+    "urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.orders,PROD)": {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.orders,PROD)",
+      "exists": true,
+      "fields": [
+        "total_amount",
+        "created_at",
+        "id",
+        "status",
+        "user_id"
+      ],
+      "owners": [
+        "Sarah Chen",
+        "sarah.chen@northbeam.io",
+        "urn:li:corpuser:sarah.chen"
+      ],
+      "deprecated": false,
+      "openIncidents": 0,
+      "failingAssertions": 0,
+      "capturedAt": "2026-08-02T20:41:23.226Z",
+      "version": {
+        "entity": "d1635b062d12",
+        "aspects": {
+          "schema": "95f741320791",
+          "ownership": "393e5e6b9c3b",
+          "deprecation": "ea9a6f4c3e7f",
+          "health": "6f3f70fb7154"
+        }
+      },
+      "name": "orders",
+      "ownerUrns": [
+        "urn:li:corpuser:sarah.chen"
+      ]
+    },
+    "urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.refunds,PROD)": {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.refunds,PROD)",
+      "exists": true,
+      "fields": [
+        "amount",
+        "created_at",
+        "id",
+        "payment_id",
+        "reason"
+      ],
+      "owners": [
+        "Priya Patel",
+        "priya.patel@northbeam.io",
+        "urn:li:corpuser:priya.patel"
+      ],
+      "deprecated": false,
+      "openIncidents": 0,
+      "failingAssertions": 0,
+      "capturedAt": "2026-08-02T20:41:23.226Z",
+      "version": {
+        "entity": "605d6b21f14e",
+        "aspects": {
+          "schema": "fc630293960f",
+          "ownership": "154f6d214d44",
+          "deprecation": "ea9a6f4c3e7f",
+          "health": "6f3f70fb7154"
+        }
+      },
+      "name": "refunds",
+      "ownerUrns": [
+        "urn:li:corpuser:priya.patel"
+      ]
+    }
+  }
+}

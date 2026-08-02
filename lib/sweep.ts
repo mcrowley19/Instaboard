@@ -24,7 +24,7 @@
  */
 
 import { detectDecayWithState, writeBackDecay, type WriteBackReceipt } from "./decay";
-import { writeBackNative, type NativeWriteBackReceipt } from "./native-writeback";
+import { resolveIncidentsFor, writeBackNative, type NativeWriteBackReceipt } from "./native-writeback";
 import { writeStructuredState, type StructuredStateReceipt } from "./structured-state";
 import { proposeFix, type RunbookProposal } from "./remediate";
 import { listHandoffs, saveHandoff } from "./handoff-store";
@@ -47,6 +47,8 @@ export interface SweepRow {
   structured: StructuredStateReceipt | null;
   /** The correction awaiting human approval, when anything could be corrected. */
   proposal: RunbookProposal | null;
+  /** Incidents this tool had raised for the runbook and has now closed. */
+  resolved: { urn: string; datasetUrn: string }[];
 }
 
 export interface SweepResult {
@@ -89,6 +91,16 @@ export async function validateRunbook(
   // and still holds" is what makes the absence of a warning mean something.
   const structured = await writeStructuredState(handoff, report);
 
+  // A detector that only ever opens incidents becomes noise. When the runbook
+  // validates clean again, close the ones it opened.
+  let resolved: { urn: string; datasetUrn: string }[] = [];
+  if (report.severity === "ok" && structured.attempted) {
+    resolved = await resolveIncidentsFor(
+      handoff,
+      [...new Set(handoff.steps.map((s) => s.urn).filter((u): u is string => Boolean(u)))]
+    );
+  }
+
   if (report.severity !== "ok") {
     receipt = await writeBackDecay(handoff, report);
     proposal = propose ? proposeFix(handoff, report, live) : null;
@@ -123,6 +135,7 @@ export async function validateRunbook(
       native,
       structured,
       proposal,
+      resolved,
     },
   };
 }

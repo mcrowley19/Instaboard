@@ -63,25 +63,43 @@ export function deleteHandoff(id: string): boolean {
   }
 }
 
-/** Render a handoff as markdown for the DataHub save_document write-back. */
+/**
+ * Render a handoff as markdown for the DataHub save_document write-back.
+ *
+ * Drafts are labelled as drafts throughout. A drafted runbook that reads like a
+ * colleague wrote it is worse than no runbook: the whole value of the artifact
+ * is that somebody vouched for it, and nobody has vouched for a draft yet.
+ */
 export function handoffToMarkdown(handoff: Handoff): string {
+  const drafted = handoff.source === "drafted";
   const lines: string[] = [
-    `# Handoff: ${handoff.title}`,
+    `# ${drafted ? "Draft runbook" : "Handoff"}: ${handoff.title}`,
     "",
-    `Recorded by **${handoff.author}**${handoff.role ? ` (${handoff.role})` : ""} on ${handoff.createdAt.slice(0, 10)}.`,
+    drafted
+      ? `Drafted from catalog evidence on ${handoff.createdAt.slice(0, 10)} — **nobody recorded this**. ` +
+        `Every "why" below is inferred from what the catalog holds, not from the person who did the work.`
+      : `Recorded by **${handoff.author}**${handoff.role ? ` (${handoff.role})` : ""} on ${handoff.createdAt.slice(0, 10)}.`,
     "",
     handoff.summary,
     "",
   ];
+  if (drafted && handoff.draftBasis?.length) {
+    lines.push(`**Evidence it was drafted from:** ${handoff.draftBasis.join("; ")}.`, "");
+  }
   handoff.steps.forEach((step, i) => {
     lines.push(`## Step ${i + 1}: ${step.title}`, "");
     lines.push(step.instruction, "");
-    lines.push(`**Why:** ${step.why}`, "");
+    lines.push(`**Why${step.whySource === "inferred" ? " (inferred from the catalog)" : ""}:** ${step.why}`, "");
     if (step.urn) lines.push(`**Entity:** \`${step.urn}\``, "");
     if (step.sql) lines.push("```sql", step.sql, "```", "");
     if (step.tips) lines.push(`**Tips:** ${step.tips}`, "");
   });
-  lines.push("---", "_Recorded with instaboard. Open the instaboard extension beside DataHub to replay this handoff step by step._");
+  lines.push(
+    "---",
+    drafted
+      ? "_Drafted by instaboard from catalog evidence. Correct it with the person who does this work, and it becomes a runbook._"
+      : "_Recorded with instaboard. Open the instaboard extension beside DataHub to replay this handoff step by step._"
+  );
   return lines.join("\n");
 }
 

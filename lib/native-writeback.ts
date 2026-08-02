@@ -90,6 +90,52 @@ const UPDATE_INCIDENT = `
   mutation updateIncident($urn: String!, $input: UpdateIncidentInput!) { updateIncident(urn: $urn, input: $input) }
 `;
 
+const RESOLVE_INCIDENT = `
+  mutation updateIncidentStatus($urn: String!, $input: UpdateIncidentStatusInput!) {
+    updateIncidentStatus(urn: $urn, input: $input)
+  }
+`;
+
+/**
+ * Close the loop the other way.
+ *
+ * A detector that only ever opens incidents is a detector nobody trusts for
+ * long: after a month the dataset carries a wall of stale-runbook incidents,
+ * most of which were fixed weeks ago, and the signal is worthless. So when a
+ * runbook validates clean, the incidents this tool raised for it get resolved,
+ * with a message saying what changed.
+ *
+ * Only ours, matched on the title convention, and only for this runbook.
+ */
+export async function resolveIncidentsFor(
+  handoff: Handoff,
+  datasetUrns: string[]
+): Promise<{ urn: string; datasetUrn: string }[]> {
+  const resolved: { urn: string; datasetUrn: string }[] = [];
+  const title = incidentTitle(handoff);
+
+  for (const datasetUrn of datasetUrns) {
+    const open = await datahubGraphQL<{
+      dataset: { incidents: { incidents: { urn: string; title: string }[] } } | null;
+    }>(LIST_OPEN_INCIDENTS, { urn: datasetUrn });
+
+    for (const incident of open.data?.dataset?.incidents?.incidents ?? []) {
+      if (incident.title !== title) continue;
+      const result = await datahubGraphQL(RESOLVE_INCIDENT, {
+        urn: incident.urn,
+        input: {
+          state: "RESOLVED",
+          message:
+            `Re-validated against the catalog on ${new Date().toISOString().slice(0, 10)}: every claim this ` +
+            `runbook makes about this dataset holds again. Resolved automatically by instaboard's decay sweep.`,
+        },
+      });
+      if (!result.errors?.length) resolved.push({ urn: incident.urn, datasetUrn });
+    }
+  }
+  return resolved;
+}
+
 /**
  * Who the incident goes to.
  *
