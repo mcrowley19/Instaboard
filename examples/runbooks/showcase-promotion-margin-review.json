@@ -1,0 +1,596 @@
+{
+  "id": "showcase-promotion-margin-review",
+  "title": "Promotion margin review before a campaign launch",
+  "author": "Karen Okonkwo",
+  "role": "Technical Owner, PowerBI ORDER_DETAILS",
+  "summary": "What I check before signing off a promotion: the campaign window and cost in PROMOTIONS, then the product catalogue for list vs min price, so we know the floor before marketing commits a discount.",
+  "createdAt": "2026-08-02T12:00:00.000Z",
+  "steps": [
+    {
+      "title": "Read the campaign window and cost",
+      "instruction": "Open PROMOTIONS and pull promotion_start_date, promotion_end_date and promotion_cost for the campaign under review.",
+      "why": "Marketing quotes a discount percentage; the number that matters to us is promotion_cost against the margin the products can absorb.",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Cb2fd91.order_entry_db.order_entry.promotions%2CPROD)",
+      "sql": "SELECT promotion_name, promotion_start_date, promotion_end_date, promotion_cost\nFROM order_entry_db.order_entry.promotions;"
+    },
+    {
+      "title": "Check the price floor on the affected products",
+      "instruction": "Open the products model and compare list_price against min_price for everything in the campaign's categories. min_price is the floor — a discount below it needs sign-off.",
+      "why": "min_price is the contractual floor, not a suggestion. Ask Priya Sharma before agreeing to anything under it; she stewards this model and knows which supplier agreements bind us.",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Adbt%2Cb2fd91.order_entry_db.order_entry.products%2CPROD)",
+      "sql": "SELECT product_id, product_name, list_price, min_price\nFROM order_entry_db.order_entry.products\nWHERE product_status = 'orderable';",
+      "tips": "Priya Sharma is the Data Steward on this model — she is the sign-off for anything below min_price."
+    }
+  ],
+  "recorded": [
+    {
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Cb2fd91.order_entry_db.order_entry.promotions%2CPROD)",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+      "title": "PROMOTIONS",
+      "note": "Campaign window and cost."
+    },
+    {
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Adbt%2Cb2fd91.order_entry_db.order_entry.products%2CPROD)",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+      "title": "products (dbt)",
+      "note": "Price floor — ask Priya."
+    }
+  ],
+  "datahub": {
+    "saved": false
+  },
+  "snapshots": {
+    "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)": {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+      "exists": true,
+      "fields": [
+        "promotion_cost",
+        "promotion_description",
+        "promotion_end_date",
+        "promotion_id",
+        "promotion_name",
+        "promotion_start_date"
+      ],
+      "owners": [],
+      "deprecated": false,
+      "openIncidents": 0,
+      "failingAssertions": 0,
+      "capturedAt": "2026-08-02T15:23:18.131Z",
+      "name": "PROMOTIONS"
+    },
+    "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)": {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+      "exists": true,
+      "fields": [
+        "catalog_url",
+        "category_id",
+        "date_added",
+        "list_price",
+        "min_price",
+        "product_description",
+        "product_id",
+        "product_name",
+        "product_status",
+        "supplier_id",
+        "warranty_period",
+        "weight_class"
+      ],
+      "owners": [
+        "Data Platform Team",
+        "b2fd91.ORG_DATA_PLATFORM",
+        "data-platform@example.com",
+        "urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM",
+        "Ian Chen",
+        "ian.chen@example.com",
+        "urn:li:corpuser:b2fd91.EMP006",
+        "Priya Sharma",
+        "priya.sharma@example.com",
+        "urn:li:corpuser:b2fd91.patrick1@example.com"
+      ],
+      "deprecated": false,
+      "openIncidents": 0,
+      "failingAssertions": 0,
+      "capturedAt": "2026-08-02T15:23:18.131Z",
+      "name": "products"
+    }
+  },
+  "decay": {
+    "handoffId": "showcase-promotion-margin-review",
+    "checkedAt": "2026-08-02T18:00:00.811Z",
+    "severity": "ok",
+    "stepsChecked": 2,
+    "entitiesChecked": 2,
+    "hadSnapshot": true,
+    "findings": [],
+    "claims": [
+      {
+        "id": "entity-exists:eadcc61683d7",
+        "stepIndex": 0,
+        "stepTitle": "Read the campaign window and cost",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+        "kind": "entity-exists",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+        "statement": "PROMOTIONS is in the catalog.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "69e3f28c6b2c",
+          "entityVersion": "867ddd04d951",
+          "at": "2026-08-02T15:23:18.131Z"
+        }
+      },
+      {
+        "id": "column-exists:ce0cdadd7ffc",
+        "stepIndex": 0,
+        "stepTitle": "Read the campaign window and cost",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+        "kind": "column-exists",
+        "subject": "promotion_cost",
+        "statement": "PROMOTIONS has a column `promotion_cost`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "69e3f28c6b2c",
+          "entityVersion": "867ddd04d951",
+          "at": "2026-08-02T15:23:18.131Z"
+        }
+      },
+      {
+        "id": "column-exists:180e39b04926",
+        "stepIndex": 0,
+        "stepTitle": "Read the campaign window and cost",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+        "kind": "column-exists",
+        "subject": "promotion_end_date",
+        "statement": "PROMOTIONS has a column `promotion_end_date`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "69e3f28c6b2c",
+          "entityVersion": "867ddd04d951",
+          "at": "2026-08-02T15:23:18.131Z"
+        }
+      },
+      {
+        "id": "column-exists:2d64e308638b",
+        "stepIndex": 0,
+        "stepTitle": "Read the campaign window and cost",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+        "kind": "column-exists",
+        "subject": "promotion_name",
+        "statement": "PROMOTIONS has a column `promotion_name`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "69e3f28c6b2c",
+          "entityVersion": "867ddd04d951",
+          "at": "2026-08-02T15:23:18.131Z"
+        }
+      },
+      {
+        "id": "column-exists:248285cc9f62",
+        "stepIndex": 0,
+        "stepTitle": "Read the campaign window and cost",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+        "kind": "column-exists",
+        "subject": "promotion_start_date",
+        "statement": "PROMOTIONS has a column `promotion_start_date`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "69e3f28c6b2c",
+          "entityVersion": "867ddd04d951",
+          "at": "2026-08-02T15:23:18.131Z"
+        }
+      },
+      {
+        "id": "not-deprecated:d2838d685e6f",
+        "stepIndex": 0,
+        "stepTitle": "Read the campaign window and cost",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+        "kind": "not-deprecated",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+        "statement": "PROMOTIONS is not deprecated.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+          "aspect": "deprecation",
+          "aspectVersion": "ea9a6f4c3e7f",
+          "entityVersion": "867ddd04d951",
+          "at": "2026-08-02T15:23:18.131Z"
+        }
+      },
+      {
+        "id": "healthy:85c1f917dbf3",
+        "stepIndex": 0,
+        "stepTitle": "Read the campaign window and cost",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+        "kind": "healthy",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+        "statement": "PROMOTIONS has no open incidents and no failing assertions.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+          "aspect": "health",
+          "aspectVersion": "6f3f70fb7154",
+          "entityVersion": "867ddd04d951",
+          "at": "2026-08-02T15:23:18.131Z"
+        }
+      },
+      {
+        "id": "entity-exists:fd094017e76d",
+        "stepIndex": 1,
+        "stepTitle": "Check the price floor on the affected products",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+        "kind": "entity-exists",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+        "statement": "products is in the catalog.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "fce7ae62b628",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T15:23:18.131Z"
+        }
+      },
+      {
+        "id": "column-exists:408cdb361c57",
+        "stepIndex": 1,
+        "stepTitle": "Check the price floor on the affected products",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+        "kind": "column-exists",
+        "subject": "list_price",
+        "statement": "products has a column `list_price`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "fce7ae62b628",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T15:23:18.131Z"
+        }
+      },
+      {
+        "id": "column-exists:d8bd181d9db9",
+        "stepIndex": 1,
+        "stepTitle": "Check the price floor on the affected products",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+        "kind": "column-exists",
+        "subject": "min_price",
+        "statement": "products has a column `min_price`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "fce7ae62b628",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T15:23:18.131Z"
+        }
+      },
+      {
+        "id": "column-exists:1fe3647ac601",
+        "stepIndex": 1,
+        "stepTitle": "Check the price floor on the affected products",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+        "kind": "column-exists",
+        "subject": "product_id",
+        "statement": "products has a column `product_id`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "fce7ae62b628",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T15:23:18.131Z"
+        }
+      },
+      {
+        "id": "column-exists:630db11ba878",
+        "stepIndex": 1,
+        "stepTitle": "Check the price floor on the affected products",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+        "kind": "column-exists",
+        "subject": "product_name",
+        "statement": "products has a column `product_name`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "fce7ae62b628",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T15:23:18.131Z"
+        }
+      },
+      {
+        "id": "column-exists:b950dc904e70",
+        "stepIndex": 1,
+        "stepTitle": "Check the price floor on the affected products",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+        "kind": "column-exists",
+        "subject": "product_status",
+        "statement": "products has a column `product_status`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "fce7ae62b628",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T15:23:18.131Z"
+        }
+      },
+      {
+        "id": "not-deprecated:32bfb4427e38",
+        "stepIndex": 1,
+        "stepTitle": "Check the price floor on the affected products",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+        "kind": "not-deprecated",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+        "statement": "products is not deprecated.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "deprecation",
+          "aspectVersion": "ea9a6f4c3e7f",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T15:23:18.131Z"
+        }
+      },
+      {
+        "id": "healthy:23789467ce87",
+        "stepIndex": 1,
+        "stepTitle": "Check the price floor on the affected products",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+        "kind": "healthy",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+        "statement": "products has no open incidents and no failing assertions.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "health",
+          "aspectVersion": "6f3f70fb7154",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T15:23:18.131Z"
+        }
+      },
+      {
+        "id": "owner-current:e2038397b08c",
+        "stepIndex": 1,
+        "stepTitle": "Check the price floor on the affected products",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+        "kind": "owner-current",
+        "subject": "Priya Sharma",
+        "statement": "Priya Sharma owns products, and is who this step says to contact.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "ownership",
+          "aspectVersion": "d8d5b5dea4e9",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T15:23:18.131Z"
+        }
+      }
+    ],
+    "verdicts": [
+      {
+        "claimId": "entity-exists:eadcc61683d7",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "69e3f28c6b2c",
+          "entityVersion": "867ddd04d951",
+          "at": "2026-08-02T17:59:59.538Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Still in the catalog as PROMOTIONS."
+      },
+      {
+        "claimId": "column-exists:ce0cdadd7ffc",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "69e3f28c6b2c",
+          "entityVersion": "867ddd04d951",
+          "at": "2026-08-02T17:59:59.538Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `promotion_cost` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:180e39b04926",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "69e3f28c6b2c",
+          "entityVersion": "867ddd04d951",
+          "at": "2026-08-02T17:59:59.538Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `promotion_end_date` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:2d64e308638b",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "69e3f28c6b2c",
+          "entityVersion": "867ddd04d951",
+          "at": "2026-08-02T17:59:59.538Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `promotion_name` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:248285cc9f62",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "69e3f28c6b2c",
+          "entityVersion": "867ddd04d951",
+          "at": "2026-08-02T17:59:59.538Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `promotion_start_date` is still on the schema."
+      },
+      {
+        "claimId": "not-deprecated:d2838d685e6f",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+          "aspect": "deprecation",
+          "aspectVersion": "ea9a6f4c3e7f",
+          "entityVersion": "867ddd04d951",
+          "at": "2026-08-02T17:59:59.538Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "PROMOTIONS is still live."
+      },
+      {
+        "claimId": "healthy:85c1f917dbf3",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+          "aspect": "health",
+          "aspectVersion": "6f3f70fb7154",
+          "entityVersion": "867ddd04d951",
+          "at": "2026-08-02T17:59:59.538Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "No open incidents, no failing assertions."
+      },
+      {
+        "claimId": "entity-exists:fd094017e76d",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "fce7ae62b628",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T17:59:59.538Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Still in the catalog as products."
+      },
+      {
+        "claimId": "column-exists:408cdb361c57",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "fce7ae62b628",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T17:59:59.538Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `list_price` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:d8bd181d9db9",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "fce7ae62b628",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T17:59:59.538Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `min_price` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:1fe3647ac601",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "fce7ae62b628",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T17:59:59.538Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `product_id` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:630db11ba878",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "fce7ae62b628",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T17:59:59.538Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `product_name` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:b950dc904e70",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "fce7ae62b628",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T17:59:59.538Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `product_status` is still on the schema."
+      },
+      {
+        "claimId": "not-deprecated:32bfb4427e38",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "deprecation",
+          "aspectVersion": "ea9a6f4c3e7f",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T17:59:59.538Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "products is still live."
+      },
+      {
+        "claimId": "healthy:23789467ce87",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "health",
+          "aspectVersion": "6f3f70fb7154",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T17:59:59.538Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "No open incidents, no failing assertions."
+      },
+      {
+        "claimId": "owner-current:e2038397b08c",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "aspect": "ownership",
+          "aspectVersion": "d8d5b5dea4e9",
+          "entityVersion": "722cfaee9b5f",
+          "at": "2026-08-02T17:59:59.538Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Priya Sharma still owns products."
+      }
+    ],
+    "versions": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)": {
+        "entity": "867ddd04d951",
+        "aspects": {
+          "schema": "69e3f28c6b2c",
+          "ownership": "4f53cda18c2b",
+          "deprecation": "ea9a6f4c3e7f",
+          "health": "6f3f70fb7154"
+        }
+      },
+      "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)": {
+        "entity": "722cfaee9b5f",
+        "aspects": {
+          "schema": "fce7ae62b628",
+          "ownership": "d8d5b5dea4e9",
+          "deprecation": "ea9a6f4c3e7f",
+          "health": "6f3f70fb7154"
+        }
+      }
+    }
+  }
+}

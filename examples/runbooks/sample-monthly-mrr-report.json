@@ -1,0 +1,726 @@
+{
+  "id": "sample-monthly-mrr-report",
+  "title": "Monthly MRR report for the board deck",
+  "author": "Priya Patel",
+  "role": "Payments Data Lead",
+  "summary": "How I produce the MRR numbers for the monthly board deck: sanity-check payment health first, verify the revenue fact loaded, then pull the MRR rollup and hand the numbers to finance.",
+  "createdAt": "2026-07-01T09:00:00.000Z",
+  "sample": true,
+  "steps": [
+    {
+      "title": "Check payment pipeline health",
+      "instruction": "Open payment_health_daily and confirm yesterday's success_rate is above 0.97 for both providers. If it dipped, the revenue numbers may undercount — check with the on-call before reporting anything.",
+      "why": "A payment outage silently deflates MRR. Finance has been burned by this before — always rule it out first.",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Canalytics.marts.payment_health_daily%2CPROD)",
+      "tips": "The saved query 'Payment success rate by provider' on this dataset is the fastest check."
+    },
+    {
+      "title": "Verify fct_revenue loaded cleanly",
+      "instruction": "Open fct_revenue and check the dataset's last updated time and row-count trend. Use net_amount_usd for anything you report — gross_amount_usd includes refunded charges.",
+      "why": "fct_revenue is the canonical revenue source; every downstream number is wrong if this load was partial.",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Canalytics.marts.fct_revenue%2CPROD)",
+      "sql": "SELECT MAX(revenue_date) AS latest, COUNT(*) AS rows_loaded\nFROM analytics.marts.fct_revenue\nWHERE revenue_date >= DATEADD(day, -35, CURRENT_DATE);",
+      "tips": "If latest is more than a day behind, ping Mike Rodriguez — the dbt mart job may have failed."
+    },
+    {
+      "title": "Pull the MRR rollup",
+      "instruction": "Open mrr_monthly and run the saved query 'Monthly MRR trend by plan' for the last 12 months. Copy mrr_usd and net_new_mrr_usd into the board template.",
+      "why": "This table implements the official MRR definition (glossary term MRR) — never recompute it by hand from payments.",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Canalytics.marts.mrr_monthly%2CPROD)",
+      "sql": "SELECT month, plan, mrr_usd, net_new_mrr_usd\nFROM analytics.marts.mrr_monthly\nWHERE month >= DATEADD(month, -12, CURRENT_DATE)\nORDER BY month, plan;",
+      "tips": "Board deck wants plan-level rows plus a total — the total is the SUM over plans, not a separate table."
+    }
+  ],
+  "recorded": [
+    {
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Canalytics.marts.payment_health_daily%2CPROD)",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+      "title": "payment_health_daily",
+      "note": "Always check this first after an incident-heavy month."
+    },
+    {
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Canalytics.marts.fct_revenue%2CPROD)",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+      "title": "fct_revenue",
+      "note": "net_amount_usd, never gross."
+    },
+    {
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Canalytics.marts.mrr_monthly%2CPROD)",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+      "title": "mrr_monthly",
+      "note": "Saved query has the exact board cut."
+    }
+  ],
+  "snapshots": {
+    "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)": {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+      "name": "payment_health_daily",
+      "exists": true,
+      "fields": [
+        "date",
+        "provider",
+        "attempts",
+        "success_rate"
+      ],
+      "owners": [
+        "Priya Patel (Payments Data Lead, urn:li:corpuser:priya.patel)"
+      ],
+      "deprecated": false,
+      "openIncidents": 0,
+      "failingAssertions": 0,
+      "capturedAt": "2026-07-01T09:00:00.000Z"
+    },
+    "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)": {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+      "name": "fct_revenue",
+      "exists": true,
+      "fields": [
+        "revenue_id",
+        "customer_id",
+        "order_id",
+        "gross_amount_usd",
+        "net_amount_usd",
+        "is_recurring",
+        "revenue_date"
+      ],
+      "owners": [
+        "Priya Patel (Payments Data Lead, urn:li:corpuser:priya.patel)",
+        "Mike Rodriguez (Analytics Engineer, urn:li:corpuser:mike.rodriguez)"
+      ],
+      "deprecated": false,
+      "openIncidents": 0,
+      "failingAssertions": 0,
+      "capturedAt": "2026-07-01T09:00:00.000Z"
+    },
+    "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)": {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+      "name": "mrr_monthly",
+      "exists": true,
+      "fields": [
+        "month",
+        "plan",
+        "mrr_usd",
+        "arr_usd",
+        "net_new_mrr_usd"
+      ],
+      "owners": [
+        "Priya Patel (Payments Data Lead, urn:li:corpuser:priya.patel)"
+      ],
+      "deprecated": false,
+      "openIncidents": 0,
+      "failingAssertions": 0,
+      "capturedAt": "2026-07-01T09:00:00.000Z"
+    }
+  },
+  "datahub": {
+    "saved": false,
+    "detail": "Sample handoff — regenerate to write back."
+  },
+  "decay": {
+    "handoffId": "sample-monthly-mrr-report",
+    "checkedAt": "2026-08-02T18:00:51.858Z",
+    "severity": "warning",
+    "stepsChecked": 3,
+    "entitiesChecked": 3,
+    "hadSnapshot": true,
+    "findings": [
+      {
+        "stepIndex": 0,
+        "stepTitle": "Check payment pipeline health",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+        "claimId": "healthy:f970c7659588",
+        "severity": "warning",
+        "kind": "failing-assertion",
+        "detail": "payment_health_daily has 1 failing assertion (freshness/volume) (was 0 when recorded).",
+        "remedy": "The table may be stale. Confirm it has loaded before trusting this step's output."
+      }
+    ],
+    "claims": [
+      {
+        "id": "entity-exists:3572f2fab468",
+        "stepIndex": 0,
+        "stepTitle": "Check payment pipeline health",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+        "kind": "entity-exists",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+        "statement": "payment_health_daily is in the catalog.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "dd40a83770de",
+          "entityVersion": "f99b48ca6a71",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "column-exists:e094eefa2d54",
+        "stepIndex": 0,
+        "stepTitle": "Check payment pipeline health",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+        "kind": "column-exists",
+        "subject": "provider",
+        "statement": "payment_health_daily has a column `provider`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "dd40a83770de",
+          "entityVersion": "f99b48ca6a71",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "column-exists:deab27af544b",
+        "stepIndex": 0,
+        "stepTitle": "Check payment pipeline health",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+        "kind": "column-exists",
+        "subject": "success_rate",
+        "statement": "payment_health_daily has a column `success_rate`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "dd40a83770de",
+          "entityVersion": "f99b48ca6a71",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "not-deprecated:1549132bb617",
+        "stepIndex": 0,
+        "stepTitle": "Check payment pipeline health",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+        "kind": "not-deprecated",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+        "statement": "payment_health_daily is not deprecated.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+          "aspect": "deprecation",
+          "aspectVersion": "ea9a6f4c3e7f",
+          "entityVersion": "f99b48ca6a71",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "healthy:f970c7659588",
+        "stepIndex": 0,
+        "stepTitle": "Check payment pipeline health",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+        "kind": "healthy",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+        "statement": "payment_health_daily has no open incidents and no failing assertions.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+          "aspect": "health",
+          "aspectVersion": "6f3f70fb7154",
+          "entityVersion": "f99b48ca6a71",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "entity-exists:5072957ef1bc",
+        "stepIndex": 1,
+        "stepTitle": "Verify fct_revenue loaded cleanly",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+        "kind": "entity-exists",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+        "statement": "fct_revenue is in the catalog.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "89280579c9b0",
+          "entityVersion": "c06dc240be94",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "column-exists:d04364588177",
+        "stepIndex": 1,
+        "stepTitle": "Verify fct_revenue loaded cleanly",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+        "kind": "column-exists",
+        "subject": "gross_amount_usd",
+        "statement": "fct_revenue has a column `gross_amount_usd`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "89280579c9b0",
+          "entityVersion": "c06dc240be94",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "column-exists:16db9a932637",
+        "stepIndex": 1,
+        "stepTitle": "Verify fct_revenue loaded cleanly",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+        "kind": "column-exists",
+        "subject": "net_amount_usd",
+        "statement": "fct_revenue has a column `net_amount_usd`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "89280579c9b0",
+          "entityVersion": "c06dc240be94",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "column-exists:7fdf890c239b",
+        "stepIndex": 1,
+        "stepTitle": "Verify fct_revenue loaded cleanly",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+        "kind": "column-exists",
+        "subject": "revenue_date",
+        "statement": "fct_revenue has a column `revenue_date`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "89280579c9b0",
+          "entityVersion": "c06dc240be94",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "not-deprecated:a55dd1efa6fe",
+        "stepIndex": 1,
+        "stepTitle": "Verify fct_revenue loaded cleanly",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+        "kind": "not-deprecated",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+        "statement": "fct_revenue is not deprecated.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "aspect": "deprecation",
+          "aspectVersion": "ea9a6f4c3e7f",
+          "entityVersion": "c06dc240be94",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "healthy:e0c8cb0617e2",
+        "stepIndex": 1,
+        "stepTitle": "Verify fct_revenue loaded cleanly",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+        "kind": "healthy",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+        "statement": "fct_revenue has no open incidents and no failing assertions.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "aspect": "health",
+          "aspectVersion": "6f3f70fb7154",
+          "entityVersion": "c06dc240be94",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "owner-current:eae362770a3e",
+        "stepIndex": 1,
+        "stepTitle": "Verify fct_revenue loaded cleanly",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+        "kind": "owner-current",
+        "subject": "Mike Rodriguez",
+        "statement": "Mike Rodriguez owns fct_revenue, and is who this step says to contact.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "aspect": "ownership",
+          "aspectVersion": "869ab9c899cc",
+          "entityVersion": "c06dc240be94",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "entity-exists:d5e69024a31b",
+        "stepIndex": 2,
+        "stepTitle": "Pull the MRR rollup",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+        "kind": "entity-exists",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+        "statement": "mrr_monthly is in the catalog.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "b3adc4e2ad41",
+          "entityVersion": "a3f5955201f2",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "column-exists:b75a061aaba4",
+        "stepIndex": 2,
+        "stepTitle": "Pull the MRR rollup",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+        "kind": "column-exists",
+        "subject": "month",
+        "statement": "mrr_monthly has a column `month`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "b3adc4e2ad41",
+          "entityVersion": "a3f5955201f2",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "column-exists:01e06dbfc253",
+        "stepIndex": 2,
+        "stepTitle": "Pull the MRR rollup",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+        "kind": "column-exists",
+        "subject": "plan",
+        "statement": "mrr_monthly has a column `plan`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "b3adc4e2ad41",
+          "entityVersion": "a3f5955201f2",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "column-exists:c2cb4def4f64",
+        "stepIndex": 2,
+        "stepTitle": "Pull the MRR rollup",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+        "kind": "column-exists",
+        "subject": "mrr_usd",
+        "statement": "mrr_monthly has a column `mrr_usd`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "b3adc4e2ad41",
+          "entityVersion": "a3f5955201f2",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "column-exists:24d1d1c2e1d4",
+        "stepIndex": 2,
+        "stepTitle": "Pull the MRR rollup",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+        "kind": "column-exists",
+        "subject": "net_new_mrr_usd",
+        "statement": "mrr_monthly has a column `net_new_mrr_usd`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "b3adc4e2ad41",
+          "entityVersion": "a3f5955201f2",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "not-deprecated:2765190ac8cc",
+        "stepIndex": 2,
+        "stepTitle": "Pull the MRR rollup",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+        "kind": "not-deprecated",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+        "statement": "mrr_monthly is not deprecated.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "aspect": "deprecation",
+          "aspectVersion": "ea9a6f4c3e7f",
+          "entityVersion": "a3f5955201f2",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      },
+      {
+        "id": "healthy:9a91f12c49a3",
+        "stepIndex": 2,
+        "stepTitle": "Pull the MRR rollup",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+        "kind": "healthy",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+        "statement": "mrr_monthly has no open incidents and no failing assertions.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "aspect": "health",
+          "aspectVersion": "6f3f70fb7154",
+          "entityVersion": "a3f5955201f2",
+          "at": "2026-07-01T09:00:00.000Z"
+        }
+      }
+    ],
+    "verdicts": [
+      {
+        "claimId": "entity-exists:3572f2fab468",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "dd40a83770de",
+          "entityVersion": "dd3723f5adec",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Still in the catalog as payment_health_daily."
+      },
+      {
+        "claimId": "column-exists:e094eefa2d54",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "dd40a83770de",
+          "entityVersion": "dd3723f5adec",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `provider` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:deab27af544b",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "dd40a83770de",
+          "entityVersion": "dd3723f5adec",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `success_rate` is still on the schema."
+      },
+      {
+        "claimId": "not-deprecated:1549132bb617",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+          "aspect": "deprecation",
+          "aspectVersion": "ea9a6f4c3e7f",
+          "entityVersion": "dd3723f5adec",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "payment_health_daily is still live."
+      },
+      {
+        "claimId": "healthy:f970c7659588",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+          "aspect": "health",
+          "aspectVersion": "b3b7361fb1ae",
+          "entityVersion": "dd3723f5adec",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": false,
+        "status": "broken",
+        "detail": "payment_health_daily now has 0 open incident(s) and 1 failing assertion(s)."
+      },
+      {
+        "claimId": "entity-exists:5072957ef1bc",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "89280579c9b0",
+          "entityVersion": "ab36daad91f3",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Still in the catalog as fct_revenue."
+      },
+      {
+        "claimId": "column-exists:d04364588177",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "89280579c9b0",
+          "entityVersion": "ab36daad91f3",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `gross_amount_usd` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:16db9a932637",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "89280579c9b0",
+          "entityVersion": "ab36daad91f3",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `net_amount_usd` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:7fdf890c239b",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "89280579c9b0",
+          "entityVersion": "ab36daad91f3",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `revenue_date` is still on the schema."
+      },
+      {
+        "claimId": "not-deprecated:a55dd1efa6fe",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "aspect": "deprecation",
+          "aspectVersion": "ea9a6f4c3e7f",
+          "entityVersion": "ab36daad91f3",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "fct_revenue is still live."
+      },
+      {
+        "claimId": "healthy:e0c8cb0617e2",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "aspect": "health",
+          "aspectVersion": "6f3f70fb7154",
+          "entityVersion": "ab36daad91f3",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "No open incidents, no failing assertions."
+      },
+      {
+        "claimId": "owner-current:eae362770a3e",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "aspect": "ownership",
+          "aspectVersion": "8e5f9dd13d08",
+          "entityVersion": "ab36daad91f3",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": false,
+        "status": "holds",
+        "detail": "Mike Rodriguez still owns fct_revenue."
+      },
+      {
+        "claimId": "entity-exists:d5e69024a31b",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "b3adc4e2ad41",
+          "entityVersion": "c05ace3f0aaa",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Still in the catalog as mrr_monthly."
+      },
+      {
+        "claimId": "column-exists:b75a061aaba4",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "b3adc4e2ad41",
+          "entityVersion": "c05ace3f0aaa",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `month` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:01e06dbfc253",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "b3adc4e2ad41",
+          "entityVersion": "c05ace3f0aaa",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `plan` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:c2cb4def4f64",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "b3adc4e2ad41",
+          "entityVersion": "c05ace3f0aaa",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `mrr_usd` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:24d1d1c2e1d4",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "b3adc4e2ad41",
+          "entityVersion": "c05ace3f0aaa",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `net_new_mrr_usd` is still on the schema."
+      },
+      {
+        "claimId": "not-deprecated:2765190ac8cc",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "aspect": "deprecation",
+          "aspectVersion": "ea9a6f4c3e7f",
+          "entityVersion": "c05ace3f0aaa",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "mrr_monthly is still live."
+      },
+      {
+        "claimId": "healthy:9a91f12c49a3",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "aspect": "health",
+          "aspectVersion": "6f3f70fb7154",
+          "entityVersion": "c05ace3f0aaa",
+          "at": "2026-08-02T18:00:26.317Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "No open incidents, no failing assertions."
+      }
+    ],
+    "versions": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)": {
+        "entity": "dd3723f5adec",
+        "aspects": {
+          "schema": "dd40a83770de",
+          "ownership": "154f6d214d44",
+          "deprecation": "ea9a6f4c3e7f",
+          "health": "b3b7361fb1ae"
+        }
+      },
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)": {
+        "entity": "ab36daad91f3",
+        "aspects": {
+          "schema": "89280579c9b0",
+          "ownership": "8e5f9dd13d08",
+          "deprecation": "ea9a6f4c3e7f",
+          "health": "6f3f70fb7154"
+        }
+      },
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)": {
+        "entity": "c05ace3f0aaa",
+        "aspects": {
+          "schema": "b3adc4e2ad41",
+          "ownership": "154f6d214d44",
+          "deprecation": "ea9a6f4c3e7f",
+          "health": "6f3f70fb7154"
+        }
+      }
+    }
+  }
+}

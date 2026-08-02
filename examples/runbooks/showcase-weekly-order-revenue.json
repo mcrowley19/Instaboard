@@ -1,0 +1,651 @@
+{
+  "id": "showcase-weekly-order-revenue",
+  "title": "Weekly order revenue pack for the commercial review",
+  "author": "David Kim",
+  "role": "Data Scientist (Data Steward, ORDER_DETAILS)",
+  "summary": "How I build the Monday commercial pack: check the order fact is healthy, pull revenue and delivery cost by customer class off ORDER_DETAILS, then cross-check the line-item detail before anyone quotes the number.",
+  "createdAt": "2026-08-02T12:00:00.000Z",
+  "steps": [
+    {
+      "title": "Confirm ORDER_DETAILS is healthy and current",
+      "instruction": "Open ORDER_DETAILS in the analytics schema. Check the health badge for failing assertions or open incidents, and confirm the Data Freshness SLA property still reads Daily before you trust today's numbers.",
+      "why": "This is the certified wide order table — it carries the Most Queried tag and a 97.5 quality score. If it is stale, every number in the pack is stale, and I would rather find that out here than in the meeting.",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Cb2fd91.order_entry_db.analytics.order_details%2CPROD)",
+      "tips": "ORDER_DETAILS_REPLICA has the same 55 columns and no owner. Do not use it — it exists because someone cloned the table and left."
+    },
+    {
+      "title": "Pull revenue and delivery cost by customer class",
+      "instruction": "Run the aggregation below. order_total is the glossary-sanctioned measure; cost_of_delivery is what the commercial team wants netted off it.",
+      "why": "The Revenue by Customer Class glossary term prescribes grouping on customer_class and aggregating order_total. Deriving it any other way produces a number finance will dispute.",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Cb2fd91.order_entry_db.analytics.order_details%2CPROD)",
+      "sql": "SELECT customer_class,\n       SUM(order_total)      AS total_revenue,\n       SUM(cost_of_delivery) AS delivery_cost,\n       COUNT(DISTINCT order_id) AS order_count\nFROM order_entry_db.analytics.order_details\nWHERE order_date >= DATEADD(day, -7, CURRENT_DATE)\nGROUP BY customer_class\nORDER BY total_revenue DESC;",
+      "tips": "cost_of_delivery is on the wide table already — do not join back to orders for it."
+    },
+    {
+      "title": "Cross-check against the line items",
+      "instruction": "Reconcile the weekly total against ORDER_ITEMS. If unit_price × quantity does not land within a rounding tolerance of the order_total sum, something upstream double-counted.",
+      "why": "We shipped a wrong number once because a retry duplicated line items. Reconciling takes two minutes and has caught it twice since.",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Cb2fd91.order_entry_db.order_entry.order_items%2CPROD)",
+      "sql": "SELECT SUM(unit_price * quantity) AS line_item_total\nFROM order_entry_db.order_entry.order_items;"
+    }
+  ],
+  "recorded": [
+    {
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Cb2fd91.order_entry_db.analytics.order_details%2CPROD)",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+      "title": "ORDER_DETAILS",
+      "note": "Certified wide table — start here."
+    },
+    {
+      "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Cb2fd91.order_entry_db.order_entry.order_items%2CPROD)",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+      "title": "ORDER_ITEMS",
+      "note": "Reconciliation source."
+    }
+  ],
+  "datahub": {
+    "saved": false
+  },
+  "snapshots": {
+    "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)": {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+      "exists": true,
+      "fields": [
+        "cust_email",
+        "phone_number",
+        "billing_address_line1",
+        "billing_address_line2",
+        "billing_country",
+        "billing_region",
+        "billing_town_city",
+        "billing_zipcode",
+        "category_id",
+        "category_name",
+        "condition",
+        "cost_of_delivery",
+        "cust_first_name",
+        "cust_last_name",
+        "customer_class",
+        "customer_id",
+        "delivery_status",
+        "delivery_type",
+        "discount_amount",
+        "discount_percent",
+        "dispatch_date",
+        "estimated_delivery",
+        "gift_wrap",
+        "line_item_id",
+        "line_total",
+        "list_price",
+        "order_date",
+        "order_id",
+        "order_mode",
+        "order_status",
+        "order_total",
+        "payment_method_code",
+        "product_description",
+        "product_id",
+        "product_name",
+        "product_status",
+        "promotion_description",
+        "promotion_id",
+        "promotion_name",
+        "quantity",
+        "quantity_on_hand",
+        "return_date",
+        "return_status",
+        "shipping_address_line1",
+        "shipping_address_line2",
+        "shipping_country",
+        "shipping_region",
+        "shipping_town_city",
+        "shipping_zipcode",
+        "stock_status",
+        "unit_price",
+        "updated_at",
+        "wait_till_complete_yn",
+        "warehouse_id",
+        "warehouse_name"
+      ],
+      "owners": [
+        "DataHub SE Team",
+        "b2fd91.1e0398a3-113f-475e-b6fc-32ab72a634d2",
+        "urn:li:corpGroup:b2fd91.1e0398a3-113f-475e-b6fc-32ab72a634d2",
+        "David Kim",
+        "david.kim@example.com",
+        "urn:li:corpuser:b2fd91.brock1@example.com",
+        "Julia Novak",
+        "julia.novak@example.com",
+        "urn:li:corpuser:b2fd91.jonny1@example.com"
+      ],
+      "deprecated": false,
+      "openIncidents": 0,
+      "failingAssertions": 0,
+      "capturedAt": "2026-08-02T15:23:13.463Z",
+      "name": "ORDER_DETAILS"
+    },
+    "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)": {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+      "exists": true,
+      "fields": [
+        "condition",
+        "dispatch_date",
+        "estimated_delivery",
+        "gift_wrap",
+        "line_item_id",
+        "order_id",
+        "product_id",
+        "quantity",
+        "return_date",
+        "supplier_id",
+        "unit_price"
+      ],
+      "owners": [],
+      "deprecated": false,
+      "openIncidents": 0,
+      "failingAssertions": 0,
+      "capturedAt": "2026-08-02T15:23:13.467Z",
+      "name": "ORDER_ITEMS"
+    }
+  },
+  "decay": {
+    "handoffId": "showcase-weekly-order-revenue",
+    "checkedAt": "2026-08-02T18:00:26.168Z",
+    "severity": "ok",
+    "stepsChecked": 3,
+    "entitiesChecked": 2,
+    "hadSnapshot": true,
+    "findings": [],
+    "claims": [
+      {
+        "id": "entity-exists:f2c4f4078474",
+        "stepIndex": 0,
+        "stepTitle": "Confirm ORDER_DETAILS is healthy and current",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "kind": "entity-exists",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "statement": "ORDER_DETAILS is in the catalog.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "3f98350c8745",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T15:23:13.463Z"
+        }
+      },
+      {
+        "id": "not-deprecated:4621ed2e7bf5",
+        "stepIndex": 0,
+        "stepTitle": "Confirm ORDER_DETAILS is healthy and current",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "kind": "not-deprecated",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "statement": "ORDER_DETAILS is not deprecated.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "deprecation",
+          "aspectVersion": "ea9a6f4c3e7f",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T15:23:13.463Z"
+        }
+      },
+      {
+        "id": "healthy:b5ecb0744712",
+        "stepIndex": 0,
+        "stepTitle": "Confirm ORDER_DETAILS is healthy and current",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "kind": "healthy",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "statement": "ORDER_DETAILS has no open incidents and no failing assertions.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "health",
+          "aspectVersion": "6f3f70fb7154",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T15:23:13.463Z"
+        }
+      },
+      {
+        "id": "entity-exists:ab76849ef26b",
+        "stepIndex": 1,
+        "stepTitle": "Pull revenue and delivery cost by customer class",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "kind": "entity-exists",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "statement": "ORDER_DETAILS is in the catalog.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "3f98350c8745",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T15:23:13.463Z"
+        }
+      },
+      {
+        "id": "column-exists:131f76fc06a0",
+        "stepIndex": 1,
+        "stepTitle": "Pull revenue and delivery cost by customer class",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "kind": "column-exists",
+        "subject": "cost_of_delivery",
+        "statement": "ORDER_DETAILS has a column `cost_of_delivery`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "3f98350c8745",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T15:23:13.463Z"
+        }
+      },
+      {
+        "id": "column-exists:da76a1373210",
+        "stepIndex": 1,
+        "stepTitle": "Pull revenue and delivery cost by customer class",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "kind": "column-exists",
+        "subject": "customer_class",
+        "statement": "ORDER_DETAILS has a column `customer_class`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "3f98350c8745",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T15:23:13.463Z"
+        }
+      },
+      {
+        "id": "column-exists:e2bf13a61606",
+        "stepIndex": 1,
+        "stepTitle": "Pull revenue and delivery cost by customer class",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "kind": "column-exists",
+        "subject": "order_date",
+        "statement": "ORDER_DETAILS has a column `order_date`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "3f98350c8745",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T15:23:13.463Z"
+        }
+      },
+      {
+        "id": "column-exists:d44bff224c36",
+        "stepIndex": 1,
+        "stepTitle": "Pull revenue and delivery cost by customer class",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "kind": "column-exists",
+        "subject": "order_id",
+        "statement": "ORDER_DETAILS has a column `order_id`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "3f98350c8745",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T15:23:13.463Z"
+        }
+      },
+      {
+        "id": "column-exists:5cbac040ed9e",
+        "stepIndex": 1,
+        "stepTitle": "Pull revenue and delivery cost by customer class",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "kind": "column-exists",
+        "subject": "order_total",
+        "statement": "ORDER_DETAILS has a column `order_total`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "3f98350c8745",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T15:23:13.463Z"
+        }
+      },
+      {
+        "id": "not-deprecated:e732fb407cb4",
+        "stepIndex": 1,
+        "stepTitle": "Pull revenue and delivery cost by customer class",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "kind": "not-deprecated",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "statement": "ORDER_DETAILS is not deprecated.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "deprecation",
+          "aspectVersion": "ea9a6f4c3e7f",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T15:23:13.463Z"
+        }
+      },
+      {
+        "id": "healthy:d82f974b3974",
+        "stepIndex": 1,
+        "stepTitle": "Pull revenue and delivery cost by customer class",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "kind": "healthy",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "statement": "ORDER_DETAILS has no open incidents and no failing assertions.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "health",
+          "aspectVersion": "6f3f70fb7154",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T15:23:13.463Z"
+        }
+      },
+      {
+        "id": "entity-exists:7d4206c5fb7a",
+        "stepIndex": 2,
+        "stepTitle": "Cross-check against the line items",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+        "kind": "entity-exists",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+        "statement": "ORDER_ITEMS is in the catalog.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "cf0846b39341",
+          "entityVersion": "b26092423ef1",
+          "at": "2026-08-02T15:23:13.467Z"
+        }
+      },
+      {
+        "id": "column-exists:89069285daf2",
+        "stepIndex": 2,
+        "stepTitle": "Cross-check against the line items",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+        "kind": "column-exists",
+        "subject": "quantity",
+        "statement": "ORDER_ITEMS has a column `quantity`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "cf0846b39341",
+          "entityVersion": "b26092423ef1",
+          "at": "2026-08-02T15:23:13.467Z"
+        }
+      },
+      {
+        "id": "column-exists:bee3a9c9f5fe",
+        "stepIndex": 2,
+        "stepTitle": "Cross-check against the line items",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+        "kind": "column-exists",
+        "subject": "unit_price",
+        "statement": "ORDER_ITEMS has a column `unit_price`, which this step reads.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "cf0846b39341",
+          "entityVersion": "b26092423ef1",
+          "at": "2026-08-02T15:23:13.467Z"
+        }
+      },
+      {
+        "id": "not-deprecated:cd3010af1fd3",
+        "stepIndex": 2,
+        "stepTitle": "Cross-check against the line items",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+        "kind": "not-deprecated",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+        "statement": "ORDER_ITEMS is not deprecated.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+          "aspect": "deprecation",
+          "aspectVersion": "ea9a6f4c3e7f",
+          "entityVersion": "b26092423ef1",
+          "at": "2026-08-02T15:23:13.467Z"
+        }
+      },
+      {
+        "id": "healthy:c3b706cb0402",
+        "stepIndex": 2,
+        "stepTitle": "Cross-check against the line items",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+        "kind": "healthy",
+        "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+        "statement": "ORDER_ITEMS has no open incidents and no failing assertions.",
+        "validatedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+          "aspect": "health",
+          "aspectVersion": "6f3f70fb7154",
+          "entityVersion": "b26092423ef1",
+          "at": "2026-08-02T15:23:13.467Z"
+        }
+      }
+    ],
+    "verdicts": [
+      {
+        "claimId": "entity-exists:f2c4f4078474",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "3f98350c8745",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T18:00:03.814Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Still in the catalog as ORDER_DETAILS."
+      },
+      {
+        "claimId": "not-deprecated:4621ed2e7bf5",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "deprecation",
+          "aspectVersion": "ea9a6f4c3e7f",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T18:00:03.814Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "ORDER_DETAILS is still live."
+      },
+      {
+        "claimId": "healthy:b5ecb0744712",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "health",
+          "aspectVersion": "6f3f70fb7154",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T18:00:03.814Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "No open incidents, no failing assertions."
+      },
+      {
+        "claimId": "entity-exists:ab76849ef26b",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "3f98350c8745",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T18:00:03.814Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Still in the catalog as ORDER_DETAILS."
+      },
+      {
+        "claimId": "column-exists:131f76fc06a0",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "3f98350c8745",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T18:00:03.814Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `cost_of_delivery` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:da76a1373210",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "3f98350c8745",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T18:00:03.814Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `customer_class` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:e2bf13a61606",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "3f98350c8745",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T18:00:03.814Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `order_date` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:d44bff224c36",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "3f98350c8745",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T18:00:03.814Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `order_id` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:5cbac040ed9e",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "3f98350c8745",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T18:00:03.814Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `order_total` is still on the schema."
+      },
+      {
+        "claimId": "not-deprecated:e732fb407cb4",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "deprecation",
+          "aspectVersion": "ea9a6f4c3e7f",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T18:00:03.814Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "ORDER_DETAILS is still live."
+      },
+      {
+        "claimId": "healthy:d82f974b3974",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "aspect": "health",
+          "aspectVersion": "6f3f70fb7154",
+          "entityVersion": "214214e38bf6",
+          "at": "2026-08-02T18:00:03.814Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "No open incidents, no failing assertions."
+      },
+      {
+        "claimId": "entity-exists:7d4206c5fb7a",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "cf0846b39341",
+          "entityVersion": "b26092423ef1",
+          "at": "2026-08-02T18:00:03.815Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Still in the catalog as ORDER_ITEMS."
+      },
+      {
+        "claimId": "column-exists:89069285daf2",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "cf0846b39341",
+          "entityVersion": "b26092423ef1",
+          "at": "2026-08-02T18:00:03.815Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `quantity` is still on the schema."
+      },
+      {
+        "claimId": "column-exists:bee3a9c9f5fe",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+          "aspect": "schema",
+          "aspectVersion": "cf0846b39341",
+          "entityVersion": "b26092423ef1",
+          "at": "2026-08-02T18:00:03.815Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "Column `unit_price` is still on the schema."
+      },
+      {
+        "claimId": "not-deprecated:cd3010af1fd3",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+          "aspect": "deprecation",
+          "aspectVersion": "ea9a6f4c3e7f",
+          "entityVersion": "b26092423ef1",
+          "at": "2026-08-02T18:00:03.815Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "ORDER_ITEMS is still live."
+      },
+      {
+        "claimId": "healthy:c3b706cb0402",
+        "checkedAgainst": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+          "aspect": "health",
+          "aspectVersion": "6f3f70fb7154",
+          "entityVersion": "b26092423ef1",
+          "at": "2026-08-02T18:00:03.815Z"
+        },
+        "aspectUnchanged": true,
+        "status": "holds",
+        "detail": "No open incidents, no failing assertions."
+      }
+    ],
+    "versions": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)": {
+        "entity": "214214e38bf6",
+        "aspects": {
+          "schema": "3f98350c8745",
+          "ownership": "06a2431b52d3",
+          "deprecation": "ea9a6f4c3e7f",
+          "health": "6f3f70fb7154"
+        }
+      },
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)": {
+        "entity": "b26092423ef1",
+        "aspects": {
+          "schema": "cf0846b39341",
+          "ownership": "4f53cda18c2b",
+          "deprecation": "ea9a6f4c3e7f",
+          "health": "6f3f70fb7154"
+        }
+      }
+    }
+  }
+}
