@@ -12,6 +12,8 @@ type Block = { type: "text"; text: string } | { type: "trace"; entry: TraceEntry
 interface DisplayMessage {
   role: "user" | "assistant";
   blocks: Block[];
+  /** True when this answer came from the committed recording, not a live run. */
+  replayed?: boolean;
 }
 
 const SUGGESTIONS = [
@@ -27,12 +29,29 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /**
+   * Set when neither the server nor the browser has an LLM key. Answers then
+   * come from a committed recording of a real session, and the UI says so. A
+   * replayed answer must never read as a live one.
+   */
+  const [replayQuestions, setReplayQuestions] = useState<string[] | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, busy]);
+
+  useEffect(() => {
+    // The browser key wins; only ask the server what it can serve without one.
+    if (Object.keys(llmHeaders()).length > 0) return;
+    fetch("/api/status")
+      .then((r) => r.json())
+      .then((s: { replay?: { questions: string[] } }) => {
+        if (s.replay?.questions?.length) setReplayQuestions(s.replay.questions);
+      })
+      .catch(() => {});
+  }, []);
 
   const historyFor = (msgs: DisplayMessage[]): ChatMessage[] =>
     msgs.map((m) => ({
@@ -50,7 +69,7 @@ export default function ChatPage() {
     setInput("");
 
     const userMessage: DisplayMessage = { role: "user", blocks: [{ type: "text", text: trimmed }] };
-    const assistantMessage: DisplayMessage = { role: "assistant", blocks: [] };
+    const assistantMessage: DisplayMessage = { role: "assistant", blocks: [], replayed: Boolean(replayQuestions) };
     const nextMessages = [...messages, userMessage];
     setMessages([...nextMessages, assistantMessage]);
     setBusy(true);
@@ -119,11 +138,18 @@ export default function ChatPage() {
             <div className="empty-state" style={{ minHeight: "60vh" }}>
               <h2>Ask your data catalog anything</h2>
               <p>
-                instaboard answers from your live DataHub metadata — tables, owners, lineage,
+                instaboard answers from your live DataHub metadata: tables, owners, lineage,
                 glossary terms, and real SQL. Perfect for your first week.
               </p>
+              {replayQuestions && (
+                <p className="replay-note">
+                  <strong>No key needed.</strong> These questions replay a recorded session,
+                  with the real tool calls and the real answers captured from a live run. Add
+                  your own key in <strong>Settings</strong> to ask anything else.
+                </p>
+              )}
               <div className="suggestions">
-                {SUGGESTIONS.map((s) => (
+                {(replayQuestions ?? SUGGESTIONS).map((s) => (
                   <button key={s} className="suggestion" onClick={() => send(s)}>
                     {s}
                   </button>
@@ -133,7 +159,10 @@ export default function ChatPage() {
           ) : (
             messages.map((m, i) => (
               <div key={i} className={`msg ${m.role}`}>
-                <div className="msg-role">{m.role === "user" ? "You" : "instaboard"}</div>
+                <div className="msg-role">
+                  {m.role === "user" ? "You" : "instaboard"}
+                  {m.replayed && <span className="replay-badge">recorded session</span>}
+                </div>
                 <div className="msg-body">
                   {m.blocks.map((b, j) =>
                     b.type === "text" ? (

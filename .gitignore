@@ -33,8 +33,13 @@ __pycache__/
 coverage/
 tsconfig.tsbuildinfo
 
-# runtime user data (handoffs)
-data/
+# runtime user data (handoffs). Ignore the contents rather than the directory
+# itself, or git never descends far enough for the exception below to apply.
+data/*
+# The recorded demo session ships, so the hosted demo needs no API key.
+!data/replay/
+data/replay/*
+!data/replay/session.json
 
 # Eval resume cache (regenerated locally)
 evals/results/cache.json

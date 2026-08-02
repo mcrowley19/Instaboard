@@ -326,6 +326,33 @@ p.page-sub {
   color: var(--accent-strong);
 }
 
+/* Marks an answer served from the committed recording rather than a live run.
+   The demo works with no key, and never pretends the two are the same thing. */
+.replay-badge {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 99px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-raised);
+  color: var(--text-faint);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  font-weight: 550;
+}
+
+.replay-note {
+  max-width: 44ch;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
 .msg-body {
   font-size: 14.5px;
 }
