@@ -13,7 +13,7 @@ Skill tool:
 
 **User's request:** $ARGUMENTS
 
-If no arguments provided, ask whether the user wants to (1) orient a new team member —
-and for their role and domain, (2) capture a departing member's task knowledge as a
-runbook — and for the task, or (3) validate an existing runbook or onboarding document
-against the live catalog.
+If no arguments are provided, ask which of three jobs the user wants. Orienting a new
+team member, in which case ask for their role and domain. Capturing a departing member's
+task knowledge as a runbook, in which case ask for the task. Or validating an existing
+runbook or onboarding document against the live catalog.

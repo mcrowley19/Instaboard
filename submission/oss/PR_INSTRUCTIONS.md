@@ -1,8 +1,18 @@
-# Submitting `datahub-onboarding` to datahub-project/datahub-skills
+# Upstream contributions
 
-Steps to turn the files in this directory into an upstream PR.
+Two upstream contributions came out of building instaboard, both prepared in this
+directory.
 
-## 1. Fork and branch
+| What | Where it goes | Files |
+| --- | --- | --- |
+| A new `datahub-onboarding` skill | `datahub-project/datahub-skills` (PR) | `skills/`, `commands/`, `registry-edits/` |
+| Four friction reports with reproductions | `acryldata/mcp-server-datahub` ×3, `datahub-project/datahub` ×1 | `issues/` |
+
+---
+
+## 1. The `datahub-onboarding` skill PR
+
+### Fork and branch
 
 ```bash
 gh repo fork datahub-project/datahub-skills --clone
@@ -10,124 +20,154 @@ cd datahub-skills
 git checkout -b feat/datahub-onboarding-skill
 ```
 
-## 2. Copy the files into place
+### Copy the files into place
 
 | From (this directory) | To (registry repo) |
-|---|---|
+| --- | --- |
 | `skills/datahub-onboarding/SKILL.md` | `skills/datahub-onboarding/SKILL.md` |
 | `skills/datahub-onboarding/README.md` | `skills/datahub-onboarding/README.md` |
-| `skills/datahub-onboarding/evaluations/new-hire-orientation.json` | `skills/datahub-onboarding/evaluations/new-hire-orientation.json` |
-| `skills/datahub-onboarding/evaluations/stale-runbook-validation.json` | `skills/datahub-onboarding/evaluations/stale-runbook-validation.json` |
+| `skills/datahub-onboarding/evaluations/*.json` | `skills/datahub-onboarding/evaluations/` |
 | `commands/catalog-onboarding.md` | `commands/catalog-onboarding.md` |
 
 ```bash
-cp -r /Users/michael/hackathon-builds/Instaboard/submission/oss/skills/datahub-onboarding skills/
-cp /Users/michael/hackathon-builds/Instaboard/submission/oss/commands/catalog-onboarding.md commands/
+cp -r <instaboard>/submission/oss/skills/datahub-onboarding skills/
+cp <instaboard>/submission/oss/commands/catalog-onboarding.md commands/
 ```
 
-Before committing, skim a sibling skill (e.g. `skills/catalog-lineage/SKILL.md`) and
-verify two things against the live repo, since these files were drafted without it:
+### Apply the registry edits
 
-- The sibling skill names referenced in our `## Not This Skill` table and description
-  (`/catalog-lineage`, `/catalog-search`) match the registry's actual skill/command names.
-  Adjust if they differ.
-- The `min-cli-version` and `allowed-tools` values match what current skills in the repo
-  use.
+A new skill has to be registered in the router, or it will never be reached.
+`registry-edits/router-and-readme.diff` holds both edits, taken against `main`:
 
-## 3. Register the skill in `skills/using-datahub/SKILL.md`
+- **`skills/using-datahub/SKILL.md`** gains three rows in the routing table, covering
+  onboarding, knowledge capture and runbook validation, plus an "Onboarding vs. Search"
+  disambiguation block. Skill count goes from 5 to 6.
+- **`README.md`** gains `/catalog-onboarding` in the catalog-interaction command table, and
+  `datahub-onboarding/` in the repo tree and the Contributing file map.
 
-The router skill must know about the new one. Two edits (we don't have that file's exact
-contents, so match its existing formatting):
+```bash
+git apply <instaboard>/submission/oss/registry-edits/router-and-readme.diff
+```
 
-1. **Routing table:** add a row for `datahub-onboarding` alongside the existing skills,
-   in the same table format the file already uses. Suggested cell text:
-   - *When to use:* onboarding a new data-team member, building a week-one learning path,
-     capturing a departing member's knowledge as a runbook, or validating a saved
-     runbook/onboarding doc against the live catalog.
-   - *Skill:* `datahub-onboarding` (command `/catalog-onboarding`).
-2. **Count:** the file says something like "5 DataHub catalog interaction skills" — bump
-   it to **6**.
+If it doesn't apply cleanly because `main` has moved, make the same edits by hand. They are
+small, and the diff reads as a checklist.
 
-## 4. Pre-commit
+### Pre-commit
 
-The repo uses pre-commit hooks; run them before pushing:
+The repo runs `prettier` (markdown) and `markdownlint-cli2` in CI via `.github/workflows/lint.yml`.
 
 ```bash
 pip install pre-commit && pre-commit install
 pre-commit run --all-files
 ```
 
-Fix anything it flags (typically trailing whitespace, EOF newlines, YAML/JSON formatting)
-and re-run until clean.
+All files in this directory were already formatted with `prettier@3` and pass
+`markdownlint-cli2@0.21.0` against the repo's `.markdownlint-cli2.yaml`. Run it anyway in
+case the pinned versions have moved.
 
-## 5. Do NOT touch
+### Do NOT touch
 
-- `plugin.json`
-- `CHANGELOG` / `CHANGELOG.md`
+- `.claude-plugin/plugin.json`
+- `CHANGELOG.md`, `.release-please-manifest.json`
 - Any version files
 
-Maintainers handle versioning and release metadata; PRs that modify them get bounced.
+Release Please owns versioning; PRs that edit those get bounced (see `CONTRIBUTING.md`).
 
-## 6. Commit and open the PR
+### Commit and open the PR
 
-PR title must be conventional-commit format, exactly:
-
-```
-feat: add datahub-onboarding skill
-```
+PR titles are enforced by the `Lint PR Title` check and must be conventional-commit format:
 
 ```bash
-git add skills/datahub-onboarding commands/catalog-onboarding.md skills/using-datahub/SKILL.md
+git add skills/datahub-onboarding commands/catalog-onboarding.md skills/using-datahub/SKILL.md README.md
 git commit -m "feat: add datahub-onboarding skill"
 git push -u origin feat/datahub-onboarding-skill
-gh pr create --title "feat: add datahub-onboarding skill" --body-file <path to body below>
+gh pr create --title "feat: add datahub-onboarding skill" --body-file <the body below>
 ```
 
-## Suggested PR description body
+### Suggested PR body
 
-```markdown
+````markdown
 ## What
 
-Adds a new user-invocable skill, `datahub-onboarding`, plus its `/catalog-onboarding`
-slash-command wrapper and two evaluation cases.
+Adds a `datahub-onboarding` skill, its `/catalog-onboarding` command wrapper, and two
+evaluation cases. It covers the two knowledge-transfer moments every data team hits:
 
-The skill covers the two knowledge-transfer moments every data team hits:
+- **Someone joins.** Orient them in the catalog: work out which of the same-named copies of
+  a table is canonical (certification markers, ownership coverage, platform usage tags,
+  lineage position), never recommend a deprecated dataset without naming its replacement,
+  surface the real owners *and* the escalation contact from `structuredProperties`, quote
+  the glossary's metric definitions, and cite real recorded queries, saying "no recorded
+  queries" rather than inventing SQL. Optionally assemble that into a role/domain "week one"
+  path and `save_document` it back to the catalog.
+- **Someone leaves.** Capture their task knowledge as a runbook where each step carries a
+  dataset URN, an action and the *why*. Enrich every step from the catalog with owners,
+  schema, recorded SQL and one-hop lineage, then save it back linked to the datasets it
+  touches.
 
-- **Someone joins:** orient them in the catalog — rank datasets by real 30-day usage
-  (`get_usage_stats`), never recommend a deprecated dataset without flagging it and naming
-  its replacement (`get_dataset_health`), surface actual owners, glossary metric
-  definitions, and real recorded queries (`get_dataset_queries`) instead of invented SQL.
-  Optionally assemble this into a role/domain "week one" learning path and save it back to
-  the catalog with `save_document`.
-- **Someone leaves:** capture their task knowledge as a runbook — dataset URN, action, and
-  the *why* for each step — enrich each step from the catalog (owners, schema, saved SQL,
-  lineage), and save it back linked to the datasets it touches.
-
-Because captured knowledge rots, the skill also enforces a staleness rule: on every
-read-back of a runbook or onboarding doc, it re-verifies the doc's claims against the live
-catalog with deterministic checks (referenced columns still exist, dataset not deprecated
-since, assertions passing, named owners still owners) and warns before anyone follows a
-stale step.
+Because captured knowledge rots, the skill enforces a staleness rule: on every read-back of
+a runbook or onboarding doc, re-verify its claims against the live catalog with
+deterministic checks (referenced columns still exist, dataset not deprecated since, `health`
+not failing, named owners still owners) and warn before anyone follows a stale step.
 
 ## Changes
 
-- `skills/datahub-onboarding/SKILL.md` — the skill
-- `skills/datahub-onboarding/README.md` — overview and usage
-- `skills/datahub-onboarding/evaluations/*.json` — two evaluation cases (orientation,
-  stale-runbook validation)
-- `commands/catalog-onboarding.md` — slash-command wrapper
-- `skills/using-datahub/SKILL.md` — routing table entry; skill count 5 → 6
+- `skills/datahub-onboarding/SKILL.md`, the skill itself
+- `skills/datahub-onboarding/README.md`, overview and usage
+- `skills/datahub-onboarding/evaluations/*.json`, two evaluation cases covering orientation
+  and stale-runbook validation
+- `commands/catalog-onboarding.md`, the slash-command wrapper
+- `skills/using-datahub/SKILL.md`, routing rows plus an Onboarding-vs-Search disambiguation
+  block, skill count 5 → 6
+- `README.md`, command table, repo tree and Contributing file map
+
+## Notes on tool surface
+
+The skill is written against what `mcp-server-datahub` 0.6.0 actually exposes, which is
+worth flagging because it shaped two steps:
+
+- **There is no usage-statistics tool**, and `get_entities` doesn't inline query counts. So
+  Step 2 ranks candidates on certification markers, governance weight, platform-assigned
+  usage tags and lineage position, and points at
+  `datahub get -a datasetUsageStatistics` for raw numbers. Filed separately as an issue.
+- **There is no health tool.** `health` and `deprecation` arrive inline on `get_entities`,
+  so Step 3 reads them there. The skill calls this out explicitly under Common Mistakes,
+  because an agent that goes looking for a health tool, doesn't find one, and concludes
+  "no health data" has just declared a broken table healthy.
 
 ## Provenance
 
-This skill was extracted and generalized from **instaboard**
-(https://github.com/mcrowley19/Instaboard), a DataHub onboarding/knowledge-handoff agent
-built for the DataHub Agent Hackathon. The workflow was validated there against a
-20-question onboarding benchmark scored deterministically against catalog facts; the
-skill distills the parts that proved out (usage-ranked recommendations, deprecation
-guardrails, real-SQL-only, catalog write-back, deterministic staleness checks) into
-registry form, with no dependency on the app.
+Extracted and generalised from [instaboard](https://github.com/mcrowley19/Instaboard), a
+DataHub onboarding and knowledge-handoff agent built for the DataHub Agent Hackathon. The
+workflow was validated there against two 20-question onboarding benchmarks scored
+deterministically against catalog facts. One benchmark runs on a purpose-built catalog and
+the other on DataHub's own `showcase-ecommerce` datapack, alongside a decay drill that makes
+real breaking changes to that datapack and checks the staleness rules catch them. This
+skill distils the parts that proved out, with no dependency on the app.
 
-Ran `pre-commit run --all-files` clean. No changes to `plugin.json`, `CHANGELOG`, or
+Ran `pre-commit run --all-files` clean. No changes to `plugin.json`, `CHANGELOG.md`, or
 version files.
-```
+````
+
+---
+
+## 2. The friction reports
+
+Four write-ups with reproduction steps are in `issues/`. Each is a complete issue body;
+file with `gh issue create -R <repo> --title "<first heading>" --body-file <file>`.
+
+| File | Repo | Summary |
+| --- | --- | --- |
+| `01-no-usage-statistics-tool.md` | `acryldata/mcp-server-datahub` | No MCP tool returns dataset usage stats and `get_entities` doesn't inline them, leaving an agent no way to rank lookalike tables by real query volume |
+| `02-incidents-unreadable.md` | `acryldata/mcp-server-datahub` | `get_entities` on an incident URN errors; the entity's health reports `causes: ["ACTIVE_INCIDENTS"]` instead of URNs, unlike the assertions branch of the same field |
+| `03-anyof-union-schemas-rejected-by-providers.md` | `acryldata/mcp-server-datahub` | Multi-type `anyOf` unions in two tool schemas make OpenAI-compatible providers reject the whole tool list with a 422 |
+| `04-showcase-datapack-drops-cloud-only-aspects.md` | `datahub-project/datahub` | `datapack load showcase-ecommerce` quietly drops 248 MCPs on OSS, every usage and assertion aspect among them, while still reporting success |
+
+Checked against the open issue lists on both repos before writing; none of these is a
+duplicate. The incident write-tool requests (#136, #143, #145, #153) are all about
+*writing* incidents. `02` covers not being able to *read* one back, and says so.
+
+One more thing we hit is **already filed**: `datahub datapack --help` crashes with
+`FileNotFoundError: .../resources/DATAPACK_AGENT_CONTEXT.md`, reported as
+[datahub#18497](https://github.com/datahub-project/datahub/issues/18497) against
+1.6.0.15. It still reproduces on **1.6.0.17**, so the useful contribution there is a
+confirming comment on the existing issue rather than a new one.
