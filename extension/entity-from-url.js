@@ -5,9 +5,11 @@
  * without an API call. What it does not do is make the mapping from entity type
  * to URL segment discoverable, and the mapping is not derivable: a `dataJob`
  * lives at `/tasks/`, a `dataFlow` at `/pipelines/`, an `mlFeature` at
- * `/features/`. Seven of the thirty routes do not match their entity type name.
+ * `/features/`. Eleven of the thirty-one routes do not match their entity type
+ * name, and five of those are a different word entirely.
  *
- * We got this wrong for months. The first version of this file pattern-matched
+ * We got this wrong from the first version of the extension until this commit.
+ * It pattern-matched
  * `/dataFlow/` and `/dataJob/`, which are not routes DataHub has ever served, so
  * the side panel silently failed to detect a page whenever somebody opened a
  * pipeline or a task — the two entity types an onboarding tool most wants to see.

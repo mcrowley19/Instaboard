@@ -17,8 +17,8 @@ publishing a copy that differs from what we run is worse than publishing nothing
 
 DataHub puts the URN in the URL, which is generous: an extension can tell what
 you are looking at without an API round trip. But the mapping from entity type to
-URL segment is **not published and not derivable**. Seven of the thirty routes do
-not match their entity type:
+URL segment is **not published and not derivable**. Eleven of the thirty-one routes
+do not match their entity type name, and five are a different word entirely:
 
 | Entity type | URL segment |
 | --- | --- |
@@ -32,12 +32,12 @@ not match their entity type:
 | `dataPlatform` | `/platform/` |
 | `businessAttribute` | `/business-attribute/` |
 
-So the obvious implementation is wrong, and wrong in the worst way. We shipped
-`/dataFlow/` and `/dataJob/` — routes DataHub has never served — and the side
-panel silently failed to detect a page whenever anyone opened a pipeline or a
-task, which are two of the entity types an onboarding tool most wants to see. It
-failed by returning "no entity", which is indistinguishable from "not a DataHub
-page", so nothing ever surfaced it. We found it by extracting `getPathName()`
+So the obvious implementation is wrong, and wrong in the worst way. Every version
+of our extension up to this one matched `/dataFlow/` and `/dataJob/` — routes
+DataHub has never served — so the side panel silently failed to detect a page
+whenever anyone opened a pipeline or a task, two of the entity types an onboarding
+tool most wants to see. It failed by returning "no entity", which is
+indistinguishable from "not a DataHub page", so nothing ever surfaced it. We found it by extracting `getPathName()`
 from the frontend bundle's entity registry and diffing against what we had.
 
 The URN is also not a simple path segment. It can contain slashes, parentheses,

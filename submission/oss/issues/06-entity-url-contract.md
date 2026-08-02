@@ -11,7 +11,8 @@ DataHub encodes the entity URN in the UI URL, so a browser extension or userscri
 can in principle tell which entity the user is looking at without an API call.
 In practice it cannot do so reliably, because the mapping from entity type to URL
 path segment is neither documented nor derivable, and the obvious implementation
-is wrong for seven of the thirty entity routes.
+is wrong for eleven of the thirty-one entity routes — five of which are a different
+word entirely.
 
 There is no supported alternative either: nothing on the rendered page states the
 current entity, so URL parsing is the only option available.
@@ -37,8 +38,8 @@ Most routes match their entity type. These do not:
 An integration written against the entity-type names silently detects nothing on
 pipeline and task pages. The failure is invisible: "no entity found" and "not a
 DataHub page" are the same result, so nothing alerts you that the detection is
-broken for a whole class of entities. We shipped exactly this bug and did not
-notice for weeks.
+broken for a whole class of entities. We shipped exactly this bug, and found it
+only by extracting the route table out of the frontend bundle to check.
 
 ## Steps to reproduce
 
