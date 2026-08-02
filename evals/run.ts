@@ -29,6 +29,7 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { runAgent } from "../lib/agent";
+import { callWarehouseTool, WAREHOUSE_TOOLS } from "../lib/warehouse-introspection";
 import { listDataHubTools } from "../lib/mcp";
 import { CHAT_SYSTEM_PROMPT } from "../lib/prompts";
 import { isQuotaExhausted } from "../lib/providers";
@@ -71,7 +72,19 @@ function llmConfig(): LLMConfig {
 
 /* ── Resume cache ─────────────────────────────────────────────────────── */
 
-type Arm = "grounded" | "blind";
+type Arm = "grounded" | "schema" | "blind";
+
+/**
+ * Three arms, one agent loop. `grounded` gets DataHub's MCP tools. `schema` gets
+ * `information_schema`-equivalent introspection — real tools, no catalog — which
+ * is what isolates "what DataHub buys you" from "what having tools buys you".
+ * `blind` gets nothing, which is what a new hire's chatbot has today.
+ */
+const ARM_LABEL: Record<Arm, string> = {
+  grounded: "With DataHub",
+  schema: "Warehouse schema only",
+  blind: "No tools (control)",
+};
 
 /**
  * What a completed case produced. Scoring is re-applied on load, so tightening a
@@ -147,13 +160,12 @@ async function runOne(
   };
 
   try {
-    answer = await runAgent(
-      config,
-      arm === "grounded" ? CHAT_SYSTEM_PROMPT : suite.blindPrompt,
-      [{ role: "user", content: evalCase.question }],
-      emit,
-      { tools: arm === "grounded" ? groundedTools : [] }
-    );
+    const system =
+      arm === "grounded" ? CHAT_SYSTEM_PROMPT : arm === "schema" ? suite.schemaPrompt : suite.blindPrompt;
+    answer = await runAgent(config, system, [{ role: "user", content: evalCase.question }], emit, {
+      tools: arm === "grounded" ? groundedTools : arm === "schema" ? WAREHOUSE_TOOLS : [],
+      ...(arm === "schema" ? { execute: callWarehouseTool } : {}),
+    });
   } catch (err) {
     if (isQuotaExhausted(err)) throw new QuotaExhausted(err instanceof Error ? err.message : String(err));
     error = err instanceof Error ? err.message : String(err);
@@ -220,6 +232,7 @@ function byCategory(cases: CaseResult[], categories: string[]): Record<string, {
 
 function scorecard(arms: ArmSummary[], meta: { model: string; mode: string; at: string }, suite: Suite): string {
   const grounded = arms.find((a) => a.arm === "grounded");
+  const schema = arms.find((a) => a.arm === "schema");
   const blind = arms.find((a) => a.arm === "blind");
   const total = suite.cases.length;
 
@@ -231,8 +244,8 @@ function scorecard(arms: ArmSummary[], meta: { model: string; mode: string; at: 
     `_Generated ${meta.at} · model \`${meta.model}\` · catalog: ${meta.mode}_`,
     "",
     `${total} questions a new hire asks in week 1, scored deterministically against`,
-    `${suite.catalog}. Both arms run through the identical agent loop; the only`,
-    "difference is whether the DataHub MCP tools are in the tool list.",
+    `${suite.catalog}. Every arm runs through the identical agent loop; the only`,
+    "difference is what is in the tool list.",
     "",
   ];
 
@@ -257,23 +270,55 @@ function scorecard(arms: ArmSummary[], meta: { model: string; mode: string; at: 
 
   if (grounded && blind) {
     lines.push(
-      `| | Cases passed | Checks passed | DataHub calls |`,
-      `| --- | --- | --- | --- |`,
-      `| **With DataHub (MCP)** | **${grounded.casesPassed}/${total}** | ${grounded.checksPassed}/${grounded.checksTotal} | ${grounded.toolCalls} |`,
-      `| Without DataHub (control) | ${blind.casesPassed}/${total} | ${blind.checksPassed}/${blind.checksTotal} | 0 |`,
-      "",
+      `| Arm | What it can see | Cases passed | Checks passed | Tool calls |`,
+      `| --- | --- | --- | --- | --- |`,
+      `| **With DataHub (MCP)** | the catalog: owners, glossary, health, deprecation, usage, lineage, saved queries | **${grounded.casesPassed}/${total}** | ${grounded.checksPassed}/${grounded.checksTotal} | ${grounded.toolCalls} |`
+    );
+    if (schema) {
+      lines.push(
+        `| Warehouse schema only | table names, column names, column types — \`information_schema\` | ${schema.casesPassed}/${total} | ${schema.checksPassed}/${schema.checksTotal} | ${schema.toolCalls} |`
+      );
+    }
+    lines.push(
+      `| No tools (control) | nothing; answers from model knowledge | ${blind.casesPassed}/${total} | ${blind.checksPassed}/${blind.checksTotal} | 0 |`,
+      ""
+    );
+    lines.push(
       `**${grounded.casesPassed - blind.casesPassed} of ${total} onboarding questions are answerable only with the catalog.**`,
       ""
     );
+    if (schema) {
+      // The middle arm is what makes the headline number mean anything, so spell
+      // out how to read it rather than leaving it as a third row in a table.
+      lines.push(
+        `The middle arm is the one that makes this readable. It has real tools and makes real ` +
+          `lookups against the same warehouse — it just cannot see anything the catalog adds on top of ` +
+          `the schema. It scores **${schema.casesPassed}/${total}**, putting ` +
+          `**${grounded.casesPassed - schema.casesPassed} of ${total}** questions beyond the reach of a ` +
+          `database connection alone. That gap is the metadata, not the tooling.`,
+        "",
+        schema.toolCalls > grounded.toolCalls
+          ? `It is not that it tried less hard: it made ${schema.toolCalls} tool calls to the grounded ` +
+            `arm's ${grounded.toolCalls}, and still finished ${grounded.casesPassed - schema.casesPassed} ` +
+            `cases behind. Listing every table in the warehouse does not tell you which of six ` +
+            `identically-named copies is the one people use, who to ask about it, or what the company ` +
+            `means by "active user".`
+          : `It made ${schema.toolCalls} tool calls doing it — the lookups happened; the answers were ` +
+            `not in the schema.`,
+        ""
+      );
+    }
   } else {
     for (const arm of arms) {
-      lines.push(`- **${arm.arm}**: ${arm.casesPassed}/${total} cases, ${arm.checksPassed}/${arm.checksTotal} checks`);
+      lines.push(
+        `- **${ARM_LABEL[arm.arm]}**: ${arm.casesPassed}/${total} cases, ${arm.checksPassed}/${arm.checksTotal} checks`
+      );
     }
     lines.push("");
   }
 
   lines.push("## By category", "");
-  lines.push(`| Category | ${arms.map((a) => (a.arm === "grounded" ? "With DataHub" : "Control")).join(" | ")} |`);
+  lines.push(`| Category | ${arms.map((a) => ARM_LABEL[a.arm]).join(" | ")} |`);
   lines.push(`| --- | ${arms.map(() => "---").join(" | ")} |`);
   const perArm = arms.map((a) => byCategory(a.cases, suite.categories));
   for (const category of suite.categories) {
@@ -290,7 +335,7 @@ function scorecard(arms: ArmSummary[], meta: { model: string; mode: string; at: 
       const result = arm.cases.find((c) => c.id === evalCase.id);
       if (!result) continue;
       const mark = result.passed ? "PASS" : "FAIL";
-      const label = arm.arm === "grounded" ? "With DataHub" : "Control";
+      const label = ARM_LABEL[arm.arm];
       lines.push(`- **${label}: ${mark}** (${result.score}/${result.maxScore})`);
       for (const check of result.checks.filter((c) => !c.passed)) {
         lines.push(
@@ -309,15 +354,22 @@ function scorecard(arms: ArmSummary[], meta: { model: string; mode: string; at: 
     "  against the agent's final answer. There is no LLM judge and no partial credit —",
     `  a case passes only if all of its checks pass. Raw answers for every case are in`,
     `  \`${suite.resultsPrefix}latest.json\` so any check can be verified by hand.`,
-    "- **Both arms share one code path** (`runAgent` in `lib/agent.ts`). The control arm",
-    "  is the same loop with `tools: []`.",
-    "- **The control is not a strawman.** It gets a neutral, capable-assistant prompt",
-    "  asking for specific tables, owners, and SQL — the counterfactual is an",
-    "  off-the-shelf chatbot, not a crippled one. Both prompts are in `suites.ts`.",
-    "- **Runs on a free API tier.** A full run is ~80 LLM calls, more than most free",
-    "  daily quotas allow at once, so each completed case is cached and a re-run",
-    "  resumes where it stopped. A score may therefore be assembled across sessions —",
-    "  always on the one model named above, never mixed.",
+    "- **All three arms share one code path** (`runAgent` in `lib/agent.ts`). The control",
+    "  arm is the same loop with `tools: []`; the schema arm is the same loop pointed at",
+    "  `lib/warehouse-introspection.ts` instead of the MCP server.",
+    "- **Neither control is a strawman.** The no-tools arm gets a neutral,",
+    "  capable-assistant prompt asking for specific tables, owners and SQL — the",
+    "  counterfactual is an off-the-shelf chatbot, not a crippled one. The schema arm is",
+    "  told to look everything up and never guess at a name it has not seen. All three",
+    "  prompts are in `suites.ts`.",
+    "- **The schema arm reads the same catalog**, stripped to what a warehouse connection",
+    "  would return: table names, column names, column types. Sourcing it separately would",
+    "  make its lower score an artifact of the harness rather than a finding about",
+    "  metadata.",
+    "- **Runs on a free API tier.** A full run is ~120 LLM calls across three arms, more",
+    "  than most free daily quotas allow at once, so each completed case is cached and a",
+    "  re-run resumes where it stopped. A score may therefore be assembled across",
+    "  sessions — always on the one model named above, never mixed.",
     ...suite.reproduce,
     ""
   );
@@ -352,7 +404,7 @@ async function main() {
   if (!live) process.env.DEMO_MODE = "true";
 
   const armArg = argv.find((a) => a.startsWith("--arm="))?.split("=")[1] as Arm | undefined;
-  const arms: Arm[] = armArg ? [armArg] : ["grounded", "blind"];
+  const arms: Arm[] = armArg ? [armArg] : ["grounded", "schema", "blind"];
   const concurrency = Number(argv.find((a) => a.startsWith("--concurrency="))?.split("=")[1] || 2);
   const fresh = argv.includes("--fresh");
 
@@ -377,7 +429,7 @@ async function main() {
 
   for (const arm of arms) {
     if (quotaHit) break;
-    process.stdout.write(`  ${arm === "grounded" ? "with DataHub" : "control (no DataHub)"} `);
+    process.stdout.write(`  ${ARM_LABEL[arm].toLowerCase()} `);
     let cases: (CaseResult & { cached?: boolean })[] = [];
     try {
       cases = await mapPool(suite.cases, concurrency, async (evalCase) => {

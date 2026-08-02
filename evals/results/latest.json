@@ -2,7 +2,7 @@
   "meta": {
     "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
     "mode": "demo catalog (fixture)",
-    "at": "2026-08-02 16:48 UTC",
+    "at": "2026-08-02 18:49 UTC",
     "suite": "northbeam"
   },
   "arms": [
@@ -621,6 +621,647 @@
       "checksTotal": 44,
       "toolCalls": 86,
       "durationMs": 775279
+    },
+    {
+      "arm": "schema",
+      "cases": [
+        {
+          "id": "revenue-tables",
+          "category": "grounding",
+          "question": "What tables do we use for revenue?",
+          "answer": "The primary tables for revenue analysis are in the **analytics.marts** schema (Snowflake, modeled data) and the **northbeam_app.public** schema (Postgres, source-of-truth):\n\n| Table | Platform | Purpose |\n|-------|----------|---------|\n| **analytics.marts.fct_revenue** | Snowflake | **Main revenue fact table** — one row per revenue event. Has `gross_amount_usd`, `net_amount_usd`, `is_recurring`, `revenue_date`, linked to `customer_id` and `order_id`. |\n| **analytics.marts.mrr_monthly** | Snowflake | Monthly Recurring Revenue rollup by `month` and `plan` — `mrr_usd`, `arr_usd`, `net_new_mrr_usd`. |\n| **analytics.marts.stg_payments** | Snowflake | Staged successful payments — `amount_usd`, `is_successful`, `paid_at`, linked to `order_id` and `user_id`. |\n| **northbeam_app.public.orders** | Postgres | Source orders — `total_amount`, `status`, `created_at`, `user_id`. |\n| **northbeam_app.public.subscriptions** | Postgres | Source subscriptions — `plan`, `monthly_amount`, `status`, `started_at`, `cancelled_at`. |\n\n**Typical starting points:**\n- **Transactional revenue** → `analytics.marts.fct_revenue` (clean, modeled, has recurring flag)\n- **MRR/ARR trends** → `analytics.marts.mrr_monthly`\n- **Payment-level detail** → `analytics.marts.stg_payments` (join to orders for order context)\n- **Raw order/subscription data** → `northbeam_app.public.orders` / `subscriptions`",
+          "checks": [
+            {
+              "label": "names fct_revenue",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names the MRR rollup",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "cites a real URN",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "invents a revenue table",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 3,
+          "maxScore": 4,
+          "toolCalls": [
+            "list_tables",
+            "list_tables",
+            "list_tables",
+            "list_tables",
+            "list_tables",
+            "list_tables",
+            "describe_table",
+            "describe_table",
+            "describe_table",
+            "describe_table",
+            "describe_table"
+          ],
+          "durationMs": 75574,
+          "cached": true
+        },
+        {
+          "id": "mrr-computed-where",
+          "category": "grounding",
+          "question": "Where is MRR actually computed? I need the table the board deck reads from.",
+          "answer": "**MRR is computed in `analytics.marts.mrr_monthly`** — this is the only MRR table in the warehouse.\n\n**Schema:**\n| Column | Type |\n|--------|------|\n| `month` | date |\n| `plan` | varchar |\n| `mrr_usd` | number(14,2) |\n| `arr_usd` | number(14,2) |\n| `net_new_mrr_usd` | number(14,2) |\n\nThe board deck almost certainly reads from this table. If you need to trace the upstream logic (how `mrr_usd` is derived from subscriptions/invoices), you'll need to look at the dbt model that builds `analytics.marts.mrr_monthly` — the warehouse itself only stores the materialized result.",
+          "checks": [
+            {
+              "label": "names mrr_monthly",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names its upstream fact",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "cites the URN",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 3,
+          "toolCalls": [
+            "search_columns",
+            "describe_table",
+            "list_tables"
+          ],
+          "durationMs": 12500,
+          "cached": true
+        },
+        {
+          "id": "customer-id-definition",
+          "category": "grounding",
+          "question": "How is customer_id defined, and which table is the source of truth for customers?",
+          "answer": "**Source of truth for customers:** `analytics.marts.dim_customers`\n\nThis is the customer dimension table in the marts layer — the canonical entity table for customers in the warehouse.\n\n**`customer_id` definition:**\n- Column: `customer_id`\n- Type: `number` (integer)\n- Role: Primary key of `dim_customers`; foreign key in fact tables (e.g., `analytics.marts.fct_revenue`)\n\n**Other key columns in `dim_customers`:**\n| Column | Type | Notes |\n|--------|------|-------|\n| `email` | varchar | |\n| `country` | varchar | |\n| `current_plan` | varchar | Current subscription plan |\n| `lifetime_revenue_usd` | number(14,2) | Aggregated revenue |\n| `first_paid_at` | timestamp_ntz | First payment timestamp |\n\n**Usage pattern:** Join from fact tables (e.g., `fct_revenue.customer_id`) to `dim_customers.customer_id` to enrich with customer attributes.",
+          "checks": [
+            {
+              "label": "names dim_customers",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "cites the URN",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [
+            "list_tables",
+            "describe_table",
+            "search_columns"
+          ],
+          "durationMs": 16180,
+          "cached": true
+        },
+        {
+          "id": "payments-owner",
+          "category": "ownership",
+          "question": "Who owns the payments pipeline? I need to ask about a discrepancy.",
+          "answer": "The warehouse doesn't store team ownership, but the schema layout gives a strong hint:\n\n| Layer | Schema/Platform | Key Tables | Likely Maintainer |\n|-------|----------------|------------|-------------------|\n| **Raw app data** | `northbeam_app.public` (Postgres) | `payments`, `refunds`, `orders`, `subscriptions` | Backend / Product Engineering |\n| **Staged / cleaned** | `analytics.marts` (Snowflake) | `stg_payments` | Analytics Engineering |\n| **Daily health / aggregates** | `analytics.marts` (Snowflake) | `payment_health_daily`, `fct_revenue`, `mrr_monthly` | Analytics Engineering |\n\n**To investigate a discrepancy**, start with these three tables:\n\n1. **Raw source of truth**  \n   `northbeam_app.public.payments` — `id`, `order_id`, `user_id`, `amount`, `status`, `provider`, `created_at`\n\n2. **Staged/cleaned version used downstream**  \n   `analytics.marts.stg_payments` — `payment_id`, `order_id`, `user_id`, `amount_usd`, `is_successful`, `paid_at`\n\n3. **Daily rollup by provider**  \n   `analytics.marts.payment_health_daily` — `date`, `provider`, `attempts`, `success_rate`\n\nA typical reconciliation query:\n```sql\n-- Compare raw vs staged counts/amounts for a given day/provider\nWITH raw AS (\n  SELECT date_trunc('day', created_at) AS dt,\n         provider,\n         COUNT(*) AS raw_cnt,\n         SUM(amount) AS raw_amt\n  FROM northbeam_app.public.payments\n  GROUP BY 1,2\n),\nstg AS (\n  SELECT date_trunc('day', paid_at) AS dt,\n         provider,          -- if you join back to raw for provider\n         COUNT(*) AS stg_cnt,\n         SUM(amount_usd) AS stg_amt\n  FROM analytics.marts.stg_payments\n  GROUP BY 1,2\n)\nSELECT COALESCE(r.dt, s.dt) AS dt,\n       COALESCE(r.provider, s.provider) AS provider,\n       r.raw_cnt, s.stg_cnt,\n       r.raw_amt, s.stg_amt\nFROM raw r\nFULL JOIN stg s ON r.dt = s.dt AND r.provider = s.provider\nWHERE r.raw_cnt != s.stg_cnt OR r.raw_amt != s.stg_amt\nORDER BY dt;\n```\n\n**Who to ping:**  \n- For raw data issues → backend/product engineer who owns `northbeam_app`  \n- For staged/aggregate issues → analytics engineer who owns `analytics.marts`  \n\nCheck your internal directory or Slack for “analytics engineering” or “data platform” — they usually own the Snowflake marts.",
+          "checks": [
+            {
+              "label": "names Priya Patel",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "invents an owner",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [
+            "search_columns",
+            "search_columns",
+            "search_columns",
+            "search_columns",
+            "list_tables",
+            "describe_table",
+            "describe_table",
+            "describe_table"
+          ],
+          "durationMs": 81077,
+          "cached": true
+        },
+        {
+          "id": "growth-owner",
+          "category": "ownership",
+          "question": "Who should I ask about the product events data?",
+          "answer": "The warehouse doesn't track data ownership or team contacts — it only stores the data itself.\n\n**What exists for product/events data:**\n\n| Table | Platform | Notes |\n|-------|----------|-------|\n| `northbeam_app.public.events` | Postgres | Raw event stream: `event_id`, `user_id`, `event_name`, `properties` (jsonb), `occurred_at` |\n| `analytics.marts.events_sessionized` | Snowflake | Modeled/aggregated version (has `event_count`) |\n\n**Who to ask in practice:**\n- **Analytics Engineering** — they own the `analytics.marts` layer (dbt models, transformations)\n- **Backend/Application Engineering** — they own the `northbeam_app.public.events` production table (instrumentation, schema changes)\n- **Product** — they define what events get emitted and what `properties` contain\n\nStart with your onboarding buddy or the analytics engineering lead; they'll point you to the right Slack channel (likely `#data-engineering` or `#analytics`).",
+          "checks": [
+            {
+              "label": "names James Okafor",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 1,
+          "toolCalls": [
+            "search_columns",
+            "search_columns",
+            "search_columns",
+            "search_columns",
+            "list_tables",
+            "describe_table"
+          ],
+          "durationMs": 18999,
+          "cached": true
+        },
+        {
+          "id": "email-blast-radius",
+          "category": "lineage",
+          "question": "What breaks if I change the email column on the users table?",
+          "answer": "Now I have a good picture. Let me",
+          "checks": [
+            {
+              "label": "names the staging model",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "names the downstream dim",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 2,
+          "toolCalls": [
+            "list_tables",
+            "describe_table",
+            "describe_table",
+            "search_columns",
+            "search_columns",
+            "describe_table",
+            "describe_table",
+            "describe_table",
+            "describe_table",
+            "describe_table"
+          ],
+          "durationMs": 62625,
+          "cached": true
+        },
+        {
+          "id": "fct-revenue-upstream",
+          "category": "lineage",
+          "question": "Where does fct_revenue get its data from?",
+          "answer": "Based on the warehouse schema, **`analytics.marts.fct_revenue`** is a mart table that draws from three upstream sources:\n\n| Source Table | Platform | Key Columns Used |\n|--------------|----------|------------------|\n| `analytics.marts.stg_payments` | Snowflake | `payment_id`, `order_id`, `user_id`, `amount_usd`, `is_successful`, `paid_at` |\n| `northbeam_app.public.orders` | Postgres (app DB) | `id` (order_id), `user_id`, `total_amount`, `status`, `created_at` |\n| `analytics.marts.stg_users` | Snowflake | `user_id`, `plan`, `country`, `signed_up_at` |\n\n**Likely column lineage:**\n\n| fct_revenue column | Probable source |\n|--------------------|-----------------|\n| `revenue_id` | Generated (e.g., `payment_id` or composite key) |\n| `customer_id` | `stg_users.user_id` / `orders.user_id` |\n| `order_id` | `stg_payments.order_id` / `orders.id` |\n| `gross_amount_usd` | `orders.total_amount` or `stg_payments.amount_usd` |\n| `net_amount_usd` | Derived (gross − fees/refunds) |\n| `is_recurring` | Derived from `stg_users.plan` (subscription vs one-time) |\n| `revenue_date` | `stg_payments.paid_at::date` or `orders.created_at::date` |\n\nThe actual transformation logic (filters like `is_successful = true`, joins, deduplication) lives in the dbt/SQL model that materializes `fct_revenue` — not visible in the catalog. If you need that exact query, check the dbt project under `models/marts/fct_revenue.sql`.",
+          "checks": [
+            {
+              "label": "names stg_payments",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names orders",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names refunds",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 3,
+          "maxScore": 3,
+          "toolCalls": [
+            "list_tables",
+            "describe_table",
+            "list_tables",
+            "describe_table",
+            "describe_table",
+            "list_tables",
+            "describe_table"
+          ],
+          "durationMs": 59391,
+          "cached": true
+        },
+        {
+          "id": "mrr-debug-upstream",
+          "category": "lineage",
+          "question": "The MRR number looks wrong this month. What should I check upstream?",
+          "answer": "Based on the warehouse structure, MRR flows from **`northbeam_app.public.subscriptions`** (raw Postgres) → **`analytics.marts.mrr_monthly`** (Snowflake mart). Here's your upstream checklist:\n\n---\n\n### 1. Raw subscription data (`northbeam_app.public.subscriptions`)\n| Column | What to verify |\n|--------|----------------|\n| `status` | Are `active`/`trialing` subscriptions being counted? Are cancelled ones incorrectly included? |\n| `monthly_amount` | Does it match the plan price? Any $0 or NULL rows? |\n| `started_at` / `cancelled_at` | Edge-of-month edge cases: a sub started 2024-01-31 vs 2024-02-01 changes which month it belongs to. |\n| `plan` | Plan names must match exactly what the mart expects (case-sensitive). |\n\n**Quick sanity query:**\n```sql\nSELECT status, plan, COUNT(*), SUM(monthly_amount)\nFROM northbeam_app.public.subscriptions\nWHERE started_at <= CURRENT_DATE\n  AND (cancelled_at IS NULL OR cancelled_at >= DATE_TRUNC('month', CURRENT_DATE))\nGROUP BY 1, 2;\n```\n\n---\n\n### 2. Transformation logic (dbt model behind `mrr_monthly`)\nLook for the model that builds `analytics.marts.mrr_monthly` — typically `models/marts/mrr_monthly.sql` or similar. Check:\n- **Active-subscription definition**: `status IN ('active','trialing')` AND `started_at <= month_end` AND (`cancelled_at IS NULL` OR `cancelled_at > month_start`)\n- **Monthly amount**: Is it `monthly_amount` directly, or does it prorate / handle annual plans divided by 12?\n- **Deduplication**: One row per subscription per month? (A user switching plans mid-month can create duplicates.)\n- **Time-zone**: `started_at`/`cancelled_at` are `timestamp` (no TZ) — ensure the model uses the same TZ as the reporting month boundary.\n\n---\n\n### 3. Payment / revenue cross-check (`analytics.marts.fct_revenue`, `stg_payments`)\nMRR ≠ cash collected, but large gaps signal issues:\n- `fct_revenue` where `is_recurring = true` → sum `net_amount_usd` by month; should roughly track `mrr_monthly.mrr_usd`.\n- `stg_payments` where `is_successful = true` → any failed/retried payments that didn't flip a subscription to `past_due`/`cancelled`?\n\n---\n\n### 4. Churn consistency (`analytics.marts.fct_churn`)\n- `churned` count × average plan price ≈ `net_new_mrr_usd` delta (new + expansion − churn − contraction).\n- If churn spikes but MRR doesn't drop, the churn model and MRR model may use different `status`/`cancelled_at` logic.\n\n---\n\n### 5. Recent changes\n- **Schema migrations** on `northbeam_app.public.subscriptions` (new status values, plan renames)?\n- **dbt model changes** in the last deploy — check `mrr_monthly` and its upstream staging models.\n- **Backfills / manual fixes** that may have touched only one layer.\n\n---\n\n### Immediate next step\nRun the sanity query above for the suspect month, then compare its `SUM(monthly_amount)` per plan to `analytics.marts.mrr_monthly` for the same month. The gap will tell you whether the issue is in the raw data, the active-subscription filter, or the aggregation.",
+          "checks": [
+            {
+              "label": "points at fct_revenue",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 1,
+          "maxScore": 1,
+          "toolCalls": [
+            "list_tables",
+            "list_tables",
+            "list_tables",
+            "describe_table",
+            "describe_table",
+            "describe_table",
+            "list_tables",
+            "list_tables",
+            "list_tables",
+            "describe_table",
+            "describe_table"
+          ],
+          "durationMs": 103403,
+          "cached": true
+        },
+        {
+          "id": "deprecated-events-trap",
+          "category": "health-trap",
+          "question": "Is it safe to build a new engagement report on the raw events table?",
+          "answer": "**Short answer: Prefer `analytics.marts.events_sessionized` for an engagement report.**\n\n### Why the raw table (`northbeam_app.public.events`) is risky\n\n| Concern | Detail |\n|---------|--------|\n| **Source system** | Lives in the **Postgres application DB** (`northbeam_app.public`), not the analytics warehouse. Querying it directly adds load to the production database. |\n| **No sessionization** | You’d have to rebuild session logic yourself (timeout windows, identity stitching, etc.). The mart already exposes `session_id`, `session_start`, `event_count`, and `is_active_marker`. |\n| **Property extraction** | All rich context sits in a `properties jsonb` column—you’d need `jsonb_extract`/`->>` in every query. The mart has likely already materialized the fields you need. |\n| **Volume & latency** | Raw event tables grow fast; scans will be slower and less predictable than the pre-aggregated mart. |\n| **Governance** | The mart is the curated, versioned layer the data team maintains. Raw tables can change schema without notice. |\n\n### What the mart gives you out of the box\n```sql\n-- analytics.marts.events_sessionized\nsession_id, user_id, session_start, event_count, is_active_marker\n```\n\nIf you need event-level detail (e.g., specific `event_name` or a property inside `properties`), join the mart back to the raw table **in the warehouse** (Snowflake) via an ELT copy, not by querying Postgres directly.\n\n### Recommended pattern\n1. **Base engagement metrics** → `analytics.marts.events_sessionized`\n2. **Event-level drill-downs** → a warehouse copy of raw events (if one exists; search for `analytics.staging.events` or similar) joined on `user_id` + time window.\n3. **Never** `SELECT * FROM northbeam_app.public.events` in a recurring report.",
+          "checks": [
+            {
+              "label": "flags it as deprecated",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "points to the replacement",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "recommends it without warning",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 2,
+          "maxScore": 3,
+          "toolCalls": [
+            "list_tables",
+            "describe_table",
+            "describe_table"
+          ],
+          "durationMs": 61792,
+          "cached": true
+        },
+        {
+          "id": "active-users-table",
+          "category": "health-trap",
+          "question": "I need to count 28-day active users. Which table should I query?",
+          "answer": "For counting 28-day active users, query **`northbeam_app.public.events`** (PostgreSQL). It has the raw event timestamps you need:\n\n| Column | Type | Purpose |\n|--------|------|---------|\n| `user_id` | bigint | User identifier |\n| `occurred_at` | timestamp | Event timestamp — use this for the 28-day window |\n| `event_name` | varchar | Optional filter (e.g., only \"login\" or \"purchase\" events) |\n\n**Typical approach:**\n```sql\nSELECT COUNT(DISTINCT user_id) AS active_users_28d\nFROM northbeam_app.public.events\nWHERE occurred_at >= CURRENT_DATE - INTERVAL '28 days';\n```\n\n---\n\n**Alternative:** `analytics.marts.events_sessionized` (Snowflake) has a pre-computed `is_active_marker` boolean and session-level timestamps (`session_start`). Use it if your team has already standardized on that table and its definition of \"active\" matches your 28-day window.",
+          "checks": [
+            {
+              "label": "routes to events_sessionized",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "references the active-user marker or definition",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "list_tables",
+            "describe_table",
+            "describe_table"
+          ],
+          "durationMs": 27545,
+          "cached": true
+        },
+        {
+          "id": "payments-open-incident",
+          "category": "health-trap",
+          "question": "Any reason to be careful using the payments table right now?",
+          "answer": "Two payments tables exist — they serve different purposes:\n\n| Table | Platform | Key differences |\n|-------|----------|-----------------|\n| `northbeam_app.public.payments` | Postgres (raw) | `status` is **varchar** (e.g., `'succeeded'`, `'failed'`, `'pending'`, `'refunded'`…); no boolean success flag; `created_at` only |\n| `analytics.marts.stg_payments` | Snowflake (staged) | `is_successful` **boolean**; `paid_at` timestamp; column names normalized (`amount_usd`, `payment_id`) |\n\n**Reasons to be careful:**\n\n1. **Raw table (`northbeam_app.public.payments`) has a free-text `status`** — you must know the exact enum values to filter successfully. A simple `status = 'succeeded'` may miss `'completed'`, `'paid'`, etc., or include refunds if they share a status.\n\n2. **No lifecycle timestamps on raw table** — only `created_at`. You can’t distinguish when a payment actually *settled* vs. when the row was inserted, nor see refunds/cancellations without joining elsewhere.\n\n3. **Two sources of truth** — if you query the raw table but downstream marts use the staged one, numbers won’t match. Prefer `analytics.marts.stg_payments` for analytics; it already encodes success as a boolean and uses `paid_at`.\n\n4. **Common payment-table gotchas not visible in schema** — refunds, partial captures, test-mode transactions, gateway-specific statuses. Check with the team or scan distinct `status` values before writing filters.\n\n**Practical advice:** default to `analytics.marts.stg_payments` for any reporting. If you must use the raw table, first run:\n```sql\nSELECT DISTINCT status FROM northbeam_app.public.payments;\n```\nto learn the actual enum, then filter explicitly (e.g., `status IN ('succeeded','completed','paid') AND status NOT LIKE '%refund%'`).",
+          "checks": [
+            {
+              "label": "surfaces the open incident",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 1,
+          "toolCalls": [
+            "list_tables",
+            "describe_table",
+            "describe_table"
+          ],
+          "durationMs": 28895,
+          "cached": true
+        },
+        {
+          "id": "payment-health-freshness",
+          "category": "health-trap",
+          "question": "Is payment_health_daily reliable right now? I want to use it for an on-call check.",
+          "answer": "**Short answer:** The table exists (`analytics.marts.payment_health_daily`) but **has no built-in freshness metadata** (no `updated_at`, `loaded_at`, `_freshness`, or dbt-tracking columns). You can't verify data freshness directly from the warehouse.\n\n**Table structure:**\n| column | type |\n|--------|------|\n| date | date |\n| provider | varchar |\n| attempts | number |\n| success_rate | number(6,4) |\n\n**What to check before using it on-call:**\n1. **dbt model** — Find the model that builds this (likely `models/marts/payment_health_daily.sql`). Look for:\n   - `config(materialized='table')` vs `incremental`\n   - `freshness` block in the source or model config\n   - `on_schema_change` / `on_configuration_change` settings\n2. **Run history** — Check dbt Cloud / Airflow / your orchestrator for the last successful run timestamp and duration.\n3. **Data observability** — If you have Monte Carlo, Elementary, or similar, look for freshness monitors on this table.\n4. **Expected cadence** — Is this supposed to be daily (by `date`)? If so, the latest `date` value should be yesterday or today.\n\n**Quick sanity query** (run in your SQL IDE):\n```sql\nselect max(date) as latest_date,\n       count(distinct date) as days_covered,\n       max(success_rate) as max_success_rate\nfrom analytics.marts.payment_health_daily;\n```\nIf `latest_date` is stale (>1 day old for a daily table), don't rely on it for on-call without confirming the pipeline ran.",
+          "checks": [
+            {
+              "label": "flags the failing assertion or staleness",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "declares it healthy",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "list_tables",
+            "describe_table",
+            "search_columns",
+            "search_columns",
+            "search_columns",
+            "search_columns"
+          ],
+          "durationMs": 30477,
+          "cached": true
+        },
+        {
+          "id": "payments-learn-first",
+          "category": "usage",
+          "question": "I just joined the Payments team. Which table should I learn first, and why that one?",
+          "answer": "**Start with `analytics.marts.stg_payments`** — it's the canonical, cleaned version your team will actually query.\n\n| Table | Platform | Why it matters |\n|-------|----------|----------------|\n| `analytics.marts.stg_payments` | Snowflake | **Primary analytical table**: one row per successful payment, USD amount, boolean success flag, and clean timestamps. Used by every dashboard and model downstream. |\n| `northbeam_app.public.payments` | Postgres | Raw app DB table — has provider, card_last4, raw status strings. Useful for debugging edge cases, but not the day-to-day source of truth. |\n| `analytics.marts.payment_health_daily` | Snowflake | Pre-aggregated health metrics (attempts, success_rate by day/provider). Good for quick monitoring, but you can't drill into individual transactions. |\n\n**Typical first query pattern:**\n```sql\nSELECT\n  paid_at::date AS pay_date,\n  provider,\n  COUNT(*) AS txns,\n  SUM(amount_usd) AS revenue_usd,\n  AVG(amount_usd) AS aov_usd\nFROM analytics.marts.stg_payments\nWHERE is_successful\n  AND paid_at >= '2024-01-01'\nGROUP BY 1, 2\nORDER BY 1 DESC, 3 DESC;\n```\n\nLearn the grain (one row = one successful payment), the key columns (`payment_id`, `order_id`, `user_id`, `amount_usd`, `paid_at`), and how it joins to `orders` and `users` — that's 80 % of what the Payments team touches daily.",
+          "checks": [
+            {
+              "label": "picks a genuinely high-traffic table",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "justifies with real query volume",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "leads with a low-traffic staging model",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 2,
+          "maxScore": 3,
+          "toolCalls": [
+            "list_tables",
+            "describe_table",
+            "describe_table",
+            "describe_table"
+          ],
+          "durationMs": 26920,
+          "cached": true
+        },
+        {
+          "id": "stg-payments-importance",
+          "category": "usage",
+          "question": "Is stg_payments an important table for me to know?",
+          "answer": "**Yes, `analytics.marts.stg_payments` is a core table you'll use frequently.**\n\n**What it is:** A cleaned/standardized staging layer for payment transactions (6 columns, ~1 row per payment attempt).\n\n**Key columns:**\n| Column | Type | Why it matters |\n|--------|------|----------------|\n| `payment_id` | number | Primary key — join to downstream fact tables |\n| `order_id` | number | Links to `stg_orders` / `fct_orders` |\n| `user_id` | number | Links to `dim_users` — enables cohort/LTV analysis |\n| `amount_usd` | number(12,2) | Revenue amount in USD (already normalized) |\n| `is_successful` | boolean | Filter to `TRUE` for recognized revenue; `FALSE` for failed/retried attempts |\n| `paid_at` | timestamp_ntz | Event time — used for daily/weekly/monthly revenue rollups |\n\n**Typical first queries you'll write:**\n```sql\n-- Daily net revenue (successful payments only)\nSELECT DATE(paid_at) AS dt, SUM(amount_usd) AS revenue_usd\nFROM analytics.marts.stg_payments\nWHERE is_successful\nGROUP BY 1 ORDER BY 1;\n\n-- Payment success rate by day\nSELECT DATE(paid_at) AS dt,\n       AVG(is_successful::int) AS success_rate\nFROM analytics.marts.stg_payments\nGROUP BY 1 ORDER BY 1;\n```\n\n**Downstream dependencies:** This table feeds `fct_payments`, `fct_orders`, MRR/ARR models, and most finance-facing dashboards. If you're doing anything with revenue, churn, or customer lifetime value, you'll start here.",
+          "checks": [
+            {
+              "label": "characterizes it as staging/intermediate",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "grounds in low usage or points to the fact table",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [
+            "list_tables",
+            "describe_table"
+          ],
+          "durationMs": 34267,
+          "cached": true
+        },
+        {
+          "id": "mrr-definition",
+          "category": "glossary",
+          "question": "How do we calculate MRR here?",
+          "answer": "<tool_call>\n<function=list_tables>\n<parameter=name_contains>\norder\n</parameter>\n</function>\n</tool_call>\n",
+          "checks": [
+            {
+              "label": "grounds in the catalog's MRR term or table",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "relates it to a neighbouring term",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 2,
+          "toolCalls": [
+            "list_tables",
+            "describe_table",
+            "search_columns",
+            "list_tables",
+            "list_tables",
+            "describe_table",
+            "list_tables",
+            "describe_table",
+            "describe_table",
+            "list_tables"
+          ],
+          "durationMs": 26751,
+          "cached": true
+        },
+        {
+          "id": "mrr-vs-arr",
+          "category": "glossary",
+          "question": "What's the difference between MRR and ARR in our metrics?",
+          "answer": "Based on the warehouse, the canonical definitions live in **`analytics.marts.mrr_monthly`**:\n\n| Column | Type | What it represents |\n|--------|------|--------------------|\n| `month` | date | Month grain (first day of month) |\n| `plan` | varchar | Plan name |\n| `mrr_usd` | number(14,2) | **Monthly Recurring Revenue** — sum of active subscriptions’ `monthly_amount` for that month |\n| `arr_usd` | number(14,2) | **Annual Recurring Revenue** — `mrr_usd * 12` (annualized run-rate) |\n| `net_new_mrr_usd` | number(14,2) | Month-over-month change in MRR (new + expansion – churn – contraction) |\n\n**Key differences**\n\n| Aspect | MRR (`mrr_usd`) | ARR (`arr_usd`) |\n|--------|-----------------|-----------------|\n| **Period** | One month | Annualized (12 × MRR) |\n| **Use case** | Operational, month-to-month tracking, cohort analysis | Board reporting, valuation multiples, year-over-year comparisons |\n| **Granularity** | Month + plan | Same grain, just multiplied by 12 |\n\n**Source of truth**: Both are derived from `northbeam_app.public.subscriptions` (`monthly_amount` for active subscriptions). The mart rolls them up by month and plan; ARR is a direct calculation, not a separate subscription field.\n\n**Typical queries**\n\n```sql\n-- Latest month MRR vs ARR\nSELECT month, mrr_usd, arr_usd\nFROM analytics.marts.mrr_monthly\nORDER BY month DESC\nLIMIT 1;\n```\n\n```sql\n-- Plan-level breakdown for current month\nSELECT plan, mrr_usd, arr_usd\nFROM analytics.marts.mrr_monthly\nWHERE month = (SELECT max(month) FROM analytics.marts.mrr_monthly)\nORDER BY mrr_usd DESC;\n```",
+          "checks": [
+            {
+              "label": "states the ×12 relationship",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "grounds in the real column or table",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "list_tables",
+            "search_columns",
+            "search_columns",
+            "describe_table",
+            "list_tables",
+            "describe_table"
+          ],
+          "durationMs": 49446,
+          "cached": true
+        },
+        {
+          "id": "churn-sql",
+          "category": "sql",
+          "question": "Show me the SQL people here use for churn analysis.",
+          "answer": "The team uses a **pre-built mart** for standard churn reporting, plus the raw `subscriptions` table for ad-hoc work.\n\n---\n\n### 1. Standard monthly churn (pre-aggregated)\n```sql\nSELECT\n  month,\n  plan,\n  subscribers_at_start,\n  churned,\n  churn_rate\nFROM analytics.marts.fct_churn\nORDER BY month DESC, plan;\n```\n- Grain: one row per `month` × `plan`\n- `churn_rate` = `churned / subscribers_at_start`\n\n---\n\n### 2. Customer-level churn flags (for cohort / survival analysis)\n```sql\nWITH sub AS (\n  SELECT\n    user_id,\n    plan,\n    monthly_amount,\n    started_at,\n    cancelled_at,\n    CASE WHEN cancelled_at IS NOT NULL THEN 1 ELSE 0 END AS is_churned\n  FROM northbeam_app.public.subscriptions\n)\nSELECT\n  user_id,\n  plan,\n  monthly_amount,\n  started_at,\n  cancelled_at,\n  is_churned,\n  DATE_TRUNC('month', started_at) AS cohort_month\nFROM sub;\n```\n- Join to `analytics.marts.dim_customers` on `user_id = customer_id` for country, LTV, etc.\n\n---\n\n### 3. Rolling 30-day churn rate (ad-hoc)\n```sql\nWITH active AS (\n  SELECT user_id, plan, started_at, cancelled_at\n  FROM northbeam_app.public.subscriptions\n  WHERE started_at <= CURRENT_DATE - INTERVAL '30 days'\n),\nchurned AS (\n  SELECT COUNT(*) FILTER (WHERE cancelled_at BETWEEN CURRENT_DATE - INTERVAL '30 days' AND CURRENT_DATE) AS churned_30d,\n         COUNT(*) AS active_30d_ago\n  FROM active\n)\nSELECT\n  churned_30d::numeric / NULLIF(active_30d_ago, 0) AS churn_rate_30d\nFROM churned;\n```\n\n---\n\n### Key tables to remember\n| Table | Purpose |\n|-------|---------|\n| `analytics.marts.fct_churn` | Monthly churn by plan (fast, pre-computed) |\n| `analytics.marts.dim_customers` | Customer attributes for segmentation |\n| `northbeam_app.public.subscriptions` | Raw subscription lifecycle (status, dates, plan) |\n\nNo separate “churn SQL” scripts live in the warehouse — analysts query the mart or build on the raw subscriptions table as needed.",
+          "checks": [
+            {
+              "label": "uses the churn fact table",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "uses the real column",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "list_tables",
+            "describe_table",
+            "describe_table",
+            "describe_table"
+          ],
+          "durationMs": 21025,
+          "cached": true
+        },
+        {
+          "id": "revenue-by-country-sql",
+          "category": "sql",
+          "question": "How do I pull net revenue by customer country?",
+          "answer": "The warehouse has a fact table for revenue and a customer dimension with country. Join them on `customer_id`:\n\n```sql\nSELECT\n    c.country,\n    SUM(f.net_amount_usd) AS net_revenue_usd\nFROM analytics.marts.fct_revenue f\nJOIN analytics.marts.dim_customers c\n    ON f.customer_id = c.customer_id\nGROUP BY c.country\nORDER BY net_revenue_usd DESC;\n```\n\nKey columns:\n- **`analytics.marts.fct_revenue.net_amount_usd`** – net revenue per transaction (already net of refunds/fees)\n- **`analytics.marts.dim_customers.country`** – customer country\n- **`customer_id`** – join key between the two tables\n\nIf you need a specific time window, add `WHERE f.revenue_date BETWEEN '2024-01-01' AND '2024-12-31'` (or whatever range).",
+          "checks": [
+            {
+              "label": "uses the net column",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "joins the customer dim",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "sums the gross column as revenue",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 3,
+          "maxScore": 3,
+          "toolCalls": [
+            "list_tables",
+            "describe_table",
+            "describe_table"
+          ],
+          "durationMs": 17740,
+          "cached": true
+        },
+        {
+          "id": "fake-marketing-table",
+          "category": "hallucination",
+          "question": "What columns are in our marketing_attribution table?",
+          "answer": "There is **no `marketing_attribution` table** in the warehouse. A search for tables containing “marketing” or “attribution” (and columns containing “attribution”) returns zero results.",
+          "checks": [
+            {
+              "label": "admits it is not in the catalog",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "invents a schema",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "describe_table",
+            "list_tables",
+            "list_tables",
+            "search_columns"
+          ],
+          "durationMs": 35265,
+          "cached": true
+        },
+        {
+          "id": "fake-feature-store",
+          "category": "hallucination",
+          "question": "Who owns the ml_feature_store dataset?",
+          "answer": "There is no dataset or table named **ml_feature_store** in the warehouse. The warehouse contains 14 tables across Postgres (northbeam_app.public) and Snowflake (analytics.marts), but none match that name or contain \"feature\" or \"ml\" in their names.\n\nIf you meant a different dataset (e.g., a dbt model, a schema, or a table in another warehouse), let me know and I can check again.",
+          "checks": [
+            {
+              "label": "admits it is not in the catalog",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "invents an owner",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "list_tables",
+            "list_tables",
+            "list_tables",
+            "list_tables"
+          ],
+          "durationMs": 17192,
+          "cached": true
+        }
+      ],
+      "casesPassed": 9,
+      "checksPassed": 30,
+      "checksTotal": 44,
+      "toolCalls": 111,
+      "durationMs": 807064
     },
     {
       "arm": "blind",

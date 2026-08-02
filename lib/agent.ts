@@ -11,6 +11,13 @@ export interface AgentOptions {
    * the only variable between arms is DataHub access.
    */
   tools?: ToolDef[];
+  /**
+   * Override how tool calls are executed. The warehouse-introspection arm of the
+   * benchmark points this at `information_schema`-equivalent tools, which is how
+   * that arm shares this loop rather than getting a parallel one written for it.
+   * Defaults to the DataHub MCP server.
+   */
+  execute?: (name: string, args: Record<string, unknown>) => Promise<{ content: string; isError: boolean }>;
 }
 
 /**
@@ -26,6 +33,7 @@ export async function runAgent(
   opts: AgentOptions = {}
 ): Promise<string> {
   const tools = opts.tools ?? (await listDataHubTools());
+  const execute = opts.execute ?? callDataHubTool;
 
   const turns: AgentTurn[] = history.map((m) =>
     m.role === "user"
@@ -47,11 +55,11 @@ export async function runAgent(
 
     turns.push({ kind: "assistant", content: turn.text, toolCalls: turn.toolCalls });
 
-    // Execute all requested tool calls in parallel against DataHub.
+    // Execute all requested tool calls in parallel against whatever backs this run.
     const results = await Promise.all(
       turn.toolCalls.map(async (call) => {
         emit({ type: "tool_call", id: call.id, name: call.name, args: call.args });
-        const result = await callDataHubTool(call.name, call.args);
+        const result = await execute(call.name, call.args);
         emit({
           type: "tool_result",
           id: call.id,

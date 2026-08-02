@@ -2,7 +2,7 @@
   "meta": {
     "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
     "mode": "live DataHub + showcase-ecommerce datapack",
-    "at": "2026-08-02 16:48 UTC",
+    "at": "2026-08-02 18:49 UTC",
     "suite": "showcase"
   },
   "arms": [
@@ -588,6 +588,630 @@
       "checksTotal": 39,
       "toolCalls": 78,
       "durationMs": 1257591
+    },
+    {
+      "arm": "schema",
+      "cases": [
+        {
+          "id": "sc-order-details-canonical",
+          "category": "grounding",
+          "question": "In the order-entry warehouse, which dataset gives me one wide row per order with the customer and product attributes already joined on? Give me its URN.",
+          "answer": "Based on my inspection of all 14 tables in the warehouse, **there is no dataset that provides one wide row per order with both customer and product attributes already joined.**\n\nHere's what exists:\n\n| Table | Grain | Key Columns |\n|-------|-------|-------------|\n| `northbeam_app.public.orders` (Postgres) | 1 row / order | `id`, `user_id`, `total_amount`, `status`, `created_at` |\n| `northbeam_app.public.users` (Postgres) | 1 row / user | `id`, `email`, `full_name`, `country`, `plan`, `created_at` |\n| `analytics.marts.dim_customers` (Snowflake) | 1 row / customer | `customer_id`, `email`, `country`, `current_plan`, `lifetime_revenue_usd`, `first_paid_at` |\n| `analytics.marts.fct_revenue` (Snowflake) | 1 row / revenue event | `revenue_id`, `customer_id`, `order_id`, `gross_amount_usd`, `net_amount_usd`, `is_recurring`, `revenue_date` |\n\n**Critical gap:** A `search_columns` for \"product\" returns **zero matches** — there are no product tables, no product columns, and no product attributes anywhere in the warehouse. The order-entry system appears to be subscription/plan-based (plans live on users/subscriptions), not SKU-based.\n\n**What you can do today:**\n- Join `fct_revenue` → `dim_customers` on `customer_id` to get one row per revenue event with customer attributes.\n- Join the raw Postgres `orders` → `users` on `user_id` for the source-level equivalent.\n\nIf you need a true \"order × product\" wide table, the warehouse doesn't contain the product dimension to build it.",
+          "checks": [
+            {
+              "label": "names order_details",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "cites a real analytics URN",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 2,
+          "toolCalls": [
+            "list_tables",
+            "describe_table",
+            "describe_table",
+            "describe_table",
+            "search_columns",
+            "describe_table",
+            "describe_table",
+            "describe_table",
+            "describe_table"
+          ],
+          "durationMs": 72707,
+          "cached": true
+        },
+        {
+          "id": "sc-order-details-customer-columns",
+          "category": "grounding",
+          "question": "Which columns on the order-entry ORDER_DETAILS table carry the customer's identity? I need to know what I'm selecting before I write the query.",
+          "answer": "There is **no `ORDER_DETAILS` table** in this warehouse. The order-entry system uses `northbeam_app.public.orders` as the primary order table.\n\n**Customer identity on `northbeam_app.public.orders`:**\n- `user_id` (bigint) — foreign key to `northbeam_app.public.users.id`\n\n**Customer identity on the referenced table `northbeam_app.public.users`:**\n- `id` (bigint) — primary key\n- `email` (varchar)\n- `full_name` (varchar)\n- `country` (varchar)\n- `plan` (varchar)\n\nSo if you need the customer's identity when selecting from orders, you'll join on `orders.user_id = users.id` and then pick whatever user columns you need (e.g., `users.email`, `users.full_name`).",
+          "checks": [
+            {
+              "label": "names the email column",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "names a real name column",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "names the join key",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "invents columns",
+              "kind": "must-not-include",
+              "passed": false,
+              "offender": "full_name"
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 4,
+          "toolCalls": [
+            "search_columns",
+            "list_tables",
+            "list_tables",
+            "list_tables",
+            "list_tables",
+            "describe_table",
+            "describe_table"
+          ],
+          "durationMs": 22523,
+          "cached": true
+        },
+        {
+          "id": "sc-order-history-grain",
+          "category": "grounding",
+          "question": "What is ORDER_HISTORY in the order-entry analytics schema, and how is its grain different from ORDER_DETAILS?",
+          "answer": "**Short answer:** Neither `ORDER_HISTORY` nor `ORDER_DETAILS` exists in the current warehouse.\n\n**What I found:**\n- The only order-related table is `northbeam_app.public.orders` (Postgres source).\n- Its grain is **one row per order** (columns: `id`, `user_id`, `total_amount`, `status`, `created_at`).\n- No columns contain “history” or “detail” substrings across any table.\n\n**Implication:** If your team expects `ORDER_HISTORY` (typically a slowly-changing-dimension or status-change log) or `ORDER_DETAILS` (line-item granularity), those models have not been built or materialized in this warehouse yet. You would need to create them in dbt (e.g., a `stg_orders` → `fct_order_history` for status transitions, and `stg_order_items` → `fct_order_details` for line items).",
+          "checks": [
+            {
+              "label": "names the snapshot date column",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "characterizes it as historical/incremental snapshots",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [
+            "list_tables",
+            "list_tables",
+            "list_tables",
+            "describe_table",
+            "search_columns",
+            "search_columns"
+          ],
+          "durationMs": 30527,
+          "cached": true
+        },
+        {
+          "id": "sc-replica-vs-canonical",
+          "category": "authority",
+          "question": "I found ORDER_DETAILS_REPLICA in the analytics schema and it has the same 55 columns as ORDER_DETAILS. Can I just build my report on the replica?",
+          "answer": "I've searched the entire warehouse and **there is no table named `ORDER_DETAILS_REPLICA` or `ORDER_DETAILS` in any schema**, including `analytics`.\n\n**What actually exists:**\n- `analytics.marts` — 8 dbt models (stg_users, stg_payments, dim_customers, fct_revenue, fct_churn, mrr_monthly, events_sessionized, payment_health_daily)\n- `northbeam_app.public` — 6 source tables replicated from Postgres (users, orders, payments, subscriptions, events, refunds)\n\nThe only \"orders\" table is `northbeam_app.public.orders` with **5 columns** (id, user_id, total_amount, status, created_at) — not 55 columns.\n\n**Possibilities:**\n1. You're looking at a different database/environment than the one I'm connected to\n2. The table name is different (e.g., `order_details` with underscores, or in a different schema)\n3. It's a view or table that hasn't been created yet in this warehouse\n\n**Recommendation:** Before building on any \"replica,\" verify:\n- The exact fully-qualified table name (schema.table)\n- That it exists in *this* warehouse (run `SELECT * FROM information_schema.tables WHERE table_name ILIKE '%order_detail%'`)\n- Column parity with the source (count, names, types, nullability)\n- Freshness / replication lag\n\nIf you can share the exact schema/table name you're seeing, I can check it directly.",
+          "checks": [
+            {
+              "label": "steers to ORDER_DETAILS instead",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "grounds the verdict in real catalog metadata",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "endorses the replica",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 2,
+          "maxScore": 3,
+          "toolCalls": [
+            "describe_table",
+            "describe_table",
+            "list_tables",
+            "search_columns",
+            "list_tables",
+            "search_columns",
+            "list_tables",
+            "describe_table"
+          ],
+          "durationMs": 54405,
+          "cached": true
+        },
+        {
+          "id": "sc-which-platform-authoritative",
+          "category": "authority",
+          "question": "order_details exists in Snowflake, dbt, Looker and PowerBI in this catalog. Which copy is the authoritative one, and what in DataHub tells you that?",
+          "answer": "The warehouse you're connected to **does not contain a table named `order_details`** in any schema — neither in the Postgres source (`northbeam_app.public`) nor in the Snowflake dbt models (`analytics.marts`).\n\nThe 14 tables present are:\n\n| Platform | Schema | Tables |\n|----------|--------|--------|\n| Postgres (source) | `northbeam_app.public` | `users`, `orders`, `payments`, `subscriptions`, `events`, `refunds` |\n| Snowflake (dbt marts) | `analytics.marts` | `stg_users`, `stg_payments`, `dim_customers`, `fct_revenue`, `fct_churn`, `mrr_monthly`, `events_sessionized`, `payment_health_daily` |\n\nThere is no `order_details`, `order_line_items`, or similar table.\n\n**What this means for your question:**  \nSince the physical warehouse has no `order_details` table, there is no authoritative copy *in the warehouse*. If DataHub (or another catalog) shows `order_details` existing in Snowflake, dbt, Looker, and PowerBI, that metadata is either:\n- Stale (the table was dropped but the catalog wasn't updated), or\n- Referring to a logical/virtual dataset (e.g., a Looker view, PowerBI dataset, or dbt model that doesn't materialize as a table), or\n- Pointing to a different warehouse/environment than the one you're connected to.\n\n**To find out what DataHub says:** you'd need to query DataHub's API/UI directly — it tracks lineage, ownership, and \"certified\" flags per dataset. The warehouse itself cannot tell you which copy DataHub considers authoritative.",
+          "checks": [
+            {
+              "label": "cites the governance marker that settles it",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names a specific platform copy",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search_columns",
+            "list_tables",
+            "list_tables",
+            "list_tables",
+            "list_tables",
+            "list_tables"
+          ],
+          "durationMs": 30898,
+          "cached": true
+        },
+        {
+          "id": "sc-order-details-domain",
+          "category": "authority",
+          "question": "Which domain does the Snowflake ORDER_DETAILS table belong to? I need to know whose remit it is.",
+          "answer": "There is no table named `ORDER_DETAILS` in the Snowflake warehouse (or in Postgres). The full table list shows only these Snowflake tables under `analytics.marts`:\n\n- `stg_users`\n- `stg_payments`\n- `dim_customers`\n- `fct_revenue`\n- `fct_churn`\n- `mrr_monthly`\n- `events_sessionized`\n- `payment_health_daily`\n\nThe only order-related source table is `northbeam_app.public.orders` (Postgres). If you’re looking for line-item / order-detail data, it may be modeled inside one of the marts (e.g., `fct_revenue`) or simply not exist yet. Let me know if you want me to describe any of the existing tables to see which one owns order-level granularity.",
+          "checks": [
+            {
+              "label": "names the real domain",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 1,
+          "toolCalls": [
+            "list_tables",
+            "list_tables",
+            "search_columns",
+            "list_tables",
+            "list_tables"
+          ],
+          "durationMs": 30907,
+          "cached": true
+        },
+        {
+          "id": "sc-order-details-stewards",
+          "category": "ownership",
+          "question": "Who are the data stewards for the Snowflake ORDER_DETAILS table?",
+          "answer": "There is no `ORDER_DETAILS` table in this warehouse. The Snowflake tables live in `analytics.marts` and are all dbt models (staging and marts) — none is named `ORDER_DETAILS`.\n\nIf you meant a different table (e.g., `northbeam_app.public.orders` in Postgres, or one of the marts like `fct_revenue`), let me know and I can describe it.",
+          "checks": [
+            {
+              "label": "names a real steward",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "invents an owner",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [
+            "list_tables",
+            "list_tables",
+            "search_columns",
+            "list_tables"
+          ],
+          "durationMs": 29142,
+          "cached": true
+        },
+        {
+          "id": "sc-escalation-contact",
+          "category": "ownership",
+          "question": "ORDER_DETAILS hasn't refreshed and it's blocking my report. Who is the escalation contact for it according to the catalog?",
+          "answer": "There is no table named `ORDER_DETAILS` in this warehouse, and there is no data catalog or metadata layer that stores escalation contacts.\n\nThe warehouse contains only 14 tables:\n- **Postgres (northbeam_app.public)**: `users`, `orders`, `payments`, `subscriptions`, `events`, `refunds`\n- **Snowflake (analytics.marts)**: `stg_users`, `stg_payments`, `dim_customers`, `fct_revenue`, `fct_churn`, `mrr_monthly`, `events_sessionized`, `payment_health_daily`\n\nNone of these tables have columns for `escalation`, `contact`, `owner`, or similar metadata. The `orders` table (the closest match) has only: `id`, `user_id`, `total_amount`, `status`, `created_at`.\n\nIf your team maintains a separate catalog (e.g., DataHub, Atlan, dbt docs, a Confluence page, or a spreadsheet), that would be outside this warehouse. You'll need to check wherever your team documents table ownership and SLAs.",
+          "checks": [
+            {
+              "label": "names the escalation contact",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "grounds it in the escalation property",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [
+            "list_tables",
+            "search_columns",
+            "search_columns",
+            "list_tables",
+            "search_columns",
+            "list_tables",
+            "list_tables",
+            "list_tables",
+            "describe_table"
+          ],
+          "durationMs": 104789,
+          "cached": true
+        },
+        {
+          "id": "sc-powerbi-order-details-owner",
+          "category": "ownership",
+          "question": "Who owns the PowerBI ORDER_DETAILS dataset in the datahub_order_entries workspace?",
+          "answer": "The warehouse does not contain any metadata about PowerBI datasets, workspaces, or ownership information. The tables available are:\n\n- **Postgres source tables** (northbeam_app.public): users, orders, payments, subscriptions, events, refunds\n- **Snowflake dbt models** (analytics.marts): stg_users, stg_payments, dim_customers, fct_revenue, fct_churn, mrr_monthly, events_sessionized, payment_health_daily\n\nThere are no tables or columns referencing \"powerbi\", \"workspace\", \"order_details\", or similar BI-layer metadata. Ownership of PowerBI datasets would typically live in PowerBI's own admin portal or a separate data catalog (e.g., DataHub, Atlan, Purview), not in the warehouse itself.",
+          "checks": [
+            {
+              "label": "names the PowerBI owner",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 1,
+          "toolCalls": [
+            "list_tables",
+            "search_columns",
+            "search_columns",
+            "list_tables",
+            "search_columns"
+          ],
+          "durationMs": 52192,
+          "cached": true
+        },
+        {
+          "id": "sc-order-details-downstream",
+          "category": "lineage",
+          "question": "What breaks if I drop a column from the Snowflake ORDER_DETAILS table? Give me the actual downstream dependents.",
+          "answer": "There is **no `ORDER_DETAILS` table in Snowflake** (or anywhere in this warehouse).\n\nThe only order-related table is `northbeam_app.public.orders` (Postgres), which has columns: `id`, `user_id`, `total_amount`, `status`, `created_at`.\n\nSnowflake tables present are all under `analytics.marts`:\n- `stg_users`, `stg_payments`\n- `dim_customers`\n- `fct_revenue`, `fct_churn`\n- `mrr_monthly`\n- `events_sessionized`\n- `payment_health_daily`\n\nNone contain an `ORDER_DETAILS` table or any column named like `order_detail*`.\n\n**Bottom line:** You can't drop a column from a table that doesn't exist. If you meant a different table, let me know the correct name and I'll trace its downstream dependents.",
+          "checks": [
+            {
+              "label": "names a BI-layer dependent",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "names a downstream dataset or dashboard",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 2,
+          "toolCalls": [
+            "list_tables",
+            "search_columns",
+            "list_tables",
+            "list_tables",
+            "list_tables",
+            "describe_table"
+          ],
+          "durationMs": 31734,
+          "cached": true
+        },
+        {
+          "id": "sc-order-details-upstream",
+          "category": "lineage",
+          "question": "Where does the Snowflake ORDER_DETAILS table get its data from? I'm debugging a wrong total.",
+          "answer": "There is **no table named `ORDER_DETAILS` (or containing \"order_details\") in this warehouse**.\n\nThe only order-related tables are:\n\n| Table | Platform | Key columns |\n|-------|----------|-------------|\n| `northbeam_app.public.orders` | Postgres (source) | `id`, `user_id`, `total_amount`, `status`, `created_at` |\n| `northbeam_app.public.payments` | Postgres (source) | `id`, `order_id`, `user_id`, `amount`, `status`, `provider`, `created_at` |\n| `analytics.marts.fct_revenue` | Snowflake (mart) | `revenue_id`, `customer_id`, `order_id`, `gross_amount_usd`, `net_amount_usd`, `is_recurring`, `revenue_date` |\n\nThe closest thing to \"order details\" in the Snowflake layer is **`analytics.marts.fct_revenue`** — it has one row per revenue event linked to an `order_id` with gross/net amounts.\n\nIf you're debugging a wrong total, check:\n1. **Source of truth**: `northbeam_app.public.orders.total_amount` (the order header total)\n2. **Payments**: `northbeam_app.public.payments.amount` where `order_id` matches and `status = 'succeeded'`\n3. **Mart**: `analytics.marts.fct_revenue` where `order_id` matches — compare `gross_amount_usd` / `net_amount_usd`\n\nDo you have a dbt model named `order_details` that hasn't been run yet, or might it be in a different schema (e.g., `analytics.staging` or `analytics.marts`)?",
+          "checks": [
+            {
+              "label": "names the line-item source",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "names another real upstream",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 2,
+          "toolCalls": [
+            "search_columns",
+            "list_tables",
+            "list_tables",
+            "list_tables",
+            "describe_table",
+            "describe_table",
+            "search_columns",
+            "describe_table"
+          ],
+          "durationMs": 33829,
+          "cached": true
+        },
+        {
+          "id": "sc-dashboard-blast-radius",
+          "category": "lineage",
+          "question": "Which dashboards are built on the order-entry data? I want to know who to warn before a migration.",
+          "answer": "I can inspect the warehouse tables, but I don't have access to BI tool metadata (Looker, PowerBI, Tableau) to see which dashboards are built on top of the data. That information lives in the BI platforms themselves, not in the warehouse.\n\nThe warehouse does have an order-entry table:\n\n**`northbeam_app.public.orders`** (Postgres source)\n\nWould you like me to describe its columns so you understand the data structure? That might help you trace downstream usage in your BI tools.",
+          "checks": [
+            {
+              "label": "names a real dashboard",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "identifies the BI platform",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [
+            "list_tables"
+          ],
+          "durationMs": 56593,
+          "cached": true
+        },
+        {
+          "id": "sc-order-total-definition",
+          "category": "glossary",
+          "question": "How is 'Order Total' defined in our glossary, and how am I supposed to compute it?",
+          "answer": "There is no column named `order_total` anywhere in the warehouse, and no \"glossary\" table that defines business metrics.\n\nThe closest field is **`total_amount`** (numeric(12,2)) on the source table **`northbeam_app.public.orders`**:\n\n| column | type |\n|--------|------|\n| id | bigint |\n| user_id | bigint |\n| **total_amount** | **numeric(12,2)** |\n| status | varchar |\n| created_at | timestamp |\n\n**What this means for you:**\n- The raw order total lives in `northbeam_app.public.orders.total_amount`.\n- Any canonical \"Order Total\" metric (e.g., net of discounts, taxes, shipping, returns) is almost certainly defined **downstream** — in a dbt model, a Looker view, a Power BI measure, or a Tableau calculated field — not in the replicated Postgres schema you’re looking at.\n\n**Next steps:**\n1. Check your dbt project for a model like `fct_orders`, `orders_clean`, or similar — that’s where the business logic (discounts, refunds, currency conversion, etc.) will be codified.\n2. In Looker/Power BI/Tableau, search for a field named \"Order Total\" or \"Total Revenue\" and inspect its definition.\n3. If you need a quick, raw query today, use `total_amount` from `northbeam_app.public.orders` (filter `status` if you only want completed orders).",
+          "checks": [
+            {
+              "label": "uses the real column",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "gives the sanctioned aggregation",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [
+            "search_columns",
+            "list_tables",
+            "describe_table"
+          ],
+          "durationMs": 46118,
+          "cached": true
+        },
+        {
+          "id": "sc-revenue-by-customer-class",
+          "category": "glossary",
+          "question": "What does 'Revenue by Customer Class' mean here, and which columns do I group by?",
+          "answer": "There is **no column named `customer_class`** (or anything containing \"class\") in the warehouse.\n\nThe two core marts are:\n\n| Table | Relevant columns |\n|-------|------------------|\n| `analytics.marts.fct_revenue` | `customer_id`, `gross_amount_usd`, `net_amount_usd`, `is_recurring`, `revenue_date` |\n| `analytics.marts.dim_customers` | `customer_id`, `current_plan`, `country`, `lifetime_revenue_usd`, `first_paid_at` |\n\n### What “Revenue by Customer Class” likely means here\nSince the warehouse doesn’t have a pre-built `customer_class` dimension, you’ll need to **define the class yourself** and then group by it. The most common, sensible definitions using existing columns:\n\n| Class definition | Column(s) to group by | Notes |\n|------------------|----------------------|-------|\n| **Subscription tier** | `dim_customers.current_plan` | e.g., “Basic”, “Pro”, “Enterprise” |\n| **Geography** | `dim_customers.country` | |\n| **Value tier (derived)** | `CASE WHEN lifetime_revenue_usd >= 10000 THEN 'High' WHEN lifetime_revenue_usd >= 1000 THEN 'Medium' ELSE 'Low' END` | Adjust thresholds to your business |\n| **Recurring vs. one-time** | `fct_revenue.is_recurring` | Group at the revenue-line level |\n\n### Minimal query skeleton (using `current_plan` as the class)\n```sql\nSELECT\n    c.current_plan AS customer_class,\n    SUM(r.net_amount_usd) AS total_net_revenue_usd\nFROM analytics.marts.fct_revenue r\nJOIN analytics.marts.dim_customers c\n  ON r.customer_id = c.customer_id\nGROUP BY c.current_plan\nORDER BY total_net_revenue_usd DESC;\n```\n\nSwap `c.current_plan` for `c.country`, the derived `CASE` expression, or `r.is_recurring` depending on which “class” the stakeholder actually wants.",
+          "checks": [
+            {
+              "label": "names the grouping column",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names the measure",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [
+            "search_columns",
+            "search_columns",
+            "search_columns",
+            "describe_table",
+            "describe_table"
+          ],
+          "durationMs": 60217,
+          "cached": true
+        },
+        {
+          "id": "sc-pii-columns",
+          "category": "governance",
+          "question": "Which columns on ORDER_DETAILS are classified as personal data, and what does that mean for how I use them?",
+          "answer": "The warehouse **does not have a table named `ORDER_DETAILS`**. The closest order-related table is `northbeam_app.public.orders`:\n\n| Column | Type | Personal Data? |\n|--------|------|----------------|\n| `id` | bigint | No (surrogate key) |\n| `user_id` | bigint | **Yes** — links to `users` table |\n| `total_amount` | numeric(12,2) | No |\n| `status` | varchar | No |\n| `created_at` | timestamp | No |\n\n**Where personal data actually lives:**\n\n1. **`northbeam_app.public.users`** — direct identifiers:\n   - `email` (PII)\n   - `full_name` (PII)\n   - `country` (can be PII in context)\n\n2. **`northbeam_app.public.payments`** — payment PII:\n   - `card_last4` (PCI-relevant)\n   - `user_id` (linkable)\n\n**What this means for you:**\n\n- **Never select `users.email` or `users.full_name`** unless you have a documented business need and approval.\n- **Treat `user_id` as a pseudonym** — it becomes PII when joined to `users`.\n- **Mask `card_last4`** in any dashboard or export (e.g., `****1234` → `****`).\n- Use the **marts layer** (`analytics.marts.dim_customers`, `fct_revenue`) for reporting — they already exclude or hash direct identifiers.\n- If you need order-line detail (SKU, quantity, price), that table **does not exist** in the current warehouse. Ask your onboarding buddy whether it’s in a different schema or not yet modeled.",
+          "checks": [
+            {
+              "label": "names a PII-classified column",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "cites the classification",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [
+            "search_columns",
+            "list_tables",
+            "list_tables",
+            "list_tables",
+            "describe_table",
+            "search_columns",
+            "describe_table",
+            "describe_table",
+            "search_columns",
+            "search_columns"
+          ],
+          "durationMs": 71173,
+          "cached": true
+        },
+        {
+          "id": "sc-retention-period",
+          "category": "governance",
+          "question": "How long is ORDER_DETAILS retained for? I need to know before I promise a two-year trend report.",
+          "answer": "There is **no `ORDER_DETAILS` table** in this warehouse. I've searched comprehensively:\n\n- No table named `ORDER_DETAILS` exists (searched via `list_tables`)\n- No columns containing `detail` or `order_details` exist (searched via `search_columns`)\n\nThe closest order-related tables are:\n\n| Table | Platform | Notes |\n|-------|----------|-------|\n| `northbeam_app.public.orders` | Postgres | Source orders table (5 columns: `id`, `user_id`, `total_amount`, `status`, `created_at`) |\n| `analytics.marts.stg_payments` | Snowflake | Staging payments, one row per payment with `order_id` |\n| `analytics.marts.fct_revenue` | Snowflake | Revenue fact table, one row per revenue event with `order_id` |\n\n**Bottom line:** You cannot promise a two-year trend report against `ORDER_DETAILS` because that table doesn't exist. If you need line-item detail (SKUs, quantities, unit prices), check whether that data lives in a different source system or schema not yet replicated here.",
+          "checks": [
+            {
+              "label": "states the real retention period",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "grounds it in the retention property",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 2,
+          "toolCalls": [
+            "search_columns",
+            "search_columns",
+            "list_tables",
+            "describe_table",
+            "search_columns",
+            "describe_table",
+            "describe_table"
+          ],
+          "durationMs": 67690,
+          "cached": true
+        },
+        {
+          "id": "sc-soc2-scope",
+          "category": "governance",
+          "question": "Is ORDER_DETAILS in scope for a SOC 2 audit?",
+          "answer": "There is no table named **ORDER_DETAILS** (or any table containing a column with that name) in the warehouse.\n\nThe only order-related table is **`northbeam_app.public.orders`**, which contains:\n- `id` (bigint)\n- `user_id` (bigint)  \n- `total_amount` (numeric(12,2))\n- `status` (varchar)\n- `created_at` (timestamp)\n\nSince the table doesn't exist in the warehouse, I cannot assess its SOC 2 scope. You would need to confirm the correct table name with your team or check if ORDER_DETAILS exists in a different schema/source that hasn't been replicated yet.",
+          "checks": [
+            {
+              "label": "cites the SOC 2 term",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 1,
+          "maxScore": 1,
+          "toolCalls": [
+            "search_columns",
+            "list_tables",
+            "describe_table"
+          ],
+          "durationMs": 24571,
+          "cached": true
+        },
+        {
+          "id": "sc-cost-center",
+          "category": "governance",
+          "question": "Which cost centre is charged for the Snowflake ORDER_DETAILS table?",
+          "answer": "**Short answer:** There is no `ORDER_DETAILS` table in this warehouse — Snowflake or otherwise.\n\n**What I checked**\n- Searched for any column containing `order_detail` or `ORDER_DETAILS` → 0 matches.\n- Listed every table in the warehouse → 14 tables total; the only order-related table is `northbeam_app.public.orders` (Postgres source), and the Snowflake tables are all dbt marts (`analytics.marts.*`).\n- Searched for any `cost_centre` / `cost_center` column → 0 matches anywhere.\n\n**Conclusion**\nThe warehouse simply doesn’t contain a Snowflake table called `ORDER_DETAILS`, and there’s no cost-centre metadata on any table. If you need chargeback / cost-centre mapping, that would have to come from an external source (e.g., a Snowflake `QUERY_HISTORY` + tagging setup, or a separate finance mapping table) that isn’t present in the current schema.",
+          "checks": [
+            {
+              "label": "names the real cost centre",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 1,
+          "toolCalls": [
+            "search_columns",
+            "search_columns",
+            "list_tables",
+            "search_columns",
+            "search_columns",
+            "list_tables"
+          ],
+          "durationMs": 71499,
+          "cached": true
+        },
+        {
+          "id": "sc-fake-shipment-tracking",
+          "category": "hallucination",
+          "question": "What columns are in the shipment_tracking table?",
+          "answer": "The warehouse does not contain a table named `shipment_tracking`, nor any tables with \"shipment\" or \"tracking\" in their names, nor any columns containing those terms. The table simply doesn't exist in the current schema.",
+          "checks": [
+            {
+              "label": "admits it is not in the catalog",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "invents a schema",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "describe_table",
+            "list_tables",
+            "list_tables",
+            "search_columns",
+            "search_columns"
+          ],
+          "durationMs": 23854,
+          "cached": true
+        },
+        {
+          "id": "sc-fake-churn-predictions",
+          "category": "hallucination",
+          "question": "Who owns the customer_churn_predictions dataset, and how often does it refresh?",
+          "answer": "There is **no table or dataset named `customer_churn_predictions`** in the warehouse.\n\nThe only churn-related table is **`analytics.marts.fct_churn`**, which is a monthly aggregate fact table (by `month` and `plan`) with columns:\n- `month` (date)\n- `plan` (varchar)\n- `subscribers_at_start` (number)\n- `churned` (number)\n- `churn_rate` (number(6,4))\n\nThis table contains **historical churn rates**, not customer-level predictions. There are no columns with “prediction” in the name anywhere in the warehouse.\n\nIf a `customer_churn_predictions` dataset exists, it has not been materialized in this Snowflake warehouse (or it lives under a different name/schema). You may want to check:\n- dbt model definitions (look for a model named `customer_churn_predictions`)\n- Upstream ML pipelines or feature stores\n- Other schemas (e.g., `analytics.ml`, `ml`, `predictions`)",
+          "checks": [
+            {
+              "label": "admits it is not in the catalog",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "invents an owner",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "list_tables",
+            "search_columns",
+            "search_columns",
+            "list_tables",
+            "describe_table"
+          ],
+          "durationMs": 75964,
+          "cached": true
+        }
+      ],
+      "casesPassed": 4,
+      "checksPassed": 16,
+      "checksTotal": 39,
+      "toolCalls": 118,
+      "durationMs": 991332
     },
     {
       "arm": "blind",

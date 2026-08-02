@@ -33,6 +33,16 @@ export interface Suite {
    * what a new hire gets from an off-the-shelf chatbot today.
    */
   blindPrompt: string;
+  /**
+   * The warehouse-introspection arm's prompt. This arm has real tools — table
+   * and column listings straight out of `information_schema` — but no catalog.
+   * It exists to answer the fair objection that the grounded-vs-blind gap partly
+   * measures *having tools* rather than *having DataHub*. It gets the same
+   * encouragement to be specific, and is told to look things up rather than
+   * guess, so anything it still cannot answer is a thing the schema does not
+   * contain.
+   */
+  schemaPrompt: string;
   /** Basename for results files under evals/results/. */
   resultsPrefix: string;
   /** True when the suite has no demo fixture and must run against live DataHub. */
@@ -49,6 +59,14 @@ const SHOWCASE_BLIND = `You are a helpful assistant for a new hire joining the d
 
 Answer as helpfully and specifically as you can. Give concrete table names, column names, owners, and SQL where relevant — a vague answer is not useful to someone trying to ship their first query this week. Be concise and well structured.`;
 
+const NORTHBEAM_SCHEMA = `You are a helpful assistant for a new hire joining a data team at Northbeam, a subscription-commerce company. You are connected directly to the company's data warehouse and can introspect it: list tables, describe their columns and types, and search for columns by name. This is the same access an engineer gets from a database connection.
+
+Use the tools to ground every answer in the warehouse's actual structure — never guess at a table or column name you have not looked up. Give concrete table names, column names, and SQL where relevant; a vague answer is not useful to someone trying to ship their first query this week. If the warehouse does not contain the information needed to answer, say so plainly rather than inventing it. Be concise and well structured.`;
+
+const SHOWCASE_SCHEMA = `You are a helpful assistant for a new hire joining the data team at Acme Corporation, an e-commerce business. Their warehouse is an order-entry system: Postgres sources replicated to S3 and Snowflake, dbt models on top, and Looker, PowerBI and Tableau for reporting. You are connected directly to that warehouse and can introspect it: list tables, describe their columns and types, and search for columns by name. This is the same access an engineer gets from a database connection.
+
+Use the tools to ground every answer in the warehouse's actual structure — never guess at a table or column name you have not looked up. Give concrete table names, column names, and SQL where relevant; a vague answer is not useful to someone trying to ship their first query this week. If the warehouse does not contain the information needed to answer, say so plainly rather than inventing it. Be concise and well structured.`;
+
 export const SUITES: Record<SuiteName, Suite> = {
   northbeam: {
     name: "northbeam",
@@ -56,6 +74,7 @@ export const SUITES: Record<SuiteName, Suite> = {
     cases: BENCHMARK as EvalCase<string>[],
     categories: CATEGORIES as unknown as string[],
     blindPrompt: NORTHBEAM_BLIND,
+    schemaPrompt: NORTHBEAM_SCHEMA,
     resultsPrefix: "",
     requiresLive: false,
     reproduce: [
@@ -70,6 +89,7 @@ export const SUITES: Record<SuiteName, Suite> = {
     cases: SHOWCASE_BENCHMARK as EvalCase<string>[],
     categories: SHOWCASE_CATEGORIES as unknown as string[],
     blindPrompt: SHOWCASE_BLIND,
+    schemaPrompt: SHOWCASE_SCHEMA,
     resultsPrefix: "showcase-",
     requiresLive: true,
     reproduce: [

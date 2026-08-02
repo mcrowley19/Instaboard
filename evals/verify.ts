@@ -19,7 +19,7 @@ import { scoreCase, summarizeCase, type CaseResult } from "./score";
 
 interface StoredResults {
   meta: { model: string; mode: string; at: string };
-  arms: { arm: "grounded" | "blind"; cases: CaseResult[] }[];
+  arms: { arm: "grounded" | "schema" | "blind"; cases: CaseResult[] }[];
 }
 
 const resultsDir = path.join(process.cwd(), "evals", "results");
@@ -62,9 +62,11 @@ function verifySuite(suite: Suite): void {
   }
 
   const grounded = headline.grounded;
+  const schema = headline.schema;
   const blind = headline.blind;
   console.log(
     `- ${suite.name}: re-scored from committed answers. With DataHub: ${grounded?.passed}/${grounded?.total}, ` +
+      `${schema ? `warehouse schema only: ${schema.passed}/${schema.total}, ` : ""}` +
       `control: ${blind?.passed}/${blind?.total} (model ${stored.meta.model})`
   );
 
