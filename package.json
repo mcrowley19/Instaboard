@@ -13,6 +13,7 @@
     "eval:verify": "tsx evals/verify.ts",
     "eval:transcripts": "tsx evals/transcripts.ts",
     "validate": "tsx scripts/validate-runbooks.ts",
+    "showcase:drill": "tsx scripts/showcase-drill.ts",
     "receipts:live": "tsx scripts/live-receipts.ts",
     "seed": "uv run --with acryl-datahub scripts/seed_datahub.py",
     "datahub:up": "uv run --with acryl-datahub datahub docker quickstart",

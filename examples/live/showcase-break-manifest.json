@@ -1,0 +1,45 @@
+{
+  "brokenAt": "2026-08-02T15:34:45.163Z",
+  "changes": [
+    {
+      "kind": "column-dropped",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+      "detail": "Removed column `cost_of_delivery` from ORDER_DETAILS — the weekly revenue runbook SUMs it.",
+      "undo": {
+        "aspect": "schemaMetadata",
+        "field": {
+          "fieldPath": "cost_of_delivery",
+          "isPartOfKey": false,
+          "nullable": true,
+          "type": {
+            "type": {
+              "com.linkedin.schema.NumberType": {}
+            }
+          },
+          "nativeDataType": "FLOAT",
+          "recursive": false
+        }
+      }
+    },
+    {
+      "kind": "deprecated",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+      "detail": "Deprecated ORDER_HISTORY — step 1 of the backfill runbook tells you to query it.",
+      "undo": {
+        "mutation": "updateDeprecation",
+        "deprecated": false
+      }
+    },
+    {
+      "kind": "owner-removed",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+      "detail": "Removed Priya Sharma as Data Steward on the products model — the margin runbook says to ask her for sign-off.",
+      "undo": {
+        "mcp": "add_owners",
+        "ownerUrn": "urn:li:corpuser:b2fd91.patrick1@example.com",
+        "ownershipType": "__system__data_steward"
+      }
+    }
+  ],
+  "restoredAt": "2026-08-02T15:41:39.865Z"
+}

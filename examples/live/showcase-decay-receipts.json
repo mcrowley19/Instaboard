@@ -1,0 +1,123 @@
+{
+  "capturedAt": "2026-08-02T15:23:59.086Z",
+  "gms": "http://localhost:8080",
+  "catalog": "showcase-ecommerce — DataHub's own published demo datapack (1,065 entities)",
+  "method": "Runbooks recorded against the datapack and snapshotted through the same code path the app uses. The catalog was then changed through DataHub's own write APIs — a column dropped from schemaMetadata, a table deprecated via updateDeprecation, an owner removed via the MCP server's remove_owners. The decay engine was told none of it; it re-read the catalog and worked out what had broken.",
+  "breakingChanges": [
+    {
+      "kind": "column-dropped",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+      "detail": "Removed column `cost_of_delivery` from ORDER_DETAILS — the weekly revenue runbook SUMs it."
+    },
+    {
+      "kind": "deprecated",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+      "detail": "Deprecated ORDER_HISTORY — step 1 of the backfill runbook tells you to query it."
+    },
+    {
+      "kind": "owner-removed",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+      "detail": "Removed Priya Sharma as Data Steward on the products model — the margin runbook says to ask her for sign-off."
+    }
+  ],
+  "before": {
+    "at": "2026-08-02T15:23:23.423Z",
+    "summary": "3 checked · 0 with drift · 0 broken",
+    "rows": [
+      {
+        "id": "showcase-order-status-backfill",
+        "severity": "ok",
+        "findings": []
+      },
+      {
+        "id": "showcase-promotion-margin-review",
+        "severity": "ok",
+        "findings": []
+      },
+      {
+        "id": "showcase-weekly-order-revenue",
+        "severity": "ok",
+        "findings": []
+      }
+    ]
+  },
+  "after": {
+    "at": "2026-08-02T15:23:59.086Z",
+    "summary": "3 checked · 3 with drift · 2 broken",
+    "exitCode": 2,
+    "rows": [
+      {
+        "id": "showcase-order-status-backfill",
+        "severity": "broken",
+        "findings": [
+          {
+            "stepIndex": 0,
+            "stepTitle": "Read the month-end snapshots from ORDER_HISTORY",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+            "severity": "broken",
+            "kind": "newly-deprecated",
+            "detail": "ORDER_HISTORY has been deprecated since this runbook was written.",
+            "remedy": "Point this step at the replacement dataset named in DataHub."
+          }
+        ],
+        "documentUrn": "urn:li:document:shared-a3c31c17-f401-47e1-bd7d-dbaf5cb70e84",
+        "incidents": [
+          {
+            "urn": "urn:li:incident:137637a7-c35e-4794-885d-7fda8b717a24",
+            "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+            "reused": false
+          }
+        ],
+        "taggedDatasets": [
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)"
+        ]
+      },
+      {
+        "id": "showcase-promotion-margin-review",
+        "severity": "warning",
+        "findings": [
+          {
+            "stepIndex": 1,
+            "stepTitle": "Check the price floor on the affected products",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+            "severity": "warning",
+            "kind": "owner-changed",
+            "detail": "This step says to contact Priya Sharma, who no longer owns products.",
+            "remedy": "Current owners: Data Platform Team, b2fd91.ORG_DATA_PLATFORM, data-platform@example.com, urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM, Ian Chen, ian.chen@example.com, urn:li:corpuser:b2fd91.EMP006."
+          }
+        ],
+        "documentUrn": "urn:li:document:shared-ce6782df-2d3c-48f6-96f5-816e868bd292",
+        "incidents": [],
+        "taggedDatasets": [
+          "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)"
+        ]
+      },
+      {
+        "id": "showcase-weekly-order-revenue",
+        "severity": "broken",
+        "findings": [
+          {
+            "stepIndex": 1,
+            "stepTitle": "Pull revenue and delivery cost by customer class",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+            "severity": "broken",
+            "kind": "column-missing",
+            "detail": "Column `cost_of_delivery` is referenced by this step but no longer exists on ORDER_DETAILS.",
+            "remedy": "Check whether cost_of_delivery was renamed, and update this step's SQL and instructions."
+          }
+        ],
+        "documentUrn": "urn:li:document:shared-2f4f835d-7012-485d-a476-ff353f714b47",
+        "incidents": [
+          {
+            "urn": "urn:li:incident:058a8a84-fd68-44c5-8543-c3d94cd1fdee",
+            "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+            "reused": false
+          }
+        ],
+        "taggedDatasets": [
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+        ]
+      }
+    ]
+  }
+}
