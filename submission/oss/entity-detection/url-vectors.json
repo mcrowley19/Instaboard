@@ -1,0 +1,99 @@
+{
+  "note": "Real DataHub UI URLs and the entity each one shows. Captured from a running DataHub 1.5.0.6 (OSS quickstart) loaded with the showcase-ecommerce datapack, by reading hrefs out of the search results page rather than by constructing them. Used as the test corpus for datahub-entity-from-url.js.",
+  "capturedAt": "2026-08-02",
+  "datahubVersion": "1.5.0.6",
+  "source": "http://localhost:9002 — hrefs read from rendered search results",
+  "vectors": [
+    {
+      "url": "/dataset/urn:li:dataset:(urn:li:dataPlatform:looker,b2fd91.order-entry.explore.order_details,PROD)",
+      "entityType": "dataset",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:looker,b2fd91.order-entry.explore.order_details,PROD)"
+    },
+    {
+      "url": "/dataset/urn:li:dataset:(urn:li:dataPlatform:s3,b2fd91.demo-data-bucket%2Forder_entry%2Forders,PROD)/Columns?schemaFilter=order_id",
+      "entityType": "dataset",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:s3,b2fd91.demo-data-bucket/order_entry/orders,PROD)",
+      "why": "URN contains slashes once decoded, plus a tab segment and a query string"
+    },
+    {
+      "url": "/tasks/urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.export_table_orders_to_s3,b2fd91.default),b2fd91.export_table_orders_to_s3)/",
+      "entityType": "dataJob",
+      "urn": "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.export_table_orders_to_s3,b2fd91.default),b2fd91.export_table_orders_to_s3)",
+      "why": "Route segment is `tasks`, not `dataJob`. Nested URN, trailing slash."
+    },
+    {
+      "url": "/tasks/urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.export_table_orders_to_s3,b2fd91.default),b2fd91.export_table_orders_to_s3)/Lineage",
+      "entityType": "dataJob",
+      "urn": "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.export_table_orders_to_s3,b2fd91.default),b2fd91.export_table_orders_to_s3)",
+      "why": "Tab segment must not be eaten into the URN"
+    },
+    {
+      "url": "/pipelines/urn:li:dataFlow:(spark,b2fd91.export_table_orders_to_s3,b2fd91.default)/",
+      "entityType": "dataFlow",
+      "urn": "urn:li:dataFlow:(spark,b2fd91.export_table_orders_to_s3,b2fd91.default)",
+      "why": "Route segment is `pipelines`, not `dataFlow`"
+    },
+    {
+      "url": "/container/urn:li:container:d6b6aada30bc0a4a5a891d06c9c1815a",
+      "entityType": "container",
+      "urn": "urn:li:container:d6b6aada30bc0a4a5a891d06c9c1815a"
+    },
+    {
+      "url": "/domain/urn:li:domain:b2fd91.1caf2b7c-ca73-4708-bdec-6687d78cab0e",
+      "entityType": "domain",
+      "urn": "urn:li:domain:b2fd91.1caf2b7c-ca73-4708-bdec-6687d78cab0e"
+    },
+    {
+      "url": "/glossaryTerm/urn:li:glossaryTerm:b2fd91.1598cf93-c199-43a1-8833-fce96faa9a1a",
+      "entityType": "glossaryTerm",
+      "urn": "urn:li:glossaryTerm:b2fd91.1598cf93-c199-43a1-8833-fce96faa9a1a"
+    },
+    {
+      "url": "/user/urn:li:corpuser:b2fd91.EMP006",
+      "entityType": "corpUser",
+      "urn": "urn:li:corpuser:b2fd91.EMP006",
+      "why": "Route segment is `user`, entity type is `corpUser`"
+    },
+    {
+      "url": "/group/urn:li:corpGroup:b2fd91.ORG_BACKEND_ENG",
+      "entityType": "corpGroup",
+      "urn": "urn:li:corpGroup:b2fd91.ORG_BACKEND_ENG",
+      "why": "Route segment is `group`, entity type is `corpGroup`"
+    },
+    {
+      "url": "/schemaField/urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.orders,PROD),sales_rep_id)",
+      "entityType": "schemaField",
+      "urn": "urn:li:schemaField:(urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.orders,PROD),sales_rep_id)",
+      "why": "Column-level page; URN nests a full dataset URN"
+    },
+    {
+      "url": "/document/urn:li:document:ecomm-orders",
+      "entityType": "document",
+      "urn": "urn:li:document:ecomm-orders"
+    },
+    {
+      "url": "http://localhost:9002/search?query=orders",
+      "entityType": null,
+      "urn": null,
+      "why": "Not an entity page"
+    },
+    {
+      "url": "http://localhost:9002/",
+      "entityType": null,
+      "urn": null,
+      "why": "Home"
+    },
+    {
+      "url": "/dataset/not-a-urn",
+      "entityType": null,
+      "urn": null,
+      "why": "Route matches but the path segment is not a URN"
+    },
+    {
+      "url": "/dataset/urn:li:dataset:(urn:li:dataPlatform:s3,bucket%2Fbroken%ZZ,PROD)",
+      "entityType": "dataset",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:s3,bucket%2Fbroken%ZZ,PROD)",
+      "why": "Malformed percent-escape must not throw out of decodeURIComponent; falls back to the raw form"
+    }
+  ]
+}

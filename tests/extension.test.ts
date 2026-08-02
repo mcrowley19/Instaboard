@@ -4,38 +4,29 @@ import { describe, expect, it } from "vitest";
 import { pageContextBlock } from "@/lib/prompts";
 
 /**
- * The side panel's entity detection lives in the extension's content script,
- * which runs in the browser and so never gets exercised by the server tests.
- * These tests read the regex straight out of `extension/content.js` and run it
- * over URLs copied from a running DataHub, so the check cannot drift from the
- * shipped extension.
+ * The side panel's entity detection runs in the browser and so never gets
+ * exercised by the server tests. These load the shipped detection module and run
+ * it over URLs copied from a running DataHub, so the check cannot drift from
+ * what the extension actually does.
+ *
+ * The exhaustive route coverage lives in `entity-from-url.test.ts`; this file
+ * checks the slice the side panel depends on, end to end into the prompt.
  */
 
-const contentScript = readFileSync(
-  path.join(process.cwd(), "extension", "content.js"),
-  "utf8"
-);
-
-/** Pull `URN_ROUTE_RE` out of the content script rather than restating it here. */
-function urnRoute(): RegExp {
-  const match = contentScript.match(/const URN_ROUTE_RE\s*=\s*([\s\S]*?);\n/);
-  if (!match) throw new Error("URN_ROUTE_RE not found in extension/content.js");
-  // eslint-disable-next-line no-eval
-  return eval(match[1]) as RegExp;
+function loadDetector(): (href: string) => { urn: string; entityType: string } | null {
+  const source = readFileSync(path.join(process.cwd(), "extension", "entity-from-url.js"), "utf8");
+  const module = { exports: {} as Record<string, unknown> };
+  new Function("module", source)(module);
+  return (module.exports as { datahubEntityFromUrl: (href: string) => { urn: string; entityType: string } | null })
+    .datahubEntityFromUrl;
 }
 
-/**
- * What content.js does to a page URL before it reaches the side panel,
- * including its guard around `decodeURIComponent`, which throws on a truncated
- * percent-escape.
- */
+const datahubEntityFromUrl = loadDetector();
+
+/** What content.js hands the side panel for a given page URL. */
 function extract(url: string): { entityType?: string; datasetUrn?: string } {
-  try {
-    const m = decodeURIComponent(url).match(urnRoute());
-    return m ? { entityType: m[1], datasetUrn: m[2] } : {};
-  } catch {
-    return {};
-  }
+  const entity = datahubEntityFromUrl(url);
+  return entity ? { entityType: entity.entityType, datasetUrn: entity.urn } : {};
 }
 
 describe("extension content script", () => {
@@ -67,6 +58,17 @@ describe("extension content script", () => {
       datasetUrn: "urn:li:glossaryTerm:MRR",
     });
     expect(extract("http://localhost:9002/domain/urn:li:domain:Payments/Assets").entityType).toBe("domain");
+  });
+
+  it("detects the entity types whose route does not match their name", () => {
+    // These were silently undetected until the routes were read off a running
+    // DataHub: a pipeline lives at /pipelines/, a task at /tasks/.
+    expect(extract("http://localhost:9002/pipelines/urn:li:dataFlow:(spark,nightly,PROD)").entityType).toBe("dataFlow");
+    expect(
+      extract("http://localhost:9002/tasks/urn:li:dataJob:(urn:li:dataFlow:(spark,nightly,PROD),load)").entityType
+    ).toBe("dataJob");
+    // Our own runbooks are documents, and those pages went undetected too.
+    expect(extract("http://localhost:9002/document/urn:li:document:runbook-1").entityType).toBe("document");
   });
 
   it("stays quiet on DataHub pages that are not an entity", () => {

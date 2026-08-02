@@ -1,30 +1,19 @@
 // Runs on DataHub pages. Answers the side panel's context requests with the
 // entity URN from the URL, the page title, and any selected text.
-
-const URN_ROUTE_RE =
-  /\/(dataset|chart|dashboard|dataFlow|dataJob|glossaryTerm|glossaryNode|domain|container|mlModels?|user|group)\/(urn:li:[^/?#]+)/;
+//
+// The URL → entity mapping lives in entity-from-url.js, which is loaded before
+// this file (see manifest.json) and shared with the tests and the upstream
+// contribution, so the shipped extension and the thing we published cannot drift.
 
 function getContext() {
-  let datasetUrn;
-  let entityType;
-  try {
-    const decoded = decodeURIComponent(location.href);
-    const match = decoded.match(URN_ROUTE_RE);
-    if (match) {
-      entityType = match[1];
-      datasetUrn = match[2];
-    }
-  } catch {
-    // malformed URL encoding — leave URN undefined
-  }
-
+  const entity = datahubEntityFromUrl(location.href);
   const selection = String(window.getSelection() || "").trim().slice(0, 2000);
 
   return {
     url: location.href,
     title: document.title,
-    datasetUrn: datasetUrn || undefined,
-    entityType: entityType || undefined,
+    datasetUrn: entity ? entity.urn : undefined,
+    entityType: entity ? entity.entityType : undefined,
     selection: selection || undefined,
   };
 }
