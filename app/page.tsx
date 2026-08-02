@@ -143,19 +143,25 @@ export default function Landing() {
         </div>
         <div className="rule" />
 
-        <h1>
-          <span className="lp-line">
-            <span>The person who built</span>
-          </span>
-          <span className="lp-line">
-            <span>your pipeline left</span>
-          </span>
-          <span className="lp-line">
-            <span>
-              <em>in March.</em>
+        <div className="lp-head-hero">
+          <h1>
+            <span className="lp-line">
+              <span>The person who built</span>
             </span>
-          </span>
-        </h1>
+            <span className="lp-line">
+              <span>your pipeline left</span>
+            </span>
+            <span className="lp-line">
+              <span>
+                <em>in March.</em>
+              </span>
+            </span>
+          </h1>
+
+          <div className="lp-glyph" aria-hidden="true">
+            i
+          </div>
+        </div>
 
         <div className="lp-head-body">
           <div>
@@ -172,10 +178,6 @@ export default function Landing() {
                 or run it locally
               </a>
             </div>
-          </div>
-
-          <div className="lp-glyph" aria-hidden="true">
-            i
           </div>
         </div>
       </section>
@@ -229,11 +231,6 @@ export default function Landing() {
                 </p>
               </div>
             </div>
-
-            <p className="lp-note">
-              Every call sits in the transcript where you can open it, which is how you find out
-              where an answer came from and whether to believe it.
-            </p>
           </div>
         </div>
       </section>
@@ -243,10 +240,6 @@ export default function Landing() {
           <div className="band-rail">what to ask</div>
           <div>
             <h2 className="lp-h2">Week one is mostly questions.</h2>
-            <p className="lp-sub">
-              These are the ones that used to cost somebody an afternoon of tapping people on the
-              shoulder.
-            </p>
             <table className="lp-table" ref={tableRef}>
               <thead>
                 <tr>
@@ -275,9 +268,8 @@ export default function Landing() {
           <div>
             <h2 className="lp-h2">Someone leaving can record what they know by doing it.</h2>
             <p className="lp-sub">
-              The knowledge that goes missing when a person moves teams was never written down
-              anywhere, because writing it down is a separate job nobody has time for. So the
-              recording happens while the work happens.
+              Writing it down is a separate job nobody has time for, so the recording happens while
+              the work happens.
             </p>
 
             <div className="lp-ruler" ref={rulerRef}>
@@ -298,8 +290,7 @@ export default function Landing() {
 
             <p className="lp-note">
               The finished runbook is saved back into DataHub through <code>save_document</code> and
-              linked to the datasets it touches, so the next person finds it in the catalog rather
-              than in someone&rsquo;s outbox.
+              linked to the datasets it touches.
             </p>
           </div>
         </div>
@@ -352,8 +343,7 @@ export default function Landing() {
             <h2 className="lp-h2">Running in about a minute.</h2>
             <p className="lp-sub">
               Demo mode answers every catalog call from a built-in fixture of Northbeam, a
-              subscription-commerce warehouse with 14 datasets, four owners, a metrics glossary and
-              real lineage. Docker can wait until the second pass.
+              subscription-commerce warehouse with 14 datasets, four owners and real lineage.
             </p>
 
             <div className="lp-shell">
@@ -374,11 +364,7 @@ export default function Landing() {
 
             <p className="lp-note">
               Pointing it at a live catalog takes two more commands,{" "}
-              <code>npm run datahub:up</code> and <code>npm run seed</code>, both written up in the{" "}
-              <a href="https://github.com/acryldata/mcp-server-datahub" target="_blank" rel="noreferrer">
-                DataHub MCP server
-              </a>{" "}
-              docs and the project README.
+              <code>npm run datahub:up</code> and <code>npm run seed</code>, covered in the README.
             </p>
           </div>
         </div>
