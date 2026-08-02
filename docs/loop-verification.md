@@ -5,13 +5,26 @@ moves out from under it, and do something about it. A README can assert that. Th
 command that proves it.
 
 ```bash
-npm run prove
+npm run prove                        # the catalog this repo seeds
+npm run prove -- --catalog=showcase  # DataHub's own showcase-ecommerce datapack
 ```
 
-**Result: 29/29 checks passed.** Full output at
-[`examples/live/prove-loop-receipts.json`](../examples/live/prove-loop-receipts.json), which
-CI re-verifies on every push ([`tests/prove-receipts.test.ts`](../tests/prove-receipts.test.ts))
-so a stale or partial capture fails the build.
+**Result: 29/29 checks passed on both catalogs.** Full output at
+[`prove-loop-receipts.json`](../examples/live/prove-loop-receipts.json) and
+[`prove-loop-receipts-showcase.json`](../examples/live/prove-loop-receipts-showcase.json),
+both of which CI re-verifies on every push
+([`tests/prove-receipts.test.ts`](../tests/prove-receipts.test.ts)) so a stale or partial
+capture fails the build.
+
+Running the same proof on DataHub's own datapack is the point of the second run: it is a
+catalog nobody here authored, and it found two real defects on its first outing — a rename
+the detector missed because edit distance punishes token reordering, and an assertion of
+ours that demanded every incident be assigned even on a dataset with no owners. Both are
+fixed; see the commit history.
+
+For how good the detector is in aggregate rather than on three planted changes, see
+`npm run bench:drift` and [`drift-benchmark.json`](../examples/live/drift-benchmark.json):
+6/6 planted drifts detected, 0 of 6 decoys firing, precision and recall 100%.
 
 ## What it does
 
