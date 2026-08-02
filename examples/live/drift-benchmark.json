@@ -1,0 +1,161 @@
+{
+  "at": "2026-08-02T20:53:17.487Z",
+  "catalog": "http://localhost:8080",
+  "runbooks": [
+    {
+      "id": "reading-the-order-detail-table-msc00u1p",
+      "title": "Reading the order detail table",
+      "steps": 1
+    },
+    {
+      "id": "showcase-order-status-backfill",
+      "title": "Monthly order-status backfill check",
+      "steps": 2
+    },
+    {
+      "id": "showcase-promotion-margin-review",
+      "title": "Promotion margin review before a campaign launch",
+      "steps": 2
+    },
+    {
+      "id": "showcase-weekly-order-revenue",
+      "title": "Weekly order revenue pack for the commercial review",
+      "steps": 3
+    },
+    {
+      "id": "sample-monthly-mrr-report",
+      "title": "Monthly MRR report for the board deck",
+      "steps": 3
+    }
+  ],
+  "method": "Known drifts planted through DataHub's own write APIs across every stored runbook, mixed with decoys that must produce nothing. Ground truth for column drift comes from tokenising each step's SQL, not from the engine's own reference matcher. Findings that pre-date the injection are excluded from the false-positive count. The engine is told nothing about any of it.",
+  "baselineFindings": 1,
+  "planted": [
+    {
+      "id": "decoy:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD):billing_address_line2",
+      "kind": "column-dropped",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+      "subject": "billing_address_line2",
+      "decoy": true,
+      "expect": null
+    },
+    {
+      "id": "decoy:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD):customer_id",
+      "kind": "column-dropped",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+      "subject": "customer_id",
+      "decoy": true,
+      "expect": null
+    },
+    {
+      "id": "column-dropped:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD):promotion_cost",
+      "kind": "column-dropped",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+      "subject": "promotion_cost",
+      "decoy": false,
+      "expect": "column-missing"
+    },
+    {
+      "id": "column-renamed:urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD):product_status",
+      "kind": "column-renamed",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+      "subject": "product_status",
+      "decoy": false,
+      "expect": "column-missing"
+    },
+    {
+      "id": "deprecated:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD):urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+      "kind": "deprecated",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+      "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+      "decoy": false,
+      "expect": "newly-deprecated"
+    },
+    {
+      "id": "deprecated:urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD):urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+      "kind": "deprecated",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+      "subject": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+      "decoy": false,
+      "expect": "newly-deprecated"
+    },
+    {
+      "id": "column-dropped:urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD):revenue_date",
+      "kind": "column-dropped",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+      "subject": "revenue_date",
+      "decoy": false,
+      "expect": "column-missing"
+    },
+    {
+      "id": "column-renamed:urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD):plan",
+      "kind": "column-renamed",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+      "subject": "plan",
+      "decoy": false,
+      "expect": "column-missing"
+    },
+    {
+      "id": "decoy:urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.payments,PROD):card_last4",
+      "kind": "column-dropped",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.payments,PROD)",
+      "subject": "card_last4",
+      "decoy": true,
+      "expect": null
+    },
+    {
+      "id": "decoy:urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.promotions,PROD):promotion_cost",
+      "kind": "column-dropped",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+      "subject": "promotion_cost",
+      "decoy": true,
+      "expect": null
+    },
+    {
+      "id": "decoy:urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.orders,PROD):total_amount",
+      "kind": "column-dropped",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.orders,PROD)",
+      "subject": "total_amount",
+      "decoy": true,
+      "expect": null
+    },
+    {
+      "id": "decoy:urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.subscriptions,PROD):cancelled_at",
+      "kind": "column-dropped",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.subscriptions,PROD)",
+      "subject": "cancelled_at",
+      "decoy": true,
+      "expect": null
+    }
+  ],
+  "overall": {
+    "truePositives": 6,
+    "falsePositives": 0,
+    "falseNegatives": 0,
+    "precision": 1,
+    "recall": 1,
+    "f1": 1,
+    "findingsExplained": 6,
+    "findingsTotal": 6
+  },
+  "byKind": {
+    "column-dropped": {
+      "truePositives": 2,
+      "falseNegatives": 0,
+      "recall": 1
+    },
+    "column-renamed": {
+      "truePositives": 2,
+      "falseNegatives": 0,
+      "recall": 1
+    },
+    "deprecated": {
+      "truePositives": 2,
+      "falseNegatives": 0,
+      "recall": 1
+    }
+  },
+  "falsePositives": [],
+  "falseNegatives": [],
+  "restored": "12/12"
+}

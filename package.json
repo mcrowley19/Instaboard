@@ -14,6 +14,7 @@
     "eval:transcripts": "tsx evals/transcripts.ts",
     "prove": "tsx scripts/prove-loop.ts",
     "draft": "tsx scripts/draft-runbooks.ts",
+    "bench:drift": "tsx scripts/drift-benchmark.ts",
     "validate": "tsx scripts/validate-runbooks.ts",
     "propose": "tsx scripts/propose-fixes.ts",
     "examples": "tsx scripts/export-examples.ts",
