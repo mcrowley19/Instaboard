@@ -449,7 +449,7 @@ evaluation case covering the write-back path and its negative cases.
 | [mcp-server-datahub#172](https://github.com/acryldata/mcp-server-datahub/issues/172) | `get_entities` on an incident URN errors, and health reports `causes: ["ACTIVE_INCIDENTS"]` where the assertions branch of the same field returns URNs |
 | [mcp-server-datahub#173](https://github.com/acryldata/mcp-server-datahub/issues/173) | Two tool schemas use multi-type `anyOf` unions that make OpenAI-compatible providers 422 the whole tool list |
 | [datahub#18815](https://github.com/datahub-project/datahub/issues/18815) | `showcase-ecommerce` loses 248 MCPs on OSS, every usage and assertion aspect among them, and still reports success |
-| [`05-deleteassertion…`](submission/oss/issues/05-deleteassertion-rejects-custom-assertions.md) | `deleteAssertion` errors with "Unsupported Assertion Type CUSTOM" on an assertion `upsertCustomAssertion` created two calls earlier; only the CLI can remove it |
+| [datahub#18817](https://github.com/datahub-project/datahub/issues/18817) | `deleteAssertion` errors with "Unsupported Assertion Type CUSTOM" on an assertion `upsertCustomAssertion` created two calls earlier; only the CLI can remove it |
 
 Each was checked against the existing open issues first. A fifth thing we hit, the
 `datapack --help` crash, was already filed as

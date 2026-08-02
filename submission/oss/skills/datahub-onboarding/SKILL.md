@@ -340,9 +340,9 @@ description. Then, where the deployment's API allows it and the user agrees:
   and read the existing values before upserting — the mutation replaces the whole list.
 - **An assertion** that fails while the runbook is stale and passes when it validates clean,
   reported against a stable assertion URN per (runbook, dataset) so the dataset gets a
-  staleness *timeline* rather than a new assertion every night.
+  staleness _timeline_ rather than a new assertion every night.
 - **An incident** on any dataset where a step would now fail, assigned to whoever owns that
-  dataset *today*. In the owner-drift case that is exactly the person the runbook has never
+  dataset _today_. In the owner-drift case that is exactly the person the runbook has never
   heard of, and DataHub's own subscriptions take it from there.
 
 Two rules, both learned the hard way:
@@ -360,13 +360,13 @@ Two rules, both learned the hard way:
 Detection that stops at a warning leaves the work exactly where it was. Where the catalog
 says what the fix is, propose it — and where it doesn't, say so instead of guessing:
 
-| Finding | Correction the catalog supports |
-| --- | --- |
-| Column gone | Match it against columns that appeared since. Propose a rename only when one candidate is clearly closest; if two are comparable, ask. |
-| Dataset deprecated | Repoint at the replacement named in the deprecation note. |
-| Owner moved on | Substitute whoever DataHub lists as the owner now. |
-| Health failing | Nothing. This is a live problem, not a wrong instruction — the table needs looking at, the runbook does not need editing. |
-| Entity gone | Nothing. There is nothing left to read a replacement from. |
+| Finding            | Correction the catalog supports                                                                                                        |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Column gone        | Match it against columns that appeared since. Propose a rename only when one candidate is clearly closest; if two are comparable, ask. |
+| Dataset deprecated | Repoint at the replacement named in the deprecation note.                                                                              |
+| Owner moved on     | Substitute whoever DataHub lists as the owner now.                                                                                     |
+| Health failing     | Nothing. This is a live problem, not a wrong instruction — the table needs looking at, the runbook does not need editing.              |
+| Entity gone        | Nothing. There is nothing left to read a replacement from.                                                                             |
 
 Present it as a diff against the saved document, with the catalog evidence for each edit,
 and **get explicit approval before saving**. Two details that matter:

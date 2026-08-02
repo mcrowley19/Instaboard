@@ -5,12 +5,12 @@ Two upstream contributions came out of building instaboard. All of them are file
 | What | Where | Status |
 | --- | --- | --- |
 | `datahub-onboarding` skill | [datahub-skills#79](https://github.com/datahub-project/datahub-skills/pull/79) | open |
-| ↳ follow-up commit: validation write-back and correction steps | same PR | ready to push, see §1a |
+| ↳ follow-up commit: validation write-back and correction steps | [same PR](https://github.com/datahub-project/datahub-skills/pull/79#issuecomment-5159658074) | pushed |
 | No MCP tool returns usage statistics | [mcp-server-datahub#171](https://github.com/acryldata/mcp-server-datahub/issues/171) | open |
 | Incidents are unreadable over MCP | [mcp-server-datahub#172](https://github.com/acryldata/mcp-server-datahub/issues/172) | open |
 | `anyOf` union schemas get 422'd by providers | [mcp-server-datahub#173](https://github.com/acryldata/mcp-server-datahub/issues/173) | open |
 | Datapack drops Cloud-only aspects on OSS | [datahub#18815](https://github.com/datahub-project/datahub/issues/18815) | open |
-| `deleteAssertion` rejects CUSTOM assertions | `issues/05-…` | ready to file |
+| `deleteAssertion` rejects CUSTOM assertions | [datahub#18817](https://github.com/datahub-project/datahub/issues/18817) | open |
 | `datapack --help` crash still on 1.6.0.17 | [comment on datahub#18497](https://github.com/datahub-project/datahub/issues/18497#issuecomment-5159253562) | existing issue |
 
 The sections below record how each was put together, and stay here so the work is
@@ -191,21 +191,25 @@ What the follow-up adds:
   rename when two candidates are comparable, no runbook edit in response to a health
   problem, and no counting your own incident as fresh drift.
 
-To push it onto the open PR:
+Pushed as `d103f41` on `feat/datahub-onboarding-skill`, with a
+[comment](https://github.com/datahub-project/datahub-skills/pull/79#issuecomment-5159658074)
+summarising it, since the original PR description does not mention Steps 9 and 10. How it
+was applied, for anyone reproducing it:
 
 ```bash
 gh repo fork datahub-project/datahub-skills --clone   # if not already cloned
 cd datahub-skills
 git fetch origin && git checkout feat/datahub-onboarding-skill
-cp -r <instaboard>/submission/oss/skills/datahub-onboarding skills/
-pre-commit run --all-files
+cp -r <instaboard>/submission/oss/skills/datahub-onboarding/. skills/datahub-onboarding/
+npx prettier@3 --write "skills/datahub-onboarding/**/*.{md,json}"
+npx markdownlint-cli2@0.21.0 "skills/datahub-onboarding/**/*.md"   # 0 errors
 git add skills/datahub-onboarding
 git commit -m "feat: add validation write-back and correction steps to datahub-onboarding"
 git push
 ```
 
-Then add a comment on the PR summarising the additions, since the original description does
-not mention Steps 9 and 10.
+`prettier` reflowed two lines of `SKILL.md`; the copy in this repo was updated to match, so
+the two stay byte-identical.
 
 ---
 
@@ -220,7 +224,7 @@ file with `gh issue create -R <repo> --title "<first heading>" --body-file <file
 | `02-incidents-unreadable.md` | `acryldata/mcp-server-datahub` | `get_entities` on an incident URN errors; the entity's health reports `causes: ["ACTIVE_INCIDENTS"]` instead of URNs, unlike the assertions branch of the same field |
 | `03-anyof-union-schemas-rejected-by-providers.md` | `acryldata/mcp-server-datahub` | Multi-type `anyOf` unions in two tool schemas make OpenAI-compatible providers reject the whole tool list with a 422 |
 | `04-showcase-datapack-drops-cloud-only-aspects.md` | `datahub-project/datahub` | `datapack load showcase-ecommerce` quietly drops 248 MCPs on OSS, every usage and assertion aspect among them, while still reporting success |
-| `05-deleteassertion-rejects-custom-assertions.md` | `datahub-project/datahub` | `deleteAssertion` errors with "Unsupported Assertion Type CUSTOM" on assertions `upsertCustomAssertion` created two calls earlier; only the CLI can remove them |
+| `05-deleteassertion-rejects-custom-assertions.md` | `datahub-project/datahub` | `deleteAssertion` errors with "Unsupported Assertion Type CUSTOM" on assertions `upsertCustomAssertion` created two calls earlier; only the CLI can remove them — filed as [#18817](https://github.com/datahub-project/datahub/issues/18817) |
 
 Checked against the open issue lists on both repos before writing; none of these is a
 duplicate. The incident write-tool requests (#136, #143, #145, #153) are all about
