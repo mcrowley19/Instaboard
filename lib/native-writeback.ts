@@ -18,9 +18,10 @@
  * tag it already applied.
  */
 
-import { callDataHubTool } from "./mcp";
+import { callDataHubTool, isDemoMode } from "./mcp";
 import { datahubGraphQL, gmsReachable } from "./datahub-graphql";
-import type { DecayFinding, DecayReport, Handoff } from "./types";
+import { provenanceBlock } from "./structured-state";
+import type { DecayFinding, DecayReport, EntitySnapshot, Handoff } from "./types";
 
 /** Tag ids become the URN suffix, so keep it URN-safe; the display name carries the spaces. */
 export const STALE_RUNBOOK_TAG_ID = "StaleRunbook";
@@ -85,11 +86,35 @@ const RAISE_INCIDENT = `
   mutation raiseIncident($input: RaiseIncidentInput!) { raiseIncident(input: $input) }
 `;
 
+const UPDATE_INCIDENT = `
+  mutation updateIncident($urn: String!, $input: UpdateIncidentInput!) { updateIncident(urn: $urn, input: $input) }
+`;
+
+/**
+ * Who the incident goes to.
+ *
+ * The whole failure mode this tool exists for is a runbook naming somebody who
+ * has moved on. So the incident is assigned to whoever owns the dataset *today*,
+ * read from the catalog at validation time — which, in the owner-drift case,
+ * is precisely the person the runbook doesn't know about yet. DataHub's own
+ * subscription and notification machinery takes it from there.
+ */
+function assigneesFor(datasetUrn: string, live: Record<string, EntitySnapshot>): string[] {
+  return (live[datasetUrn]?.ownerUrns ?? []).filter((u) => u.startsWith("urn:li:corpuser:")).slice(0, 10);
+}
+
 function incidentTitle(handoff: Handoff): string {
   return `Stale runbook: ${handoff.title}`;
 }
 
-function incidentBody(handoff: Handoff, findings: DecayFinding[], documentUrn?: string): string {
+function incidentBody(
+  handoff: Handoff,
+  report: DecayReport,
+  findings: DecayFinding[],
+  datasetUrn: string,
+  documentUrn?: string,
+  proposal?: ProposalLink
+): string {
   const lines = [
     `The saved runbook "${handoff.title}" (recorded ${handoff.createdAt.slice(0, 10)} by ${handoff.author}) ` +
       `references this dataset, and ${findings.length === 1 ? "one of its steps" : `${findings.length} of its steps`} ` +
@@ -100,11 +125,26 @@ function incidentBody(handoff: Handoff, findings: DecayFinding[], documentUrn?: 
     lines.push(`• Step ${f.stepIndex + 1} (${f.stepTitle}), ${f.kind}: ${f.detail}`);
     if (f.remedy) lines.push(`  ${f.remedy}`);
   }
+
+  // The provenance chain: which claim, validated against which version, reading
+  // what now. This is the part that makes the incident checkable rather than
+  // something to take on faith.
+  const chain = provenanceBlock(report, datasetUrn);
+  if (chain) lines.push("", "Provenance — every claim this runbook makes about this dataset:", chain);
+
   lines.push("");
+  if (proposal?.summary) lines.push(`Proposed correction: ${proposal.summary}`);
+  if (proposal?.url) lines.push(`Review it here: ${proposal.url}`);
   if (documentUrn) lines.push(`Full validation note: ${documentUrn}`);
   lines.push("Raised automatically by instaboard's runbook decay sweep. Detection is a deterministic");
   lines.push("schema and health diff against the state captured when the runbook was recorded. No LLM judgement.");
   return lines.join("\n");
+}
+
+/** A correction waiting for review, linked from the incident so the fix is one click away. */
+export interface ProposalLink {
+  summary?: string;
+  url?: string;
 }
 
 /* ── Public API ───────────────────────────────────────────────────────── */
@@ -113,7 +153,7 @@ export interface NativeWriteBackReceipt {
   /** False when GMS never answered (demo mode), so nothing was attempted. */
   attempted: boolean;
   /** Incidents raised this run, plus any already-open ones we reused. */
-  incidents: { urn: string; datasetUrn: string; reused: boolean }[];
+  incidents: { urn: string; datasetUrn: string; reused: boolean; assignees: string[] }[];
   /** Datasets that carry the Stale Runbook tag after this run. */
   tagged: string[];
   errors: string[];
@@ -121,16 +161,20 @@ export interface NativeWriteBackReceipt {
 }
 
 /**
- * Raise a native Incident on every dataset a runbook breaks on. Tag every dataset
- * it drifted on.
+ * Raise a native Incident on every dataset a runbook breaks on, assigned to
+ * whoever owns that dataset now. Tag every dataset it drifted on.
  *
  * @param documentUrn the drift note's URN when one was written. The incident body
  *   links to it, so the two artifacts point at each other.
+ * @param live the snapshots this validation read, used to find the current owners.
+ * @param proposal a correction awaiting review, linked from the incident body.
  */
 export async function writeBackNative(
   handoff: Handoff,
   report: DecayReport,
-  documentUrn?: string
+  documentUrn?: string,
+  live: Record<string, EntitySnapshot> = {},
+  proposal?: ProposalLink
 ): Promise<NativeWriteBackReceipt> {
   const receipt: NativeWriteBackReceipt = {
     attempted: false,
@@ -142,8 +186,11 @@ export async function writeBackNative(
 
   if (report.severity === "ok" || report.findings.length === 0) return receipt;
 
-  // Demo mode answers MCP calls from a fixture and has no GMS behind it. Skip
-  // rather than fabricate a receipt for a write that never happened.
+  // Demo mode answers MCP calls from a fixture. Never write fixture-derived
+  // findings into a real catalog, even when one happens to be reachable — and
+  // when GMS genuinely isn't there, skip rather than fabricate a receipt for a
+  // write that never happened.
+  if (isDemoMode()) return receipt;
   if (!(await gmsReachable())) return receipt;
   receipt.attempted = true;
 
@@ -170,6 +217,8 @@ export async function writeBackNative(
 
   for (const [datasetUrn, findings] of brokenByUrn) {
     const title = incidentTitle(handoff);
+    const assignees = assigneesFor(datasetUrn, live);
+    const description = incidentBody(handoff, report, findings, datasetUrn, documentUrn, proposal);
 
     // Idempotency: a nightly sweep must not open a new incident every night.
     const open = await datahubGraphQL<{
@@ -177,7 +226,16 @@ export async function writeBackNative(
     }>(LIST_OPEN_INCIDENTS, { urn: datasetUrn });
     const existing = open.data?.dataset?.incidents?.incidents?.find((i) => i.title === title);
     if (existing) {
-      receipt.incidents.push({ urn: existing.urn, datasetUrn, reused: true });
+      // Refresh it rather than leaving a stale body: the drift may have grown
+      // since it was opened, and ownership may have moved again.
+      const updated = await datahubGraphQL(UPDATE_INCIDENT, {
+        urn: existing.urn,
+        input: { title, description, ...(assignees.length ? { assigneeUrns: assignees } : {}) },
+      });
+      if (updated.errors?.length) {
+        receipt.errors.push(`updateIncident(${existing.urn}): ${updated.errors.map((e) => e.message).join("; ")}`);
+      }
+      receipt.incidents.push({ urn: existing.urn, datasetUrn, reused: true, assignees });
       continue;
     }
 
@@ -187,10 +245,13 @@ export async function writeBackNative(
         type,
         ...(customType ? { customType } : {}),
         title,
-        description: incidentBody(handoff, findings, documentUrn),
+        description,
         resourceUrn: datasetUrn,
         // A runbook that would fail if followed is a real, but not paging, problem.
         priority: "MEDIUM",
+        // Land it on the person who owns the table today — in the owner-drift
+        // case, the one the runbook has never heard of.
+        ...(assignees.length ? { assigneeUrns: assignees } : {}),
       },
     });
 
@@ -200,7 +261,7 @@ export async function writeBackNative(
       );
       continue;
     }
-    receipt.incidents.push({ urn: raised.data.raiseIncident, datasetUrn, reused: false });
+    receipt.incidents.push({ urn: raised.data.raiseIncident, datasetUrn, reused: false, assignees });
   }
 
   return receipt;
