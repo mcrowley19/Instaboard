@@ -16,6 +16,7 @@
     "showcase:drill": "tsx scripts/showcase-drill.ts",
     "capture:replay": "tsx scripts/capture-replay.ts",
     "receipts:live": "tsx scripts/live-receipts.ts",
+    "receipts:extension": "tsx scripts/extension-receipt.ts",
     "seed": "uv run --with acryl-datahub scripts/seed_datahub.py",
     "datahub:up": "uv run --with acryl-datahub datahub docker quickstart",
     "datahub:down": "uv run --with acryl-datahub datahub docker quickstart --stop"

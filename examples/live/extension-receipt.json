@@ -1,0 +1,231 @@
+{
+  "capturedAt": "2026-08-02T16:12:28.913Z",
+  "backend": "http://localhost:3000",
+  "datahubUi": "http://localhost:9002",
+  "what": "The two requests extension/sidepanel.js makes, run against a live backend and a live DataHub.",
+  "entityDetection": {
+    "pageUrl": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Cb2fd91.order_entry_db.analytics.order_details%2CPROD)/Schema",
+    "detected": {
+      "entityType": "dataset",
+      "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+    },
+    "source": "extension/content.js URN_ROUTE_RE"
+  },
+  "chat": {
+    "request": {
+      "message": "What is this table, and what should I be careful about before using it?",
+      "messages": [],
+      "context": {
+        "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Cb2fd91.order_entry_db.analytics.order_details%2CPROD)/Schema",
+        "title": "order_details | Model",
+        "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "entityType": "dataset",
+        "selection": "cost_of_delivery"
+      }
+    },
+    "status": 200,
+    "toolCalls": [
+      {
+        "name": "get_entities",
+        "args": {
+          "urns": [
+            "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+          ]
+        }
+      },
+      {
+        "name": "get_lineage",
+        "args": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "upstream": false,
+          "max_results": 30
+        }
+      },
+      {
+        "name": "get_lineage",
+        "args": {
+          "max_results": 30,
+          "upstream": true,
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+        }
+      },
+      {
+        "name": "get_dataset_queries",
+        "args": {
+          "column": "cost_of_delivery",
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "count": 5
+        }
+      },
+      {
+        "name": "get_dataset_queries",
+        "args": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "count": 5
+        }
+      }
+    ],
+    "answer": "# `b2fd91.order_entry_db.analytics.order_details` (Snowflake)\n\n**What it is:** A denormalized analytical table (materialized via dbt) that joins 10+ source tables from the `order_entry` schema. Grain = **one row per order line item** (55+ columns). It’s the central hub for order analytics — customers, products, billing/shipping addresses, inventory, promotions, fulfillment status.\n\n**Domain:** Ecommerce Operations  \n**Data Product:** Promotions Performance (also part of Order Entry Analytics)  \n**Freshness SLA:** Daily | **Quality Score:** 97.5 | **Retention:** 1 year\n\n---\n\n## ⚠️ Critical things to know before using it\n\n### 1. **Heavy PII / Compliance surface**\n| Tag / Term | What it means |\n|---|---|\n| `PII` (glossary term) | Direct identifiers: `cust_first_name`, `cust_last_name`, `cust_email`, `phone_number`, `customer_id`, billing & shipping address lines, zipcodes, country |\n| `GDPR` (glossary term) | EU personal-data classification — same columns |\n| `SOC2 Auditable` | This table is in scope for SOC2 compliance reviews |\n| `PII_Data` (tag) | Explicit “special handling required” tag |\n\n**→ Access must be approved; avoid `SELECT *` in shared queries; mask or drop PII columns in downstream marts.**\n\n### 2. **Large & heavily queried** — tagged **💲 Large Table** + **📈 Most Queried**\n- Storage footprint is significant; scan costs add up fast.\n- **Write selective queries**: filter early on `order_date`, `customer_class`, `warehouse_id`, etc.\n- Consider the dbt incremental model `order_history` (`urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.ORDER_ENTRY_DB.analytics.order_history,PROD)`) for time-series work — it’s narrower and cheaper.\n\n### 3. **14 downstream consumers** — changes ripple widely\n| Platform | Examples |\n|---|---|\n| **dbt** | `order_history` (incremental model) |\n| **Looker** | `order-entry-looker.view.order_details` |\n| **Power BI** | 6+ datasets (Customer Analytics, Essential KPI, Geographic, Order Details, Product Analytics, Returns) |\n| **Tableau** | 4+ datasets |\n| **Snowflake** | `ORDER_HISTORY` table + 1 other |\n\n**Before altering schema / renaming columns / changing grain:** coordinate with owners (see below) and check each consumer’s lineage.\n\n### 4. **Ownership & escalation**\n| Role | Who |\n|---|---|\n| **Technical Owner (group)** | `DataHub SE Team` (`urn:li:corpGroup:b2fd91.1e0398a3-113f-475e-b6fc-32ab72a634d2`) |\n| **Technical Owners (individuals)** | Julia Novak (Data Quality Eng), David Kim (Data Scientist) |\n| **Data Stewards** | Same group + Julia, David |\n| **Escalation Contact** | **Ian Chen** — Director of Data Engineering (`urn:li:corpuser:b2fd91.EMP006`) |\n| **Business Owner (glossary: Order Total)** | Fiona Green (Technical Lead) |\n\n### 5. **Key glossary-defined metrics** (use these formulas)\n- **Order Total** → `SUM(order_total)` per order, `AVG(order_total)` for AOV\n- **Revenue by Customer Class** → `GROUP BY customer_class` + `SUM(order_total)`, `COUNT(DISTINCT order_id)`, `AVG(order_total)`\n\n### 6. **`cost_of_delivery` (the column you highlighted)**\n- Type: `FLOAT`, nullable\n- dbt docs: “Shipping and handling cost” (example: 12.99)\n- No dedicated glossary term — treat as a standard numeric measure. If you aggregate it, watch for nulls: `COALESCE(cost_of_delivery, 0)`.\n\n### 7. **No saved queries in catalog** — `get_dataset_queries` returned 0\n- No vetted SQL examples stored. Follow the glossary patterns above; ask the Data Platform team for approved query templates.\n\n---\n\n## Quick checklist before you write against this table\n- [ ] Do I need PII columns? If not, **exclude them explicitly**.\n- [ ] Am I filtering on a high-cardinality column early (`order_date`, `customer_id`, `warehouse_id`)?\n- [ ] Have I checked downstream Looker/Power BI/Tableau dashboards that might break?\n- [ ] Is there a narrower mart (`order_history`, a curated data product) that fits my use case better?\n- [ ] If I’m changing anything — ping **Ian Chen** and the **DataHub SE Team** first.\n\n---\n\nWant me to pull the exact dbt model SQL (from the upstream dbt entity) so you can see the join logic, or fetch the Looker/Power BI view definitions to understand how they expose this table?"
+  },
+  "handoff": {
+    "request": {
+      "title": "Reading the order detail table",
+      "author": "Michael",
+      "role": "Analytics Engineer",
+      "steps": [
+        {
+          "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Cb2fd91.order_entry_db.analytics.order_details%2CPROD)/Schema",
+          "title": "order_details | Model",
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "entityType": "dataset",
+          "note": "Start here. This is the certified wide order table, not the replica."
+        }
+      ]
+    },
+    "status": 200,
+    "toolCalls": [
+      {
+        "name": "get_entities",
+        "args": {
+          "urns": [
+            "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+          ]
+        }
+      },
+      {
+        "name": "get_dataset_queries",
+        "args": {
+          "source": "MANUAL",
+          "count": 5,
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+        }
+      },
+      {
+        "name": "get_dataset_queries",
+        "args": {
+          "count": 5,
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "source": "SYSTEM"
+        }
+      },
+      {
+        "name": "get_lineage",
+        "args": {
+          "max_hops": 3,
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+        }
+      }
+    ],
+    "runbook": {
+      "id": "reading-the-order-detail-table-msc00u1p",
+      "title": "Reading the order detail table",
+      "author": "Michael",
+      "role": "Analytics Engineer",
+      "summary": "This runbook guides you through the certified wide order table (order_details) — the authoritative denormalized view of orders, customers, products, promotions, and fulfillment. It covers key fields, ownership, PII handling, and how to query common metrics like order totals and revenue by customer class. The table is refreshed daily, has a 97.5% data quality score, and powers the Promotions Performance data product.",
+      "steps": [
+        {
+          "title": "Open the certified order_details table",
+          "instruction": "Navigate to the order_details table page and review the schema, focusing on the PII-marked columns (cust_email, phone_number, billing/shipping address fields, customer_id, names) and the key metric columns (order_total, line_total, discount_amount, discount_percent, customer_class).",
+          "why": "Michael noted: \"Start here. This is the certified wide order table, not the replica.\" The catalog confirms this is the authoritative denormalized view (materialized as a table) joining 10+ source tables, with a grain of one row per order line item. It carries the 'Authoritative Source' tag and 'Certified' glossary term, and is the core asset in the Promotions Performance data product.",
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Cb2fd91.order_entry_db.analytics.order_details%2CPROD)/Schema",
+          "sql": "-- Total revenue\nSELECT SUM(order_total) FROM order_entry_db.analytics.order_details;\n\n-- Average order value\nSELECT AVG(order_total) FROM order_entry_db.analytics.order_details;\n\n-- Revenue by customer class\nSELECT customer_class,\n       SUM(order_total) as total_revenue,\n       COUNT(DISTINCT order_id) as order_count,\n       AVG(order_total) as avg_order_value\nFROM order_entry_db.analytics.order_details\nGROUP BY customer_class\nORDER BY total_revenue DESC;\n\n-- Revenue by date\nSELECT order_date, SUM(order_total)\nFROM order_entry_db.analytics.order_details\nGROUP BY order_date;",
+          "tips": "Owners: Technical Owner = DataHub SE Team (group); Data Stewards = David Kim (david.kim@example.com) and Julia Novak (julia.novak@example.com). Business escalation contact = Ian Chen (ian.chen@example.com, Director of Data Engineering). PII glossary term applied at table level; multiple columns have explicit PII tags (cust_email, phone_number, billing_address_line1/2, billing_zipcode, cust_first_name, cust_last_name, customer_id, shipping_address_line1/2, shipping_country, shipping_town_city, shipping_zipcode). Handle per privacy policy. Tags: Large Table (storage footprint), Most Queried (high usage). Data Freshness SLA = Daily; Data Quality Score = 97.5; Retention = 1 year. Domain = Ecommerce Operations. Cost Center = Marketing. No active incidents (health check PASS). No manual or system queries stored in catalog — use the glossary-term SQL patterns above as starting points."
+        }
+      ],
+      "recorded": [
+        {
+          "url": "http://localhost:9002/dataset/urn%3Ali%3Adataset%3A(urn%3Ali%3AdataPlatform%3Asnowflake%2Cb2fd91.order_entry_db.analytics.order_details%2CPROD)/Schema",
+          "title": "order_details | Model",
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "entityType": "dataset",
+          "note": "Start here. This is the certified wide order table, not the replica."
+        }
+      ],
+      "createdAt": "2026-08-02T16:12:28.573Z",
+      "snapshots": {
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)": {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "exists": true,
+          "fields": [
+            "cust_email",
+            "phone_number",
+            "billing_address_line1",
+            "billing_address_line2",
+            "billing_country",
+            "billing_region",
+            "billing_town_city",
+            "billing_zipcode",
+            "category_id",
+            "category_name",
+            "condition",
+            "cost_of_delivery",
+            "cust_first_name",
+            "cust_last_name",
+            "customer_class",
+            "customer_id",
+            "delivery_status",
+            "delivery_type",
+            "discount_amount",
+            "discount_percent",
+            "dispatch_date",
+            "estimated_delivery",
+            "gift_wrap",
+            "line_item_id",
+            "line_total",
+            "list_price",
+            "order_date",
+            "order_id",
+            "order_mode",
+            "order_status",
+            "order_total",
+            "payment_method_code",
+            "product_description",
+            "product_id",
+            "product_name",
+            "product_status",
+            "promotion_description",
+            "promotion_id",
+            "promotion_name",
+            "quantity",
+            "quantity_on_hand",
+            "return_date",
+            "return_status",
+            "shipping_address_line1",
+            "shipping_address_line2",
+            "shipping_country",
+            "shipping_region",
+            "shipping_town_city",
+            "shipping_zipcode",
+            "stock_status",
+            "unit_price",
+            "updated_at",
+            "wait_till_complete_yn",
+            "warehouse_id",
+            "warehouse_name"
+          ],
+          "owners": [
+            "DataHub SE Team",
+            "b2fd91.1e0398a3-113f-475e-b6fc-32ab72a634d2",
+            "urn:li:corpGroup:b2fd91.1e0398a3-113f-475e-b6fc-32ab72a634d2",
+            "David Kim",
+            "david.kim@example.com",
+            "urn:li:corpuser:b2fd91.brock1@example.com",
+            "Julia Novak",
+            "julia.novak@example.com",
+            "urn:li:corpuser:b2fd91.jonny1@example.com"
+          ],
+          "deprecated": false,
+          "openIncidents": 0,
+          "failingAssertions": 0,
+          "capturedAt": "2026-08-02T16:12:27.828Z",
+          "name": "ORDER_DETAILS"
+        }
+      },
+      "datahub": {
+        "saved": true,
+        "detail": "{\"success\":true,\"urn\":\"urn:li:document:shared-e3a81563-0f42-44c6-aa6a-f23a9cb7c686\",\"message\":\"Successfully created document: Handoff: Reading the order detail table\",\"author\":\"__datahub_system\"}"
+      }
+    }
+  }
+}
