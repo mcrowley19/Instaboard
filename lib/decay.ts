@@ -1,6 +1,16 @@
 import { callDataHubTool } from "./mcp";
 import { datahubGraphQL } from "./datahub-graphql";
-import type { EntitySnapshot, DecayFinding, DecayReport, Handoff } from "./types";
+import {
+  chainLine,
+  displayName,
+  extractClaims,
+  humanOwners,
+  ownersNamedIn,
+  stepReferences,
+  verifyClaims,
+  versionOf,
+} from "./provenance";
+import type { ClaimKind, DecayFinding, DecayReport, EntitySnapshot, Handoff, RunbookClaim } from "./types";
 
 /**
  * Runbook decay detection.
@@ -91,8 +101,11 @@ function countByStatus(node: unknown, key: string, status: string): number {
  * Sharma", never "ping urn:li:corpuser:b2fd91.patrick1@example.com". Without it,
  * owner drift can never be detected against a live catalog.
  */
-function ownerIdentities(parsed: unknown): string[] {
+function ownerIdentities(parsed: unknown): { identities: string[]; urns: string[] } {
   const out: string[] = [];
+  // Kept separately from the display identities: assigning a DataHub incident to
+  // the current owner needs the actual corpuser URN, and "Priya Sharma" is not one.
+  const urns: string[] = [];
 
   // `get_entities` returns a bare array (live GMS) or `{entities: [...]}` (demo
   // fixture). Read ownership off the entity root only. A deep scan also picks up
@@ -115,21 +128,26 @@ function ownerIdentities(parsed: unknown): string[] {
     for (const entry of Array.isArray(list) ? list : list ? [list] : []) {
       if (typeof entry === "string") {
         out.push(entry);
+        if (entry.startsWith("urn:li:corp")) urns.push(entry);
         continue;
       }
       if (!entry || typeof entry !== "object") continue;
-      const owner = ((entry as Record<string, unknown>).owner ?? entry) as Record<string, unknown>;
-      if (typeof owner === "string") {
-        out.push(owner);
+      const raw: unknown = (entry as Record<string, unknown>).owner ?? entry;
+      // Some shapes inline the owner as a bare URN string rather than an object.
+      if (typeof raw === "string") {
+        out.push(raw);
+        if (raw.startsWith("urn:li:corp")) urns.push(raw);
         continue;
       }
+      const owner = raw as Record<string, unknown>;
       const props = (owner.properties ?? owner.info ?? {}) as Record<string, unknown>;
       for (const candidate of [props.displayName, owner.username, owner.name, props.email, owner.urn]) {
         if (typeof candidate === "string" && candidate) out.push(candidate);
       }
+      if (typeof owner.urn === "string" && owner.urn.startsWith("urn:li:corp")) urns.push(owner.urn);
     }
   }
-  return [...new Set(out)];
+  return { identities: [...new Set(out)], urns: [...new Set(urns)] };
 }
 
 /**
@@ -147,46 +165,68 @@ function applyHealthSummary(parsed: unknown, snapshot: EntitySnapshot): void {
     // marker string ("ACTIVE_INCIDENTS"); the `message` carries the real count
     // ("1 active incident", "2 of 3 assertions are failing").
     const causes = Array.isArray(e.causes) ? e.causes.filter((c): c is string => typeof c === "string") : [];
-    const urnCauses = causes.filter((c) => c.startsWith("urn:li:"));
+    // Discount the assertions this tool reports itself (see discountSelfWrittenState).
+    const urnCauses = causes.filter((c) => c.startsWith("urn:li:") && !isSelfWritten(c));
     const fromMessage = Number(String(e.message ?? "").match(/(\d+)/)?.[1] ?? 0);
-    const count = urnCauses.length || fromMessage || 1;
+    const count = causes.some((c) => c.startsWith("urn:li:")) ? urnCauses.length : fromMessage || 1;
     const type = String(e.type ?? "").toUpperCase();
     if (type === "ASSERTIONS") snapshot.failingAssertions = Math.max(snapshot.failingAssertions, count);
     if (type === "INCIDENTS") snapshot.openIncidents = Math.max(snapshot.openIncidents, count);
   }
 }
 
+/** Assertions instaboard reports itself carry a recognisable URN prefix. */
+export const SELF_ASSERTION_PREFIX = "urn:li:assertion:instaboard-";
+
+function isSelfWritten(urn: string): boolean {
+  return urn.startsWith(SELF_ASSERTION_PREFIX);
+}
+
 /**
  * Don't let the tool's own write-back read back as new drift.
  *
- * When a sweep finds a broken runbook it raises an Incident on the dataset. The
- * next sweep then sees an open incident that wasn't there at record time and
- * reports it as fresh drift. instaboard flagging instaboard, every night, for
- * ever. So discount the incidents this tool raised. They are titled
- * "Stale runbook: <runbook>".
+ * When a sweep finds a broken runbook it raises an Incident on the dataset and
+ * reports a FAILING assertion against it. The next sweep then sees an open
+ * incident and a failing assertion that weren't there at record time and reports
+ * both as fresh drift. instaboard flagging instaboard, every night, for ever. So
+ * discount the state this tool wrote: incidents titled "Stale runbook: <runbook>"
+ * and assertions under `urn:li:assertion:instaboard-`.
  *
  * This has to go over GraphQL. The entity's inlined health summary reports
  * `causes: ["ACTIVE_INCIDENTS"]` rather than the incident URNs, and reading an
  * incident by URN through `get_entities` returns "exists but no data could be
  * retrieved", because incidents are not readable over MCP today. Demo mode has no
- * GMS behind the fixture, so the call fails fast and the count is left alone.
+ * GMS behind the fixture, so the call fails fast and the counts are left alone.
  */
-async function discountSelfRaisedIncidents(snapshot: EntitySnapshot): Promise<void> {
-  if (snapshot.openIncidents === 0) return;
+async function discountSelfWrittenState(snapshot: EntitySnapshot): Promise<void> {
+  if (snapshot.openIncidents === 0 && snapshot.failingAssertions === 0) return;
 
   const res = await datahubGraphQL<{
-    dataset: { incidents: { incidents: { title: string }[] } } | null;
+    dataset: {
+      incidents: { incidents: { title: string }[] } | null;
+      assertions: { assertions: { urn: string; runEvents: { failed: number } | null }[] } | null;
+    } | null;
   }>(
     `query($urn: String!) {
-       dataset(urn: $urn) { incidents(state: ACTIVE, start: 0, count: 50) { incidents { title } } }
+       dataset(urn: $urn) {
+         incidents(state: ACTIVE, start: 0, count: 50) { incidents { title } }
+         assertions(start: 0, count: 50) { assertions { urn runEvents(limit: 1) { failed } } }
+       }
      }`,
     { urn: snapshot.urn }
   );
 
   const open = res.data?.dataset?.incidents?.incidents;
-  if (!open) return;
-  const ours = open.filter((i) => /^stale runbook:/i.test(i.title ?? "")).length;
-  if (ours > 0) snapshot.openIncidents = Math.max(0, snapshot.openIncidents - ours);
+  if (open) {
+    const ours = open.filter((i) => /^stale runbook:/i.test(i.title ?? "")).length;
+    if (ours > 0) snapshot.openIncidents = Math.max(0, snapshot.openIncidents - ours);
+  }
+
+  const assertions = res.data?.dataset?.assertions?.assertions;
+  if (assertions) {
+    const ours = assertions.filter((a) => isSelfWritten(a.urn) && (a.runEvents?.failed ?? 0) > 0).length;
+    if (ours > 0) snapshot.failingAssertions = Math.max(0, snapshot.failingAssertions - ours);
+  }
 }
 
 /**
@@ -206,6 +246,9 @@ export async function snapshotEntity(urn: string): Promise<EntitySnapshot> {
     failingAssertions: 0,
     capturedAt,
   };
+  // A missing entity still gets a version, so "it was there, now it isn't" is a
+  // fingerprint change rather than a gap in the chain.
+  base.version = versionOf(base);
 
   const entityResult = await callDataHubTool("get_entities", { urns: [urn] });
   if (entityResult.isError) return base;
@@ -220,18 +263,26 @@ export async function snapshotEntity(urn: string): Promise<EntitySnapshot> {
 
   const names = flatStrings(collect(parsed, "name"));
   const owners = ownerIdentities(parsed);
+  // The deprecation note names the replacement dataset far more often than not,
+  // which is what makes an automatic "point this step somewhere else" proposal
+  // possible instead of just a warning.
+  const note = collect(parsed, "deprecation")
+    .map((d) => (d && typeof d === "object" ? (d as Record<string, unknown>).note : undefined))
+    .find((n): n is string => typeof n === "string" && n.trim().length > 0);
   const snapshot: EntitySnapshot = {
     ...base,
     exists: true,
     name: names[0],
     fields: [...new Set(flatStrings(collect(parsed, "fieldPath")))],
-    owners,
+    owners: owners.identities,
+    ownerUrns: owners.urns,
     deprecated: collect(parsed, "deprecated").some((d) => d === true || (d && typeof d === "object")),
+    ...(note ? { deprecationNote: note.trim() } : {}),
     openIncidents: countByStatus(parsed, "incidents", "open") + countByStatus(parsed, "openIncidents", "open"),
     failingAssertions: countByStatus(parsed, "assertions", "fail"),
   };
   applyHealthSummary(parsed, snapshot);
-  await discountSelfRaisedIncidents(snapshot);
+  await discountSelfWrittenState(snapshot);
 
   // A dedicated health tool, where one exists, is authoritative over whatever
   // happens to be inlined on the entity. The live `mcp-server-datahub` has no
@@ -247,6 +298,9 @@ export async function snapshotEntity(urn: string): Promise<EntitySnapshot> {
     }
   }
 
+  // Fingerprint last, once every fact is in: the version has to cover the
+  // snapshot as it will be stored, or a pin points at a state nobody can recompute.
+  snapshot.version = versionOf(snapshot);
   return snapshot;
 }
 
@@ -259,22 +313,6 @@ export async function snapshotHandoff(steps: { urn?: string }[]): Promise<Record
 
 /* ── Decay detection ──────────────────────────────────────────────────── */
 
-/** Does this step's prose or SQL actually depend on the given identifier? */
-function stepReferences(step: { instruction: string; why: string; sql?: string; tips?: string }, token: string): boolean {
-  const haystack = [step.instruction, step.why, step.sql ?? "", step.tips ?? ""].join(" ");
-  return new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(haystack);
-}
-
-/** Owner display names the step tells the successor to contact. */
-function ownersNamedIn(step: { why: string; tips?: string; instruction: string }, knownOwners: string[]): string[] {
-  const haystack = [step.instruction, step.why, step.tips ?? ""].join(" ");
-  return knownOwners.filter((owner) => {
-    // Owner strings look like "Priya Patel (Payments Data Lead, urn:li:corpuser:priya.patel)".
-    const display = owner.split("(")[0].trim();
-    return display.length > 2 && haystack.includes(display);
-  });
-}
-
 const RANK: Record<DecayFinding["severity"], number> = { ok: 0, warning: 1, broken: 2 };
 
 /**
@@ -286,9 +324,37 @@ const RANK: Record<DecayFinding["severity"], number> = { ok: 0, warning: 1, brok
  * deprecated tables, open incidents, and stale owner references.
  */
 export async function detectDecay(handoff: Handoff): Promise<DecayReport> {
+  return (await detectDecayWithState(handoff)).report;
+}
+
+/**
+ * Detection, plus the live snapshots it read.
+ *
+ * The remediator needs the current schema and owner list to work out *what to
+ * put instead* — a dropped `net_amount_usd` can only be proposed as a rename to
+ * `net_revenue_usd` if you can see the columns that exist now. Handing the same
+ * read back out avoids a second pass over the catalog to recover it.
+ */
+export async function detectDecayWithState(
+  handoff: Handoff
+): Promise<{ report: DecayReport; live: Record<string, EntitySnapshot> }> {
   const findings: DecayFinding[] = [];
   const live = await snapshotHandoff(handoff.steps);
   const recorded = handoff.snapshots ?? {};
+
+  // The claim layer runs alongside detection rather than replacing it: detection
+  // decides severity and what to say, claims record what was checked and against
+  // which version of which aspect. Findings are joined back to their claim below.
+  const claims = extractClaims(handoff, recorded, live);
+  const verdicts = verifyClaims(claims, live);
+
+  // Findings carry the id of the claim they broke, so a reader can walk from
+  // "step 2 is wrong" back to the exact fact and the version it last held at.
+  const claimIndex = new Map(claims.map((c) => [`${c.stepIndex}|${c.kind}|${c.subject.toLowerCase()}`, c.id]));
+  const claimRef = (stepIndex: number, kind: ClaimKind, subject: string): { claimId?: string } => {
+    const id = claimIndex.get(`${stepIndex}|${kind}|${subject.toLowerCase()}`);
+    return id ? { claimId: id } : {};
+  };
 
   handoff.steps.forEach((step, i) => {
     if (!step.urn) return;
@@ -299,6 +365,7 @@ export async function detectDecay(handoff: Handoff): Promise<DecayReport> {
     if (!now || !now.exists) {
       findings.push({
         ...where,
+        ...claimRef(i, "entity-exists", step.urn),
         severity: "broken",
         kind: "entity-missing",
         detail: `\`${step.urn}\` is no longer in the catalog.`,
@@ -314,6 +381,7 @@ export async function detectDecay(handoff: Handoff): Promise<DecayReport> {
         if (!stepReferences(step, field)) continue;
         findings.push({
           ...where,
+          ...claimRef(i, "column-exists", field),
           severity: "broken",
           kind: "column-missing",
           detail: `Column \`${field}\` is referenced by this step but no longer exists on ${now.name ?? step.urn}.`,
@@ -325,6 +393,7 @@ export async function detectDecay(handoff: Handoff): Promise<DecayReport> {
     if (now.deprecated && !then?.deprecated) {
       findings.push({
         ...where,
+        ...claimRef(i, "not-deprecated", step.urn),
         severity: "broken",
         kind: "newly-deprecated",
         detail: `${now.name ?? step.urn} has been deprecated since this runbook was written.`,
@@ -333,6 +402,7 @@ export async function detectDecay(handoff: Handoff): Promise<DecayReport> {
     } else if (now.deprecated) {
       findings.push({
         ...where,
+        ...claimRef(i, "not-deprecated", step.urn),
         severity: "warning",
         kind: "deprecated",
         detail: `${now.name ?? step.urn} is deprecated.`,
@@ -343,6 +413,7 @@ export async function detectDecay(handoff: Handoff): Promise<DecayReport> {
     if (now.openIncidents > (then?.openIncidents ?? 0)) {
       findings.push({
         ...where,
+        ...claimRef(i, "healthy", step.urn),
         severity: "warning",
         kind: "new-incident",
         detail: `${now.name ?? step.urn} has ${now.openIncidents} open incident${now.openIncidents === 1 ? "" : "s"}${
@@ -355,6 +426,7 @@ export async function detectDecay(handoff: Handoff): Promise<DecayReport> {
     if (now.failingAssertions > (then?.failingAssertions ?? 0)) {
       findings.push({
         ...where,
+        ...claimRef(i, "healthy", step.urn),
         severity: "warning",
         kind: "failing-assertion",
         detail: `${now.name ?? step.urn} has ${now.failingAssertions} failing assertion${
@@ -367,7 +439,7 @@ export async function detectDecay(handoff: Handoff): Promise<DecayReport> {
     // "Ping Mike about the dbt job" — but Mike no longer owns the dataset.
     const namedThen = then?.exists ? ownersNamedIn(step, then.owners) : [];
     for (const owner of namedThen) {
-      const display = owner.split("(")[0].trim();
+      const display = displayName(owner);
       // Live DataHub renders owners as usernames ("mike.rodriguez"), snapshots
       // may hold display names ("Mike Rodriguez") — compare normalized.
       const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -375,11 +447,12 @@ export async function detectDecay(handoff: Handoff): Promise<DecayReport> {
       if (!stillOwns) {
         findings.push({
           ...where,
+          ...claimRef(i, "owner-current", display),
           severity: "warning",
           kind: "owner-changed",
           detail: `This step says to contact ${display}, who no longer owns ${now.name ?? step.urn}.`,
-          remedy: `Current owner${now.owners.length === 1 ? "" : "s"}: ${
-            now.owners.map((o) => o.split("(")[0].trim()).join(", ") || "none listed"
+          remedy: `Current owner${humanOwners(now.owners).length === 1 ? "" : "s"}: ${
+            humanOwners(now.owners).join(", ") || "none listed"
           }.`,
         });
       }
@@ -391,7 +464,7 @@ export async function detectDecay(handoff: Handoff): Promise<DecayReport> {
     "ok"
   );
 
-  return {
+  const report: DecayReport = {
     handoffId: handoff.id,
     checkedAt: new Date().toISOString(),
     severity,
@@ -399,7 +472,18 @@ export async function detectDecay(handoff: Handoff): Promise<DecayReport> {
     entitiesChecked: Object.keys(live).length,
     hadSnapshot: Object.keys(recorded).length > 0,
     findings,
+    claims,
+    verdicts,
+    versions: Object.fromEntries(Object.entries(live).map(([urn, snap]) => [urn, snap.version ?? versionOf(snap)])),
   };
+
+  return { report, live };
+}
+
+/** Look a claim up by id — findings carry the id, consumers want the claim. */
+export function claimById(report: DecayReport, claimId?: string): RunbookClaim | undefined {
+  if (!claimId) return undefined;
+  return report.claims?.find((c) => c.id === claimId);
 }
 
 /* ── Write-back with receipt ──────────────────────────────────────────── */
@@ -470,7 +554,41 @@ export function decayToMarkdown(handoff: Handoff, report: DecayReport): string {
       lines.push(`## ${icon} Step ${f.stepIndex + 1}: ${f.stepTitle}`, "");
       lines.push(`**${f.kind}** — ${f.detail}`, "");
       if (f.remedy) lines.push(f.remedy, "");
+      const claim = claimById(report, f.claimId);
+      const pinned = claim?.validatedAgainst;
+      if (pinned) {
+        const now = report.versions?.[f.urn]?.aspects[pinned.aspect];
+        lines.push(
+          `<sub>Provenance: this step's claim that ${claim.statement.replace(/\.$/, "")} was validated on ` +
+            `${pinned.at.slice(0, 10)} against \`${pinned.aspect}@${pinned.aspectVersion}\`; that aspect now reads ` +
+            `\`${pinned.aspect}@${now ?? "unreadable"}\`. Claim id \`${claim.id}\`.</sub>`,
+          ""
+        );
+      }
     }
+  }
+
+  // The claims that still hold matter as much as the ones that broke: they are
+  // the part of the runbook the successor can follow without re-checking.
+  const verdicts = report.verdicts ?? [];
+  if (verdicts.length) {
+    const holds = verdicts.filter((v) => v.status === "holds").length;
+    const unchanged = verdicts.filter((v) => v.aspectUnchanged).length;
+    lines.push(
+      "## Provenance",
+      "",
+      `${verdicts.length} catalog claim${verdicts.length === 1 ? "" : "s"} in this runbook, each pinned to the ` +
+        `version of the catalog aspect it was validated against. ${holds} still hold${holds === 1 ? "s" : ""}; ` +
+        `${unchanged} sit on aspects that have not changed at all since the runbook was recorded.`,
+      "",
+      "```",
+      ...(report.claims ?? []).map((c) => {
+        const v = verdicts.find((x) => x.claimId === c.id);
+        return v ? chainLine(c, v) : `? step ${c.stepIndex + 1} · ${c.statement} — not re-checked`;
+      }),
+      "```",
+      ""
+    );
   }
 
   lines.push("---", "_Validated automatically by instaboard against the DataHub catalog._");
