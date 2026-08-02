@@ -66,6 +66,26 @@ export async function runAgent(
     turns.push({ kind: "tool_results", results });
   }
 
+  // The loop can run out of iterations still holding tool results and no answer
+  // — the model kept exploring the catalog until the budget ran out. Returning
+  // empty then is the worst possible outcome: the work was done and thrown away.
+  // Ask once more with the tools removed, which forces a final answer from what
+  // it already gathered.
+  if (!finalText.trim() && turns.some((t) => t.kind === "tool_results")) {
+    const closing = await runLLMTurn(
+      config,
+      system +
+        "\n\nYou have gathered enough from the catalog. Answer the user's question now, " +
+        "from the tool results above. Do not request more data.",
+      turns,
+      []
+    );
+    if (closing.text) {
+      emit({ type: "text", text: closing.text });
+      finalText = closing.text;
+    }
+  }
+
   emit({ type: "done" });
   return finalText;
 }
