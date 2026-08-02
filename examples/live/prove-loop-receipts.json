@@ -1,24 +1,25 @@
 {
-  "startedAt": "2026-08-02T20:43:50.752Z",
-  "finishedAt": "2026-08-02T20:45:00.761Z",
+  "startedAt": "2026-08-02T21:02:06.045Z",
+  "finishedAt": "2026-08-02T21:03:13.696Z",
   "gms": "http://localhost:8080",
-  "catalog": "the sample Northbeam catalog ingested by scripts/seed_datahub.py",
+  "catalog": "the sample catalog this repo seeds with scripts/seed_datahub.py",
+  "catalogProfile": "northbeam",
   "method": "A runbook was captured against the live catalog and snapshotted through the same code path the app uses. The catalog was then changed through DataHub's own write APIs: a column renamed in schemaMetadata, a table deprecated via updateDeprecation, an owner removed via the MCP server's remove_owners. The decay engine was told none of it.",
   "breakingChanges": [
     {
       "kind": "column-renamed",
       "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
-      "detail": "Renamed fct_revenue.net_amount_usd to net_revenue_usd — the column step 2's SQL sums."
+      "detail": "Renamed fct_revenue.net_amount_usd to net_revenue_usd — a column the runbook's SQL selects."
     },
     {
       "kind": "deprecated",
       "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
-      "detail": "Deprecated mrr_monthly, which step 3 tells you to reconcile against."
+      "detail": "Deprecated mrr_monthly, which the runbook routes you to."
     },
     {
       "kind": "owner-removed",
       "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
-      "detail": "Removed Mike Rodriguez as an owner of fct_revenue, whom step 2 tells you to ping."
+      "detail": "Removed Mike Rodriguez as an owner of fct_revenue, whom the runbook names."
     }
   ],
   "checks": [
@@ -30,7 +31,7 @@
     },
     {
       "phase": "ingest",
-      "what": "sample catalog is in the catalog",
+      "what": "northbeam catalog is in the catalog",
       "passed": true,
       "detail": "fct_revenue resolves in DataHub"
     },
@@ -116,7 +117,7 @@
       "phase": "write-back",
       "what": "a drift note is in the catalog",
       "passed": true,
-      "detail": "urn:li:document:shared-056f4c81-9ffe-4a94-b477-7654b5c53bff"
+      "detail": "urn:li:document:shared-a59fc529-25ab-4942-8849-964354752d48"
     },
     {
       "phase": "write-back",
@@ -138,9 +139,9 @@
     },
     {
       "phase": "write-back",
-      "what": "an incident is raised and assigned to the current owner",
+      "what": "every incident on an owned dataset reaches its current owner",
       "passed": true,
-      "detail": "88bdde80effa → urn:li:corpuser:priya.patel; 58b16698a813 → urn:li:corpuser:priya.patel"
+      "detail": "fct_revenue → urn:li:corpuser:priya.patel; mrr_monthly → urn:li:corpuser:priya.patel"
     },
     {
       "phase": "propose",
@@ -253,7 +254,7 @@
           "remedy": "Point this step at the replacement dataset named in DataHub."
         }
       ],
-      "documentUrn": "urn:li:document:shared-056f4c81-9ffe-4a94-b477-7654b5c53bff",
+      "documentUrn": "urn:li:document:shared-a59fc529-25ab-4942-8849-964354752d48",
       "assertions": [
         {
           "urn": "urn:li:assertion:instaboard-f80ab7b3a1306fa23998",
@@ -293,17 +294,17 @@
       ],
       "incidents": [
         {
-          "urn": "urn:li:incident:57ff45c3-e9b7-497a-be98-88bdde80effa",
+          "urn": "urn:li:incident:e2eaa122-30ec-413b-92bd-700fda58f1f1",
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
-          "reused": true,
+          "reused": false,
           "assignees": [
             "urn:li:corpuser:priya.patel"
           ]
         },
         {
-          "urn": "urn:li:incident:0da3de32-4a98-4ba1-9cfa-58b16698a813",
+          "urn": "urn:li:incident:540f17be-e44f-4eeb-9375-02b6299af040",
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
-          "reused": true,
+          "reused": false,
           "assignees": [
             "urn:li:corpuser:priya.patel"
           ]
@@ -321,7 +322,7 @@
             "kind": "column-rename",
             "from": "net_amount_usd",
             "to": "net_revenue_usd",
-            "rationale": "`net_revenue_usd` is on fct_revenue now and was not when this runbook was recorded, and it is the closest match to `net_amount_usd` (0.64).",
+            "rationale": "`net_revenue_usd` is on fct_revenue now and was not when this runbook was recorded, and it is the closest match to `net_amount_usd` (0.65).",
             "confidence": "medium",
             "claimId": "column-exists:c1d447df18e7",
             "occurrences": 3

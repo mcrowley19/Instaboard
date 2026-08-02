@@ -1,0 +1,382 @@
+{
+  "startedAt": "2026-08-02T21:00:19.202Z",
+  "finishedAt": "2026-08-02T21:02:00.245Z",
+  "gms": "http://localhost:8080",
+  "catalog": "showcase-ecommerce, the demo datapack DataHub publishes (1,065 entities)",
+  "catalogProfile": "showcase",
+  "method": "A runbook was captured against the live catalog and snapshotted through the same code path the app uses. The catalog was then changed through DataHub's own write APIs: a column renamed in schemaMetadata, a table deprecated via updateDeprecation, an owner removed via the MCP server's remove_owners. The decay engine was told none of it.",
+  "breakingChanges": [
+    {
+      "kind": "column-renamed",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+      "detail": "Renamed order_details.cost_of_delivery to delivery_cost_usd — a column the runbook's SQL selects."
+    },
+    {
+      "kind": "deprecated",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+      "detail": "Deprecated order_history, which the runbook routes you to."
+    },
+    {
+      "kind": "owner-removed",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+      "detail": "Removed Priya Sharma as an owner of products, whom the runbook names."
+    }
+  ],
+  "checks": [
+    {
+      "phase": "datahub",
+      "what": "DataHub is up",
+      "passed": true,
+      "detail": "GMS answering at http://localhost:8080"
+    },
+    {
+      "phase": "ingest",
+      "what": "showcase catalog is in the catalog",
+      "passed": true,
+      "detail": "order_details resolves in DataHub"
+    },
+    {
+      "phase": "capture",
+      "what": "runbook captured with a catalog baseline",
+      "passed": true,
+      "detail": "3 entities snapshotted, 3 resolved"
+    },
+    {
+      "phase": "capture",
+      "what": "every snapshot carries a recomputable version",
+      "passed": true,
+      "detail": "ORDER_DETAILS@214214e38bf6, ORDER_HISTORY@574d60e4d127, products@722cfaee9b5f"
+    },
+    {
+      "phase": "validate",
+      "what": "no drift reported",
+      "passed": true,
+      "detail": "1 runbook checked, 0 drifted"
+    },
+    {
+      "phase": "validate",
+      "what": "every catalog claim holds",
+      "passed": true,
+      "detail": "19/19 claims hold"
+    },
+    {
+      "phase": "validate",
+      "what": "the runbook's assertion is passing in DataHub",
+      "passed": true,
+      "detail": "b278999326f7=SUCCESS, b72ffd0598d4=SUCCESS, ee42329c3599=SUCCESS"
+    },
+    {
+      "phase": "validate",
+      "what": "validated-against pins are written to the catalog",
+      "passed": true,
+      "detail": "9 pins, 6 pins, 4 pins"
+    },
+    {
+      "phase": "break",
+      "what": "breaking changes applied through DataHub's own APIs",
+      "passed": true,
+      "detail": "3/3 applied"
+    },
+    {
+      "phase": "revalidate",
+      "what": "the runbook is reported broken",
+      "passed": true,
+      "detail": "1 broken of 1"
+    },
+    {
+      "phase": "revalidate",
+      "what": "the renamed column is caught",
+      "passed": true,
+      "detail": "Column `cost_of_delivery` is referenced by this step but no longer exists on ORDER_DETAILS."
+    },
+    {
+      "phase": "revalidate",
+      "what": "the deprecation is caught",
+      "passed": true,
+      "detail": "ORDER_HISTORY has been deprecated since this runbook was written."
+    },
+    {
+      "phase": "revalidate",
+      "what": "the owner change is caught",
+      "passed": true,
+      "detail": "This step says to contact Priya Sharma, who no longer owns products."
+    },
+    {
+      "phase": "revalidate",
+      "what": "every finding names the claim it broke",
+      "passed": true,
+      "detail": "3/3 findings carry a claim id"
+    },
+    {
+      "phase": "revalidate",
+      "what": "broken claims moved the aspect they were pinned to",
+      "passed": true,
+      "detail": "3 of 19 claims broken, 16 still hold"
+    },
+    {
+      "phase": "write-back",
+      "what": "a drift note is in the catalog",
+      "passed": true,
+      "detail": "urn:li:document:shared-b0c115ce-89e1-4e4c-9d08-682b0fc57a45"
+    },
+    {
+      "phase": "write-back",
+      "what": "the runbook's assertion is now FAILING in DataHub",
+      "passed": true,
+      "detail": "b278999326f7=FAILURE, b72ffd0598d4=FAILURE, ee42329c3599=SUCCESS"
+    },
+    {
+      "phase": "write-back",
+      "what": "the specific catalog change is recorded as structured state",
+      "passed": true,
+      "detail": "1 drift value(s), 1 drift value(s), 1 drift value(s)"
+    },
+    {
+      "phase": "write-back",
+      "what": "drifted datasets are tagged",
+      "passed": true,
+      "detail": "3 tagged"
+    },
+    {
+      "phase": "write-back",
+      "what": "every incident on an owned dataset reaches its current owner",
+      "passed": true,
+      "detail": "order_details → urn:li:corpuser:b2fd91.brock1@example.com, urn:li:corpuser:b2fd91.jonny1@example.com; order_history → unassigned (0 owners)"
+    },
+    {
+      "phase": "propose",
+      "what": "a correction is proposed for the renamed column",
+      "passed": true,
+      "detail": "cost_of_delivery→delivery_cost_usd, ORDER_HISTORY→order_entry_db.analytics.order_details, Priya Sharma→Data Platform Team"
+    },
+    {
+      "phase": "propose",
+      "what": "a correction is proposed for the departed owner",
+      "passed": true,
+      "detail": "Priya Sharma → Data Platform Team"
+    },
+    {
+      "phase": "propose",
+      "what": "the deprecated table is repointed at its named replacement",
+      "passed": true,
+      "detail": "order_entry_db.analytics.order_details"
+    },
+    {
+      "phase": "propose",
+      "what": "the correction comes out as a reviewable diff",
+      "passed": true,
+      "detail": "58 diff lines"
+    },
+    {
+      "phase": "propose",
+      "what": "the review goes to whoever owns the data now",
+      "passed": true,
+      "detail": "DataHub SE Team, David Kim, Julia Novak, Data Platform Team, Ian Chen"
+    },
+    {
+      "phase": "restore",
+      "what": "no drift reported",
+      "passed": true,
+      "detail": "1 runbook checked, 0 drifted"
+    },
+    {
+      "phase": "restore",
+      "what": "every catalog claim holds",
+      "passed": true,
+      "detail": "19/19 claims hold"
+    },
+    {
+      "phase": "restore",
+      "what": "the runbook's assertion is passing in DataHub",
+      "passed": true,
+      "detail": "b278999326f7=SUCCESS, b72ffd0598d4=SUCCESS, ee42329c3599=SUCCESS"
+    },
+    {
+      "phase": "restore",
+      "what": "validated-against pins are written to the catalog",
+      "passed": true,
+      "detail": "9 pins, 6 pins, 4 pins"
+    }
+  ],
+  "summary": {
+    "total": 29,
+    "passed": 29,
+    "failed": 0
+  },
+  "validations": {
+    "before": {
+      "severity": "ok",
+      "claims": {
+        "total": 19,
+        "holds": 19,
+        "broken": 0,
+        "unverified": 0
+      },
+      "findings": []
+    },
+    "after": {
+      "severity": "broken",
+      "claims": {
+        "total": 19,
+        "holds": 16,
+        "broken": 3,
+        "unverified": 0
+      },
+      "findings": [
+        {
+          "stepIndex": 1,
+          "stepTitle": "Pull revenue and delivery cost by customer class",
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "claimId": "column-exists:db8ff6d8e9f8",
+          "severity": "broken",
+          "kind": "column-missing",
+          "detail": "Column `cost_of_delivery` is referenced by this step but no longer exists on ORDER_DETAILS.",
+          "remedy": "Check whether cost_of_delivery was renamed, and update this step's SQL and instructions."
+        },
+        {
+          "stepIndex": 2,
+          "stepTitle": "Cross-check against the point-in-time history",
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+          "claimId": "not-deprecated:b8ad95f67636",
+          "severity": "broken",
+          "kind": "newly-deprecated",
+          "detail": "ORDER_HISTORY has been deprecated since this runbook was written.",
+          "remedy": "Point this step at the replacement dataset named in DataHub."
+        },
+        {
+          "stepIndex": 3,
+          "stepTitle": "Get sign-off on the product margins",
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "claimId": "owner-current:4f55cc1848ce",
+          "severity": "warning",
+          "kind": "owner-changed",
+          "detail": "This step says to contact Priya Sharma, who no longer owns products.",
+          "remedy": "Current owners: Data Platform Team, Ian Chen."
+        }
+      ],
+      "documentUrn": "urn:li:document:shared-b0c115ce-89e1-4e4c-9d08-682b0fc57a45",
+      "assertions": [
+        {
+          "urn": "urn:li:assertion:instaboard-0a02391ab278999326f7",
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "result": "FAILURE"
+        },
+        {
+          "urn": "urn:li:assertion:instaboard-74ce1705b72ffd0598d4",
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+          "result": "FAILURE"
+        },
+        {
+          "urn": "urn:li:assertion:instaboard-5d8cafbfee42329c3599",
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "result": "SUCCESS"
+        }
+      ],
+      "structuredProperties": [
+        {
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "status": "prove-weekly-order-revenue: stale (checked 2026-08-02)",
+          "driftValues": 1,
+          "pins": 9
+        },
+        {
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+          "status": "prove-weekly-order-revenue: stale (checked 2026-08-02)",
+          "driftValues": 1,
+          "pins": 6
+        },
+        {
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "status": "prove-weekly-order-revenue: validated (checked 2026-08-02)",
+          "driftValues": 1,
+          "pins": 4
+        }
+      ],
+      "incidents": [
+        {
+          "urn": "urn:li:incident:b42b17d0-0837-4b21-9c97-d2c18462ba61",
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "reused": false,
+          "assignees": [
+            "urn:li:corpuser:b2fd91.brock1@example.com",
+            "urn:li:corpuser:b2fd91.jonny1@example.com"
+          ]
+        },
+        {
+          "urn": "urn:li:incident:f862b1d6-9efb-4420-8208-ccb00b9eadaf",
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+          "reused": false,
+          "assignees": []
+        }
+      ],
+      "tagged": [
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)"
+      ],
+      "proposal": {
+        "edits": [
+          {
+            "stepIndex": 1,
+            "stepTitle": "Pull revenue and delivery cost by customer class",
+            "kind": "column-rename",
+            "from": "cost_of_delivery",
+            "to": "delivery_cost_usd",
+            "rationale": "`delivery_cost_usd` is on ORDER_DETAILS now and was not when this runbook was recorded, and it is the closest match to `cost_of_delivery` (0.76).",
+            "confidence": "medium",
+            "claimId": "column-exists:db8ff6d8e9f8",
+            "occurrences": 3
+          },
+          {
+            "stepIndex": 2,
+            "stepTitle": "Cross-check against the point-in-time history",
+            "kind": "dataset-replacement",
+            "from": "ORDER_HISTORY",
+            "to": "order_entry_db.analytics.order_details",
+            "rationale": "DataHub's deprecation note on ORDER_HISTORY names it: \"Retired at the FY close. Use order_entry_db.analytics.order_details with a point-in-time filter instead.\".",
+            "confidence": "high",
+            "claimId": "not-deprecated:b8ad95f67636",
+            "occurrences": 3
+          },
+          {
+            "stepIndex": 3,
+            "stepTitle": "Get sign-off on the product margins",
+            "kind": "owner-update",
+            "from": "Priya Sharma",
+            "to": "Data Platform Team",
+            "rationale": "DataHub lists Data Platform Team, Ian Chen as the owners today. Pronouns referring to Priya Sharma were repointed to Data; check the prose reads right.",
+            "confidence": "medium",
+            "claimId": "owner-current:4f55cc1848ce",
+            "occurrences": 1
+          }
+        ],
+        "unresolved": [
+          {
+            "stepIndex": 2,
+            "stepTitle": "Cross-check against the point-in-time history",
+            "kind": "newly-deprecated",
+            "detail": "ORDER_HISTORY has been deprecated since this runbook was written.",
+            "needsHuman": "The deprecation note names `order_entry_db.analytics.order_details`, which is a table name rather than a URN, so this step's entity link still points at the deprecated dataset. Repoint it once the replacement is in the catalog."
+          }
+        ],
+        "reviewers": [
+          "DataHub SE Team",
+          "David Kim",
+          "Julia Novak",
+          "Data Platform Team",
+          "Ian Chen"
+        ],
+        "diff": "--- a/runbooks/prove-weekly-order-revenue.md\n+++ b/runbooks/prove-weekly-order-revenue.md\n@@ -14,7 +14,7 @@\n \n ## Step 2: Pull revenue and delivery cost by customer class\n \n-Run the aggregation below. order_total is the glossary-sanctioned measure; cost_of_delivery is what the commercial team wants netted off it.\n+Run the aggregation below. order_total is the glossary-sanctioned measure; delivery_cost_usd is what the commercial team wants netted off it.\n \n **Why:** The commercial review asks for revenue net of delivery every week, and the wide table already carries both.\n \n@@ -23,17 +23,17 @@\n ```sql\n SELECT customer_class,\n        SUM(order_total)      AS total_revenue,\n-       SUM(cost_of_delivery) AS delivery_cost\n+       SUM(delivery_cost_usd) AS delivery_cost\n FROM order_entry_db.analytics.order_details\n GROUP BY customer_class\n ORDER BY total_revenue DESC;\n ```\n \n-**Tips:** cost_of_delivery is on the wide table already, so do not join back to orders for it.\n+**Tips:** delivery_cost_usd is on the wide table already, so do not join back to orders for it.\n \n ## Step 3: Cross-check against the point-in-time history\n \n-Compare the totals above against ORDER_HISTORY at the latest as_of_date. They should agree; if they don't, the snapshot ran mid-load.\n+Compare the totals above against order_entry_db.analytics.order_details at the latest as_of_date. They should agree; if they don't, the snapshot ran mid-load.\n \n **Why:** The pack quotes a weekly movement, and a mid-load snapshot makes the movement look like a real swing.\n \n@@ -41,11 +41,13 @@\n \n ```sql\n SELECT order_status, COUNT(*) AS orders, SUM(order_total) AS value\n-FROM order_entry_db.analytics.order_history\n-WHERE as_of_date = (SELECT MAX(as_of_date) FROM order_entry_db.analytics.order_history)\n+FROM order_entry_db.analytics.order_details\n+WHERE as_of_date = (SELECT MAX(as_of_date) FROM order_entry_db.analytics.order_details)\n GROUP BY order_status;\n ```\n \n+**Tips:** ORDER_HISTORY was deprecated after this runbook was recorded; DataHub's deprecation note points here instead.\n+\n ## Step 4: Get sign-off on the product margins\n \n Before the pack goes out, have the product margins signed off against the dbt products model.\n@@ -54,7 +56,7 @@\n \n **Entity:** `urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)`\n \n-**Tips:** Priya Sharma is the Data Steward on the products model — she signs these off.\n+**Tips:** Data Platform Team is the Data Steward on the products model — Data signs these off.\n \n ---\n _Recorded with instaboard. Open the instaboard extension beside DataHub to replay this handoff step by step._\n"
+      }
+    },
+    "afterRestore": {
+      "severity": "ok",
+      "claims": {
+        "total": 19,
+        "holds": 19,
+        "broken": 0,
+        "unverified": 0
+      }
+    }
+  }
+}

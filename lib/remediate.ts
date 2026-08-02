@@ -39,21 +39,47 @@ function levenshtein(a: string, b: string): number {
   return prev[b.length];
 }
 
-/** Token overlap on snake_case parts, blended with edit distance. */
+/** Filler tokens that carry no meaning in a column name. */
+const FILLER = new Set(["of", "the", "a", "an", "and", "to", "for", "by", "in", "on"]);
+
+/**
+ * Token overlap on snake_case parts, blended with edit distance.
+ *
+ * Token overlap carries most of the weight because edit distance punishes
+ * *reordering* far more than a reader would. `cost_of_delivery` →
+ * `delivery_cost_usd` is an obvious rename to a person and a poor edit-distance
+ * match: the same two content words, swapped, with a unit appended. Weighting
+ * edit distance at 0.4 scored that pair at 0.49 and missed it on DataHub's own
+ * datapack, which is how the weakness was found.
+ *
+ * Filler tokens are dropped for the same reason: `of` is not evidence.
+ */
 function similarity(a: string, b: string): number {
   const norm = (s: string) => s.toLowerCase();
   const [x, y] = [norm(a), norm(b)];
   if (x === y) return 1;
 
   const edit = 1 - levenshtein(x, y) / Math.max(x.length, y.length);
-  const tokens = (s: string) => new Set(s.split(/[_\s.-]+/).filter(Boolean));
+  const tokens = (s: string) => new Set(s.split(/[_\s.-]+/).filter((t) => t && !FILLER.has(t)));
   const [tx, ty] = [tokens(x), tokens(y)];
+  if (tx.size === 0 || ty.size === 0) return edit;
   const shared = [...tx].filter((t) => ty.has(t)).length;
-  const overlap = shared / Math.max(tx.size, ty.size);
 
-  // Token overlap carries the weight: `net_amount_usd` → `net_revenue_usd` is an
-  // obvious rename to a person and a mediocre edit-distance match.
-  return 0.6 * overlap + 0.4 * edit;
+  /*
+   * When the new name contains *every* content word of the old one, the rename
+   * is about as clear as this signal gets — the name was reordered, or a
+   * qualifier was appended, and nothing was dropped. `cost_of_delivery` →
+   * `delivery_cost_usd` is that case, and edit distance scores it 0.06 because a
+   * full reorder is nearly a maximal edit.
+   *
+   * Requiring at least two content words keeps this narrow: `id` is contained in
+   * `order_id`, `customer_id` and `product_id` alike, and boosting all three
+   * equally would be a guess. Two or more words that all survive is evidence.
+   */
+  const containsAll = shared === tx.size && tx.size >= 2;
+  const overlap = containsAll ? 1 : shared / Math.max(tx.size, ty.size);
+
+  return 0.75 * overlap + 0.25 * edit;
 }
 
 /** Above this, a rename is proposed as an edit; below it, it goes to the human. */
