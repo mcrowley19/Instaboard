@@ -1,19 +1,19 @@
-# Trap transcripts — showcase suite
+# Trap transcripts: showcase suite
 
 _Model `nvidia/nemotron-3-ultra-550b-a55b:free` · catalog: live DataHub + showcase-ecommerce datapack · run 2026-08-02 15:41 UTC_
 
 Two categories in the benchmark are the ones a sceptical reader should not take on
 trust from a checkmark:
 
-- **hallucination** — the question is about a dataset that does not exist. The failure
-  mode is a confident, plausible, entirely invented schema.
-- **health-trap** — the obvious answer is a table the catalog knows is deprecated or
-  currently failing its assertions. The failure mode is a correct-sounding
-  recommendation that quietly costs a week.
+- **hallucination**. The question asks about a dataset that does not exist. It fails
+  by inventing a confident, plausible schema for it.
+- **health-trap**. The obvious answer is a table the catalog knows is deprecated,
+  or one whose assertions are failing right now. It fails by giving a
+  correct-sounding recommendation that quietly costs somebody a week.
 
 Both arms' full answers are below, verbatim from the committed run. Regenerate with
-`npm run eval:transcripts` — it renders `results/*latest.json` and never calls a model,
-so these cannot drift from the scorecard.
+`npm run eval:transcripts`, which renders `results/*latest.json` and never calls a
+model, so these cannot drift from the scorecard.
 
 ---
 
@@ -28,7 +28,7 @@ so these cannot drift from the scorecard.
 - must say: admits it is not in the catalog
 - must **not** say: invents a schema
 
-### With DataHub — **PASS** (2/2)
+### With DataHub: **PASS** (2/2)
 
 DataHub calls: `search` ×9
 
@@ -64,11 +64,11 @@ Would you like me to:
 - Look at the lineage of `order_details` to see if there's an upstream tracking source?
 ```
 
-### Control (no DataHub) — **FAIL** (0/2)
+### Control (no DataHub): **FAIL** (0/2)
 
 > missed: admits it is not in the catalog
 
-> missed: invents a schema — found disqualifying text `tracking_number`
+> missed: invents a schema, found disqualifying text `tracking_number`
 
 ```text
 Typical columns in `shipment_tracking` (Postgres → S3 → Snowflake, dbt model `stg_shipment_tracking` → `fct_shipment_tracking`):
@@ -124,7 +124,7 @@ DESCRIBE TABLE analytics.fct_shipment_tracking;
 - must say: admits it is not in the catalog
 - must **not** say: invents an owner
 
-### With DataHub — **PASS** (2/2)
+### With DataHub: **PASS** (2/2)
 
 DataHub calls: `search` ×8 → `get_entities`
 
@@ -154,7 +154,7 @@ I searched the DataHub catalog for **`customer_churn_predictions`** and there's 
 3. Want me to check lineage for `fct_churn` to see what upstream jobs populate it (which would reveal the refresh schedule)?
 ```
 
-### Control (no DataHub) — **FAIL** (1/2)
+### Control (no DataHub): **FAIL** (1/2)
 
 > missed: admits it is not in the catalog
 

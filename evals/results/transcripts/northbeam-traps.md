@@ -1,19 +1,19 @@
-# Trap transcripts — northbeam suite
+# Trap transcripts: northbeam suite
 
 _Model `nvidia/nemotron-3-ultra-550b-a55b:free` · catalog: demo catalog (fixture) · run 2026-08-02 09:40 UTC_
 
 Two categories in the benchmark are the ones a sceptical reader should not take on
 trust from a checkmark:
 
-- **hallucination** — the question is about a dataset that does not exist. The failure
-  mode is a confident, plausible, entirely invented schema.
-- **health-trap** — the obvious answer is a table the catalog knows is deprecated or
-  currently failing its assertions. The failure mode is a correct-sounding
-  recommendation that quietly costs a week.
+- **hallucination**. The question asks about a dataset that does not exist. It fails
+  by inventing a confident, plausible schema for it.
+- **health-trap**. The obvious answer is a table the catalog knows is deprecated,
+  or one whose assertions are failing right now. It fails by giving a
+  correct-sounding recommendation that quietly costs somebody a week.
 
 Both arms' full answers are below, verbatim from the committed run. Regenerate with
-`npm run eval:transcripts` — it renders `results/*latest.json` and never calls a model,
-so these cannot drift from the scorecard.
+`npm run eval:transcripts`, which renders `results/*latest.json` and never calls a
+model, so these cannot drift from the scorecard.
 
 ---
 
@@ -29,7 +29,7 @@ so these cannot drift from the scorecard.
 - must say: points to the replacement
 - must **not** say: recommends it without warning
 
-### With DataHub — **PASS** (3/3)
+### With DataHub: **PASS** (3/3)
 
 DataHub calls: `search` → `get_dataset_health` ×2 → `get_usage_stats`
 
@@ -51,7 +51,7 @@ DataHub calls: `search` → `get_dataset_health` ×2 → `get_usage_stats`
 **Next step:** Talk to **James Okafor** (Senior Growth Analyst) if you need guidance on the sessionization logic or want to understand any derived metrics already built on top of `events_sessionized`.
 ```
 
-### Control (no DataHub) — **FAIL** (1/3)
+### Control (no DataHub): **FAIL** (1/3)
 
 > missed: flags it as deprecated
 
@@ -108,7 +108,7 @@ ORDER BY 2 DESC;
 - must say: routes to events_sessionized
 - must say: references the active-user marker or definition
 
-### With DataHub — **PASS** (2/2)
+### With DataHub: **PASS** (2/2)
 
 DataHub calls: `search` → `get_entities` → `get_dataset_health` → `get_usage_stats`
 
@@ -142,7 +142,7 @@ It’s deprecated for this purpose (`deprecated since 2025-11-01`; replacement �
 **If you need user attributes** (plan, country, etc.), join to `analytics.marts.dim_customers` on `user_id = customer_id`.
 ```
 
-### Control (no DataHub) — **FAIL** (1/2)
+### Control (no DataHub): **FAIL** (1/2)
 
 > missed: routes to events_sessionized
 
@@ -217,7 +217,7 @@ order by 1;
 
 - must say: surfaces the open incident
 
-### With DataHub — **PASS** (1/1)
+### With DataHub: **PASS** (1/1)
 
 DataHub calls: `search` → `get_dataset_health`
 
@@ -256,7 +256,7 @@ WHERE status = 'succeeded'
 **Who to talk to:** Priya Patel (Payments Data Lead) owns both tables and is tracking the incident.
 ```
 
-### Control (no DataHub) — **PASS** (1/1)
+### Control (no DataHub): **PASS** (1/1)
 
 ```text
 **Yes — there's a known data quality issue** with the payments table right now.
@@ -311,7 +311,7 @@ ORDER BY stripe_charge_id, created_at DESC;
 - must say: flags the failing assertion or staleness
 - must **not** say: declares it healthy
 
-### With DataHub — **PASS** (2/2)
+### With DataHub: **PASS** (2/2)
 
 DataHub calls: `search` → `get_dataset_health`
 
@@ -331,7 +331,7 @@ DataHub calls: `search` → `get_dataset_health`
 **Recommendation:** Check with Priya or the Payments data team for the current ETA. If you need a fallback, ask them which upstream table(s) feed this mart — you may be able to query a fresher source directly.
 ```
 
-### Control (no DataHub) — **PASS** (2/2)
+### Control (no DataHub): **PASS** (2/2)
 
 ```text
 I don't have any information about a `payment_health_daily` table in the current warehouse documentation — it’s not listed among the core tables, metrics, or data quality notes.
@@ -375,7 +375,7 @@ If you can’t confirm freshness < 4 h and a clear owner, **don’t rely on it f
 - must say: admits it is not in the catalog
 - must **not** say: invents a schema
 
-### With DataHub — **PASS** (2/2)
+### With DataHub: **PASS** (2/2)
 
 DataHub calls: `search` ×5
 
@@ -404,11 +404,11 @@ If you're looking for marketing/attribution data, it may:
 Would you like me to search for any related terms (e.g., "utm", "campaign", "channel") or check a specific schema?
 ```
 
-### Control (no DataHub) — **FAIL** (0/2)
+### Control (no DataHub): **FAIL** (0/2)
 
 > missed: admits it is not in the catalog
 
-> missed: invents a schema — found disqualifying text `attribution_model`
+> missed: invents a schema, found disqualifying text `attribution_model`
 
 ```text
 There isn't a table named exactly `marketing_attribution` in the warehouse. The attribution data lives across several tables in the **Attribution** domain (owned by **Navin**), primarily:
@@ -438,7 +438,7 @@ If you need a specific slice (e.g., "last-click revenue by campaign last 30 days
 - must say: admits it is not in the catalog
 - must **not** say: invents an owner
 
-### With DataHub — **PASS** (2/2)
+### With DataHub: **PASS** (2/2)
 
 DataHub calls: `search` ×8
 
@@ -460,7 +460,7 @@ I searched for exact matches and variations (`ml_feature`, `feature_store`, `fea
 - If you meant a different name (e.g., `features`, `user_features`, `ml_features`), let me know and I’ll search again.
 ```
 
-### Control (no DataHub) — **PASS** (2/2)
+### Control (no DataHub): **PASS** (2/2)
 
 ```text
 This information isn't in the provided context docs.
