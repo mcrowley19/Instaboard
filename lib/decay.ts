@@ -277,6 +277,43 @@ export async function detectDecay(handoff: Handoff): Promise<DecayReport> {
   };
 }
 
+/* ── Write-back with receipt ──────────────────────────────────────────── */
+
+export interface WriteBackReceipt {
+  written: boolean;
+  /** URN of the document DataHub reports it created — the verifiable artifact. */
+  documentUrn?: string;
+  relatedAssets: string[];
+  at: string;
+  error?: string;
+}
+
+/**
+ * Write a decay report into the catalog as a Note linked to the drifted
+ * entities, and capture what DataHub says it created. The returned receipt
+ * carries the document URN so the write-back is checkable, not just claimed.
+ */
+export async function writeBackDecay(handoff: Handoff, report: DecayReport): Promise<WriteBackReceipt> {
+  const relatedAssets = [...new Set(report.findings.map((f) => f.urn))].slice(0, 10);
+  const at = new Date().toISOString();
+
+  const result = await callDataHubTool("save_document", {
+    document_type: "Note",
+    title: `Stale runbook: ${handoff.title}`,
+    content: decayToMarkdown(handoff, report),
+    topics: ["onboarding", "handoff", "validation"],
+    related_assets: relatedAssets,
+  });
+
+  if (result.isError) {
+    return { written: false, relatedAssets, at, error: result.content.slice(0, 300) };
+  }
+
+  const parsed = parseToolJson(result.content);
+  const urns = flatStrings(collect(parsed, "urn")).filter((u) => u.startsWith("urn:li:document"));
+  return { written: true, ...(urns[0] ? { documentUrn: urns[0] } : {}), relatedAssets, at };
+}
+
 /** Render a decay report as markdown for the DataHub write-back. */
 export function decayToMarkdown(handoff: Handoff, report: DecayReport): string {
   const headline =

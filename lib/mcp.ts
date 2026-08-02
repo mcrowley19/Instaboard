@@ -24,11 +24,23 @@ interface McpState {
   client: Client | null;
   connecting: Promise<Client> | null;
   tools: ToolDef[] | null;
+  /** Set when the MCP server can't be spawned (e.g. serverless hosts with no
+   *  uvx) — the process falls back to the demo catalog instead of erroring. */
+  fallbackDemo: boolean;
 }
 
 // Survive Next.js dev-mode module reloads by stashing on globalThis.
 const g = globalThis as unknown as { __datahubMcp?: McpState };
-const state: McpState = (g.__datahubMcp ??= { client: null, connecting: null, tools: null });
+const state: McpState = (g.__datahubMcp ??= {
+  client: null,
+  connecting: null,
+  tools: null,
+  fallbackDemo: false,
+});
+
+function demoActive(): boolean {
+  return isDemoMode() || state.fallbackDemo;
+}
 
 async function connect(): Promise<Client> {
   const client = new Client({ name: "instaboard", version: "0.1.0" });
@@ -72,9 +84,17 @@ export async function getMcpClient(): Promise<Client> {
 
 /** List DataHub MCP tools mapped to a provider-neutral shape (cached). */
 export async function listDataHubTools(): Promise<ToolDef[]> {
-  if (isDemoMode()) return DEMO_TOOLS;
+  if (demoActive()) return DEMO_TOOLS;
   if (state.tools) return state.tools;
-  const client = await getMcpClient();
+  let client: Client;
+  try {
+    client = await getMcpClient();
+  } catch {
+    // Can't spawn the server at all — serve the demo catalog rather than a
+    // dead app. The status pill reports the fallback so it's never ambiguous.
+    state.fallbackDemo = true;
+    return DEMO_TOOLS;
+  }
   const { tools } = await client.listTools();
   state.tools = tools.map((t) => ({
     name: t.name,
@@ -91,8 +111,14 @@ export async function callDataHubTool(
   name: string,
   args: Record<string, unknown>
 ): Promise<{ content: string; isError: boolean }> {
-  if (isDemoMode()) return callDemoTool(name, args);
-  const client = await getMcpClient();
+  if (demoActive()) return callDemoTool(name, args);
+  let client: Client;
+  try {
+    client = await getMcpClient();
+  } catch {
+    state.fallbackDemo = true;
+    return callDemoTool(name, args);
+  }
   try {
     const result = await client.callTool({ name, arguments: args });
     const blocks = Array.isArray(result.content) ? result.content : [];
@@ -113,10 +139,21 @@ export async function callDataHubTool(
 }
 
 /** Health probe used by the UI status pill. */
-export async function mcpStatus(): Promise<{ connected: boolean; toolCount: number; demo?: boolean; error?: string }> {
+export async function mcpStatus(): Promise<{
+  connected: boolean;
+  toolCount: number;
+  demo?: boolean;
+  fallback?: boolean;
+  error?: string;
+}> {
   try {
     const tools = await listDataHubTools();
-    return { connected: true, toolCount: tools.length, ...(isDemoMode() ? { demo: true } : {}) };
+    return {
+      connected: true,
+      toolCount: tools.length,
+      ...(demoActive() ? { demo: true } : {}),
+      ...(state.fallbackDemo ? { fallback: true } : {}),
+    };
   } catch (err) {
     return {
       connected: false,

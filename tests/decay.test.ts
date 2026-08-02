@@ -1,6 +1,6 @@
 import { beforeAll, describe, expect, it } from "vitest";
 import { sfUrn } from "../lib/demo-catalog";
-import { detectDecay, decayToMarkdown, snapshotEntity } from "../lib/decay";
+import { detectDecay, decayToMarkdown, snapshotEntity, writeBackDecay } from "../lib/decay";
 import type { EntitySnapshot, Handoff, HandoffStep } from "../lib/types";
 
 // Decay detection reads the catalog through the MCP layer; point it at the fixture.
@@ -158,6 +158,19 @@ describe("detectDecay", () => {
     );
     expect(report.severity).toBe("broken");
     expect(report.findings[0].kind).toBe("entity-missing");
+  });
+});
+
+describe("writeBackDecay", () => {
+  it("returns a receipt carrying the document URN the catalog reports", async () => {
+    const h = handoff(
+      [{ title: "Check payment health", instruction: "Open it.", why: "Catch outages.", urn: PAYMENT_HEALTH }],
+      { [PAYMENT_HEALTH]: snapshot(PAYMENT_HEALTH, { fields: ["date"] }) }
+    );
+    const receipt = await writeBackDecay(h, await detectDecay(h));
+    expect(receipt.written).toBe(true);
+    expect(receipt.documentUrn).toMatch(/^urn:li:document/);
+    expect(receipt.relatedAssets).toContain(PAYMENT_HEALTH);
   });
 });
 

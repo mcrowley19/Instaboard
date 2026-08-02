@@ -10,6 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "eval": "tsx evals/run.ts",
+    "eval:verify": "tsx evals/verify.ts",
+    "validate": "tsx scripts/validate-runbooks.ts",
     "seed": "uv run --with acryl-datahub scripts/seed_datahub.py",
     "datahub:up": "uv run --with acryl-datahub datahub docker quickstart",
     "datahub:down": "uv run --with acryl-datahub datahub docker quickstart --stop"

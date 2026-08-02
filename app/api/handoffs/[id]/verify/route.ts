@@ -1,6 +1,5 @@
-import { detectDecay, decayToMarkdown } from "@/lib/decay";
+import { detectDecay, writeBackDecay, type WriteBackReceipt } from "@/lib/decay";
 import { getHandoff, saveHandoff } from "@/lib/handoff-store";
-import { callDataHubTool } from "@/lib/mcp";
 
 export { corsPreflight as OPTIONS } from "@/lib/cors";
 
@@ -26,20 +25,15 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
     handoff.decay = report;
     saveHandoff(handoff);
 
-    // Only write back when there's something worth telling the catalog.
-    let written = false;
+    // Only write back when there's something worth telling the catalog. The
+    // receipt carries the document URN DataHub reports, so the write-back is
+    // verifiable in the catalog rather than just claimed by this response.
+    let receipt: WriteBackReceipt | null = null;
     if (report.severity !== "ok") {
-      const doc = await callDataHubTool("save_document", {
-        document_type: "Note",
-        title: `Stale runbook: ${handoff.title}`,
-        content: decayToMarkdown(handoff, report),
-        topics: ["onboarding", "handoff", "validation"],
-        related_assets: [...new Set(report.findings.map((f) => f.urn))].slice(0, 10),
-      });
-      written = !doc.isError;
+      receipt = await writeBackDecay(handoff, report);
     }
 
-    return Response.json({ report, writtenBack: written });
+    return Response.json({ report, writtenBack: Boolean(receipt?.written), receipt });
   } catch (err) {
     return Response.json(
       { error: err instanceof Error ? err.message : String(err) },

@@ -10,9 +10,7 @@ back). Tagline and description below.*
 Capture leaving engineers' knowledge in DataHub — and know when it goes stale.
 
 **Links for the submission form:**
-- Working project URL: https://instaboard-mcrowley19s-projects.vercel.app
-  *(before submitting: Vercel → Project → Settings → Deployment Protection →
-  disable Vercel Authentication, or judges hit an SSO wall)*
+- Working project URL: https://instaboard-mu.vercel.app
 - Repo: https://github.com/mcrowley19/Instaboard
 - Demo video: *(add YouTube link once recorded)*
 

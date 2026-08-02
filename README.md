@@ -1,5 +1,9 @@
 # ⚡ instaboard
 
+[![ci](https://github.com/mcrowley19/Instaboard/actions/workflows/ci.yml/badge.svg)](https://github.com/mcrowley19/Instaboard/actions/workflows/ci.yml)
+*CI re-scores the committed benchmark answers on every push — a green badge
+means the published 19/20 vs 5/20 is reproducible, not just claimed.*
+
 **When a data engineer leaves, their knowledge leaves with them. instaboard captures
 it into DataHub — and tells you when it goes stale.**
 
@@ -91,7 +95,10 @@ What the catalog buys you, by category:
   written back into DataHub**, linked to the datasets it touches. Replayed
   step-by-step by whoever inherits it.
 - **🕰️ Runbook decay detection** — one click re-validates a runbook against live
-  DataHub. Deterministic: a schema diff plus a health read, no LLM guessing, so a
+  DataHub, or run the whole sweep unattended: `npm run validate` checks every
+  stored runbook, writes drift notes back to the catalog with a document-URN
+  receipt, and exits non-zero on broken runbooks — cron it and the decay loop
+  runs itself. Deterministic: a schema diff plus a health read, no LLM guessing, so a
   "this is broken" verdict is something you can confirm in the DataHub UI in ten
   seconds. Detects vanished entities, **removed columns the runbook's SQL actually
   references**, newly-deprecated tables, new incidents, newly-failing assertions,
@@ -118,7 +125,7 @@ What the catalog buys you, by category:
 ## For judges: the 5-minute path
 
 1. **Run it with zero infrastructure** — use the hosted demo at
-   [instaboard-mcrowley19s-projects.vercel.app](https://instaboard-mcrowley19s-projects.vercel.app)
+   [instaboard-mu.vercel.app](https://instaboard-mu.vercel.app)
    (paste any LLM key in Settings), or locally: `npm install`,
    `echo "DEMO_MODE=true" > .env.local`, `npm run dev`. Full product, no Docker.
 2. **See the headline loop** — `/handoffs` → the sample runbook → **Validate
@@ -253,6 +260,8 @@ forwarded to your own server per request), or `LLM_PROVIDER` / `LLM_API_KEY` in
 | `npm run build` / `npm start` | production build / serve |
 | `npm test` | vitest suite (44 tests, MCP mocked) |
 | `npm run eval` | the 20-case onboarding benchmark, both arms |
+| `npm run eval:verify` | re-score the committed answers — CI runs this on every push |
+| `npm run validate` | sweep every runbook for decay, write drift notes back to DataHub |
 | `npm run seed` | seed the Northbeam demo catalog into DataHub |
 | `npm run datahub:up` / `datahub:down` | start / stop the local DataHub stack |
 
