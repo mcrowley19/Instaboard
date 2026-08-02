@@ -91,7 +91,7 @@ const UPDATE_INCIDENT = `
 `;
 
 const RESOLVE_INCIDENT = `
-  mutation updateIncidentStatus($urn: String!, $input: UpdateIncidentStatusInput!) {
+  mutation updateIncidentStatus($urn: String!, $input: IncidentStatusInput!) {
     updateIncidentStatus(urn: $urn, input: $input)
   }
 `;

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { writeBackNative } from "../lib/native-writeback";
+import { resolveIncidentsFor, writeBackNative } from "../lib/native-writeback";
 import type { DecayReport, EntitySnapshot, Handoff } from "../lib/types";
 
 /**
@@ -46,6 +46,7 @@ beforeEach(() => {
       return reply({ dataset: { incidents: { incidents: openIncidents } } });
     }
     if (body.query.includes("raiseIncident")) return reply({ raiseIncident: "urn:li:incident:new" });
+    if (body.query.includes("updateIncidentStatus")) return reply({ updateIncidentStatus: true });
     if (body.query.includes("updateIncident")) return reply({ updateIncident: true });
     return reply({});
   });
@@ -175,5 +176,30 @@ describe("writeBackNative", () => {
     const receipt = await writeBackNative(handoff, report, undefined, orphaned);
     expect(receipt.incidents[0].assignees).toEqual([]);
     expect((named("raiseIncident")[0].variables.input as Record<string, unknown>).assigneeUrns).toBeUndefined();
+  });
+});
+
+describe("resolveIncidentsFor", () => {
+  it("closes the incidents this tool opened once the runbook validates clean", async () => {
+    openIncidents = [{ urn: "urn:li:incident:ours", title: "Stale runbook: Monthly close" }];
+    const resolved = await resolveIncidentsFor(handoff, [URN]);
+
+    expect(resolved).toEqual([{ urn: "urn:li:incident:ours", datasetUrn: URN }]);
+    const input = named("updateIncidentStatus")[0].variables.input as { state: string; message: string };
+    expect(input.state).toBe("RESOLVED");
+    expect(input.message).toMatch(/holds again/i);
+  });
+
+  it("leaves incidents raised by anyone else alone", async () => {
+    // A detector that closes other people's incidents is worse than one that
+    // never closes anything.
+    openIncidents = [
+      { urn: "urn:li:incident:theirs", title: "Freshness breach on fct_revenue" },
+      { urn: "urn:li:incident:other-runbook", title: "Stale runbook: Weekly refresh" },
+    ];
+    const resolved = await resolveIncidentsFor(handoff, [URN]);
+
+    expect(resolved).toEqual([]);
+    expect(named("updateIncidentStatus")).toHaveLength(0);
   });
 });
