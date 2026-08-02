@@ -328,6 +328,19 @@ export default function Landing() {
             </div>
 
             <p className="lp-note">
+              Install takes a minute: it ships in the repo&rsquo;s{" "}
+              <a
+                href="https://github.com/mcrowley19/Instaboard/tree/main/extension"
+                target="_blank"
+                rel="noreferrer"
+              >
+                extension/ folder
+              </a>{" "}
+              — open <code>chrome://extensions</code>, turn on Developer mode, and{" "}
+              <b>Load unpacked</b>. No store listing, no API keys in the browser.
+            </p>
+
+            <p className="lp-note">
               Everything the panel does also lives in the web app, alongside a week-one learning
               path and a ramp checklist generated from the catalog.
             </p>
