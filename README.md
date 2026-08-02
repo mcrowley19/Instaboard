@@ -117,8 +117,10 @@ What the catalog buys you, by category:
 
 ## For judges: the 5-minute path
 
-1. **Run it with zero infrastructure** — `npm install`, `echo "DEMO_MODE=true" > .env.local`,
-   `npm run dev`, paste any LLM key in Settings. Full product, no Docker.
+1. **Run it with zero infrastructure** — use the hosted demo at
+   [instaboard-mcrowley19s-projects.vercel.app](https://instaboard-mcrowley19s-projects.vercel.app)
+   (paste any LLM key in Settings), or locally: `npm install`,
+   `echo "DEMO_MODE=true" > .env.local`, `npm run dev`. Full product, no Docker.
 2. **See the headline loop** — `/handoffs` → the sample runbook → **Validate
    against DataHub**: a deterministic staleness verdict on step 1, written back
    to the catalog. The exact document it writes is committed at

@@ -142,7 +142,12 @@ export default function Landing() {
           <a href="#proof" className="hide-sm">
             proof
           </a>
-          <a href="#start">install</a>
+          <a href="#start" className="hide-sm">
+            install
+          </a>
+          <a href="https://github.com/mcrowley19/Instaboard" target="_blank" rel="noreferrer">
+            github
+          </a>
           <Link className="go" href="/chat">
             open the app
           </Link>
@@ -166,7 +171,12 @@ export default function Landing() {
           </h1>
 
           <div className="lp-glyph" aria-hidden="true">
-            i
+            <span className="lp-glyph-dot" />
+            <span className="lp-glyph-stem">
+              <i />
+              <i />
+              <i />
+            </span>
           </div>
         </div>
 
@@ -523,6 +533,9 @@ export default function Landing() {
       <div className="lp-foot-wrap">
         <footer className="lp-foot">
           <span>instaboard v0.1.0</span>
+          <a href="https://github.com/mcrowley19/Instaboard" target="_blank" rel="noreferrer">
+            github
+          </a>
           <a href="https://docs.datahub.com/docs/quickstart" target="_blank" rel="noreferrer">
             datahub quickstart
           </a>
