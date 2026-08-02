@@ -1,8 +1,9 @@
 # ⚡ instaboard
 
 [![ci](https://github.com/mcrowley19/Instaboard/actions/workflows/ci.yml/badge.svg)](https://github.com/mcrowley19/Instaboard/actions/workflows/ci.yml)
-*CI re-scores the committed benchmark answers on every push — a green badge
-means the published 19/20 vs 5/20 is reproducible, not just claimed.*
+*CI re-scores the committed benchmark answers on every push. A green badge means you can
+reproduce the published **19/20 vs 5/20** on our catalog and **20/20 vs 3/20** on DataHub's
+own `showcase-ecommerce` datapack.*
 
 **When a data engineer leaves, their knowledge leaves with them. instaboard captures
 it into DataHub — and tells you when it goes stale.**
@@ -37,7 +38,7 @@ assertion it detected](docs/screenshots/payment-health-failing-assertion.jpg) ·
 
 ---
 
-## Does grounding in DataHub actually help? We measured it.
+## Does grounding in DataHub actually help? We measured it twice.
 
 `evals/` holds a 20-question onboarding benchmark — the questions a real new hire
 asks in week 1 — scored **deterministically** against the catalog. Every check is a
@@ -45,14 +46,32 @@ substring match on facts that live in DataHub (real URNs, real owners, real colu
 No LLM judge, no partial credit: a case passes only if every one of its checks passes.
 
 The same 20 cases run twice through the **identical agent loop** (`lib/agent.ts`).
-The only variable is whether the DataHub MCP tools are in the tool list:
+The only variable is whether the DataHub MCP tools are in the tool list.
+
+A benchmark you score on your own catalog is partly built in, so it runs on **two**:
+
+| Suite | Catalog | With DataHub | Control | Scorecard |
+| --- | --- | --- | --- | --- |
+| `northbeam` | seeded by this repo | **19/20** | 5/20 | [scorecard.md](evals/results/scorecard.md) |
+| `showcase` | **DataHub's own `showcase-ecommerce` datapack**, 1,065 entities we didn't author | **20/20** | 3/20 | [showcase-scorecard.md](evals/results/showcase-scorecard.md) |
 
 ```bash
-DEMO_MODE=true npm run eval      # no DataHub, no Docker
+DEMO_MODE=true npm run eval                # Northbeam, no DataHub, no Docker
+npm run eval -- --live --suite=showcase    # DataHub's own catalog
 ```
 
-Results are committed at [`evals/results/scorecard.md`](evals/results/scorecard.md),
-with every raw answer in `latest.json` so any check can be audited by hand.
+One command loads the showcase catalog (`datahub datapack load showcase-ecommerce`), and it
+gives the agent a harder time than ours does. It sits alongside Northbeam, so the search
+surface has real collisions in it: two `orders` tables, six datasets called some form of
+`order_details`, and an `ORDER_DETAILS_REPLICA` whose 55 columns match the real one byte for
+byte. The stewards, the escalation contact, the retention period, the SOC 2 scope, the
+glossary SQL: all of it came out of the pack. See
+[`docs/showcase-verification.md`](docs/showcase-verification.md).
+
+Every raw answer sits in the matching `latest.json`, so you can audit any check by hand.
+Two categories are hard to believe from a checkmark, so **hallucination** and
+**health-trap** also have their full transcripts committed with both arms side by side, at
+[`evals/results/transcripts/`](evals/results/transcripts/).
 
 **It runs on a free API key.** A full run is ~80 LLM calls — more than most free
 daily quotas allow in one sitting — so every completed case is cached and a re-run
@@ -71,7 +90,7 @@ Add `--concurrency=1` if your provider is strict about requests per minute, and
 The control arm is deliberately **not** a strawman — it gets a neutral, capable-assistant
 prompt asking for specific tables, owners, and SQL. It's the honest counterfactual:
 an off-the-shelf chatbot, which is what a new hire actually reaches for today. Both
-prompts are in `evals/run.ts`.
+prompts are in `evals/suites.ts`.
 
 What the catalog buys you, by category:
 
@@ -96,6 +115,12 @@ What the catalog buys you, by category:
 - **Chrome side panel** — follows you *inside* DataHub, detects the entity on
   screen, records handoffs, replays them ([install](extension/README.md))
 
+Both requests the side panel makes are captured against a live catalog and committed at
+[`examples/live/extension-receipt.json`](examples/live/extension-receipt.json), covering
+entity detection off a real DataHub URL, an answer grounded in 5 MCP calls, and a recorded
+runbook written back with its document URN. See
+[`docs/extension-verification.md`](docs/extension-verification.md).
+
 ## Features
 
 - **🔁 Handoffs** — the headline. Record a task by doing it; the agent turns the
@@ -103,21 +128,30 @@ What the catalog buys you, by category:
   written back into DataHub**, linked to the datasets it touches. Replayed
   step-by-step by whoever inherits it.
 - **🕰️ Runbook decay detection** — one click re-validates a runbook against live
-  DataHub, or run the whole sweep unattended: `npm run validate` checks every
-  stored runbook, writes drift notes back to the catalog with a document-URN
-  receipt, and exits non-zero on broken runbooks — cron it and the decay loop
-  runs itself. Deterministic: a schema diff plus a health read, no LLM guessing, so a
-  "this is broken" verdict is something you can confirm in the DataHub UI in ten
-  seconds. Detects vanished entities, **removed columns the runbook's SQL actually
-  references**, newly-deprecated tables, new incidents, newly-failing assertions,
-  and owners who have moved on. Drift is written back to the catalog as a note.
-- **💬 Chat assistant** — plain-English Q&A grounded in DataHub metadata, with
-  every MCP call visible in an expandable tool trace.
-- **🩺 Data health awareness** — checks `get_dataset_health` before recommending a
-  table, and leads with ⚠️ plus the safe alternative instead of confidently
-  answering from a dead one.
-- **📈 Usage-aware ranking** — `get_usage_stats` lets the agent prefer tables
-  people actually query over ones that merely exist in the domain.
+  DataHub. `npm run validate` sweeps every stored runbook unattended and exits non-zero
+  when one is broken, so a cron job runs the decay loop for you. There is no LLM in the
+  detection. It diffs the schema and reads health, which means you can confirm any "this
+  is broken" verdict in the DataHub UI inside ten seconds. It catches vanished entities,
+  **removed columns the runbook's SQL actually references**, tables deprecated since
+  recording, new incidents, assertions that started failing, and owners who have moved on.
+  Proved against real breaking changes on DataHub's own datapack:
+  [see the drill](docs/showcase-verification.md).
+- **🚨 Write-back into DataHub's native primitives** — a drift note sits in a document
+  until somebody opens it. When a sweep finds a runbook that would now fail if followed,
+  it raises a real **Incident** on the affected dataset, typed from the finding and linked
+  to the note, and tags everything that drifted **`Stale Runbook`**. The finding turns up
+  in the workflows a data team already watches, and "which tables have rotted runbooks?"
+  becomes a search query. A nightly sweep re-uses the incident it opened last night.
+- **💬 Chat assistant** — plain-English Q&A grounded in DataHub metadata, with every MCP
+  call visible in an expandable tool trace. Runs on the hosted demo with no API key at
+  all, replaying a committed recording of a real session.
+- **🩺 Data health awareness** — reads the `health` and `deprecation` fields DataHub
+  inlines on an entity before it recommends a table, then leads with ⚠️ and the safe
+  alternative rather than answering confidently from a dead one.
+- **📈 Usage-aware ranking** — prefers tables people query over tables that merely exist,
+  using whatever the deployment gives it. Usage stats in demo mode. DataHub's own
+  `📈 Most Queried` and certification tags on a live catalog, since the MCP server exposes
+  no usage tool ([reported upstream](submission/oss/issues/01-no-usage-statistics-tool.md)).
 - **🕸️ Glossary graph** — metrics explained in relation to each other (MRR ↔ ARR ↔
   Churn Rate) via `relatedTerms`, not in isolation.
 - **✍️ Documentation gap write-back** — when a description is missing or too thin,
@@ -132,31 +166,40 @@ What the catalog buys you, by category:
 
 ## For judges: the 5-minute path
 
-1. **Run it with zero infrastructure** — use the hosted demo at
-   [instaboard-mu.vercel.app](https://instaboard-mu.vercel.app)
-   (paste any LLM key in Settings), or locally: `npm install`,
-   `echo "DEMO_MODE=true" > .env.local`, `npm run dev`. Full product, no Docker.
-2. **See the headline loop** — `/handoffs` → the sample runbook → **Validate
-   against DataHub**: a deterministic staleness verdict on step 1, written back
-   to the catalog with a receipt carrying the document URN DataHub reports.
-   The exact document it writes is committed at
-   [`examples/decay-writeback-note.md`](examples/decay-writeback-note.md) —
-   generated by the real code path, not by hand. `npm run validate` runs the
-   same sweep unattended across every runbook.
-3. **See the measurement** — [`evals/results/scorecard.md`](evals/results/scorecard.md):
-   the same agent scores **19/20 with DataHub's MCP tools vs 5/20 without**, on
-   deterministic substring checks against real catalog facts. Every raw answer
-   is in `latest.json`; `npm test` runs 44 unit tests.
+1. **Open it. No key, no Docker, no signup.** The hosted demo at
+   [instaboard-mu.vercel.app](https://instaboard-mu.vercel.app) answers the suggested
+   questions from a committed recording of a real session, streaming back the same tool
+   trace, the same MCP calls and results, the same text. Replayed answers carry a
+   *recorded session* label so you always know which you are looking at. Paste a key in
+   Settings and it goes live. Locally: `npm install`, `echo "DEMO_MODE=true" > .env.local`,
+   `npm run dev`.
+2. **Watch the headline loop.** Go to `/handoffs`, open the sample runbook, hit **Validate
+   against DataHub**. You get a deterministic staleness verdict on step 1, written back to
+   the catalog three ways: a drift note carrying the document URN DataHub reports, a native
+   Incident on the affected dataset, and a `Stale Runbook` tag. `npm run validate` does the
+   same sweep unattended and exits non-zero on a broken runbook, so you can cron it.
+3. **Check it on a catalog we didn't build.** See
+   [`docs/showcase-verification.md`](docs/showcase-verification.md). Against DataHub's own
+   `showcase-ecommerce` datapack the benchmark scores **20/20 vs 3/20**, and a decay drill
+   drops a column a runbook selects, deprecates a table a runbook routes people to, and
+   moves an owner a runbook tells you to page. All three get caught, one finding each,
+   nothing else fires. [Receipts](examples/live/showcase-decay-receipts.json).
+   [The incident in DataHub](docs/screenshots/showcase-stale-runbook-tag-and-incident.jpg).
+4. **Audit the measurement.** [`scorecard.md`](evals/results/scorecard.md) and
+   [`showcase-scorecard.md`](evals/results/showcase-scorecard.md) ship with every raw
+   answer, and CI re-scores them on each push. `npm test` runs 51 unit tests.
 
-Where this sits against the judging criteria: **Use of DataHub** — reads seven
-MCP tools and writes back four document kinds (runbooks, decay notes, learning
-paths, description proposals), so the graph improves with every use.
-**Originality** — knowledge capture/replay/decay is an onboarding product, not
-another lineage guard; the Chrome side panel makes DataHub itself the recording
-surface. **Technical execution** — deterministic decay engine, resumable
-free-tier eval runner, one agent loop shared by app, extension, and benchmark.
-**Real-world usefulness** — the two weeks around every departure and every new
-hire, which every data platform team pays for today.
+Against the judging criteria. **Use of DataHub**: reads the MCP tool set, and writes back
+through documents (runbooks, decay notes, learning paths, description proposals) as well as
+DataHub's own operational primitives, so a finding lands somewhere a data team already
+watches. **Originality**: capture, replay and decay make this an onboarding product rather
+than another lineage guard, and the Chrome side panel turns DataHub itself into the
+recording surface. **Technical execution**: a decay engine with no LLM in it, a two-catalog
+benchmark that CI re-verifies, an eval runner that resumes across free-tier quota walls, and
+one agent loop shared by the app, the extension and the benchmark. **Real-world
+usefulness**: the fortnight around every departure and every new hire, which data platform
+teams pay for today. **Open source**: a skill sent upstream plus four friction reports with
+reproductions, described under [Contributing back](#contributing-back-upstream).
 
 ## Quick start
 
@@ -168,8 +211,15 @@ echo "DEMO_MODE=true" > .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000), paste an LLM key in
-**Settings** (Anthropic / OpenRouter / Gemini), and ask *"How do we calculate MRR?"*
+Open [http://localhost:3000](http://localhost:3000) and click one of the suggested
+questions. Those replay a committed recording of a real session, so chat works with no API
+key at all. Add a key in **Settings** (Anthropic / OpenRouter / Gemini) to ask anything
+else.
+
+The transcript labels recorded answers *recorded session*. What gets replayed is the real
+event stream, so the tool trace expands to the same MCP calls and results the live agent
+made. `npm run capture:replay` records it again; the events come straight out of
+`lib/agent.ts`.
 
 Demo mode answers every DataHub tool call from a built-in fixture of the same
 Northbeam catalog the seed script creates — same datasets, owners, lineage,
@@ -177,6 +227,18 @@ glossary, health signals, and saved SQL. The full agent loop, tool traces, learn
 paths, lineage explainer, handoff replay, and **the eval harness** all work with
 zero infrastructure. The sidebar pill shows **Demo catalog** so the mode is never
 ambiguous.
+
+**Where the fixture and the real server part company.** The fixture offers 7 tools. Live
+`mcp-server-datahub` 0.6.0 offers 20. Two of the fixture's have no equivalent on the real
+server: `get_dataset_health` and `get_usage_stats`. DataHub inlines `health` and
+`deprecation` on `get_entities` instead, and exposes nothing for usage
+([reported upstream](submission/oss/issues/01-no-usage-statistics-tool.md)). A demo-mode
+tool trace therefore shows two calls you will never see against a live catalog. The decay
+engine reads the inlined `health` first and treats a health tool as an optional extra,
+which is how the same code path produced the [live receipts](docs/live-verification.md)
+and the [showcase drill](docs/showcase-verification.md) on a real DataHub where neither
+tool exists. Both scorecards and the drill ran against live DataHub rather than the
+fixture.
 
 **Try the decay loop in demo mode:** open `/handoffs` → the sample runbook →
 **Validate against DataHub**. It flags step 1: `payment_health_daily`'s freshness
@@ -268,10 +330,14 @@ forwarded to your own server per request), or `LLM_PROVIDER` / `LLM_API_KEY` in
 | --- | --- |
 | `npm run dev` | start the app on :3000 |
 | `npm run build` / `npm start` | production build / serve |
-| `npm test` | vitest suite (44 tests, MCP mocked) |
-| `npm run eval` | the 20-case onboarding benchmark, both arms |
-| `npm run eval:verify` | re-score the committed answers — CI runs this on every push |
-| `npm run validate` | sweep every runbook for decay, write drift notes back to DataHub |
+| `npm test` | vitest suite (45 tests, MCP mocked) |
+| `npm run eval` | the 20-case onboarding benchmark, both arms (`-- --suite=showcase` for DataHub's catalog) |
+| `npm run eval:verify` | re-score the committed answers for both suites — CI runs this on every push |
+| `npm run eval:transcripts` | render the hallucination / health-trap transcripts from committed answers |
+| `npm run validate` | sweep every runbook for decay; write notes, incidents and tags back to DataHub |
+| `npm run showcase:drill` | `record` / `break` / `receipts` / `restore` — the decay drill on DataHub's own datapack |
+| `npm run capture:replay` | record a real session for the zero-key hosted demo |
+| `npm run receipts:live` | re-capture the live-DataHub verification receipts |
 | `npm run seed` | seed the Northbeam demo catalog into DataHub |
 | `npm run datahub:up` / `datahub:down` | start / stop the local DataHub stack |
 
@@ -281,12 +347,44 @@ forwarded to your own server per request), or `LLM_PROVIDER` / `LLM_API_KEY` in
 app/            page.tsx (landing) · (app)/ signed-in pages · api/ routes
 components/     Sidebar, ToolTrace, Markdown, SettingsModal
 lib/            mcp.ts (MCP client) · agent.ts (loop) · decay.ts (validation)
+                sweep.ts (the unattended pass) · native-writeback.ts (incidents + tags)
+                datahub-graphql.ts (what MCP has no tool for) · replay.ts (zero-key demo)
                 providers.ts (LLMs) · prompts.ts · demo-catalog.ts · demo-mcp.ts
-evals/          benchmark.ts (20 cases) · score.ts · run.ts · results/
+evals/          benchmark.ts + benchmark-showcase.ts (20 cases each) · suites.ts
+                score.ts · run.ts · verify.ts · transcripts.ts · results/
 extension/      Chrome side panel
-scripts/        seed_datahub.py — demo catalog ingestion
+scripts/        seed_datahub.py · showcase-drill.ts · capture-replay.ts
+                validate-runbooks.ts · live-receipts.ts
+submission/oss/ the upstream skill PR and the friction reports
 tests/          vitest suite
 ```
+
+## Contributing back upstream
+
+Building this turned up work worth sending back. It is prepared in
+[`submission/oss/`](submission/oss/), with instructions in
+[`PR_INSTRUCTIONS.md`](submission/oss/PR_INSTRUCTIONS.md).
+
+**A skill for `datahub-project/datahub-skills`.** The onboarding and handoff workflow,
+generalised into a registry skill called `datahub-onboarding`, with a
+`/catalog-onboarding` command, two evaluation cases and the router registration. It is
+written against what `mcp-server-datahub` 0.6.0 exposes, which is why it reads `health` and
+`deprecation` off `get_entities` rather than reaching for tools that aren't there.
+
+**Four friction reports with reproductions.** Three go to `acryldata/mcp-server-datahub`,
+one to `datahub-project/datahub`.
+
+| Report | What |
+| --- | --- |
+| [no usage-statistics tool](submission/oss/issues/01-no-usage-statistics-tool.md) | Nothing in the 20-tool surface returns usage and `get_entities` doesn't inline it, so an agent has no way to rank six lookalike tables by query volume |
+| [incidents are unreadable](submission/oss/issues/02-incidents-unreadable.md) | `get_entities` on an incident URN errors, and health reports `causes: ["ACTIVE_INCIDENTS"]` where the assertions branch of the same field returns URNs |
+| [`anyOf` union schemas](submission/oss/issues/03-anyof-union-schemas-rejected-by-providers.md) | Two tool schemas use multi-type unions that make OpenAI-compatible providers 422 the whole tool list |
+| [datapack drops Cloud-only aspects](submission/oss/issues/04-showcase-datapack-drops-cloud-only-aspects.md) | `showcase-ecommerce` loses 248 MCPs on OSS, every usage and assertion aspect among them, and still reports success |
+
+Each one was checked against the existing open issues first. Two of them changed this
+codebase. [Report 02](submission/oss/issues/02-incidents-unreadable.md) is why
+`lib/datahub-graphql.ts` exists, and why `discountSelfRaisedIncidents` in `lib/decay.ts`
+has to be there so the sweep stops reading its own incidents as drift.
 
 ## Security notes
 

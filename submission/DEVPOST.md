@@ -49,11 +49,13 @@ with three connected loops:
   runbook against live DataHub: columns that vanished (and whether the step's
   SQL actually references them), tables deprecated since recording, newly
   failing assertions, open incidents, owners who no longer own the thing.
-  Findings are **written back to the catalog** as a Note linked to the affected
-  datasets — the staleness warning lives where the data lives. Detection is
-  deliberately deterministic (a schema diff plus a health read, no LLM), so
-  every "this is broken" verdict can be confirmed in the DataHub UI in ten
-  seconds.
+  Findings go **back into the catalog** three ways. A drift Note linked to the
+  affected datasets. A native DataHub **Incident** on anything that would now fail
+  if followed. A **`Stale Runbook` tag** on everything that drifted. The warning
+  lands in the workflows a data team already watches instead of in a document
+  somebody has to open. There is no LLM in the detection; it diffs the schema and
+  reads health, so you can confirm any "this is broken" verdict in the DataHub UI
+  inside ten seconds.
 
 Around that core: a chat assistant grounded in catalog metadata with a visible
 MCP tool trace, a week-1 learning path generator built from real 30-day usage
@@ -71,11 +73,27 @@ columns). No LLM judge, no partial credit. The same 20 cases run twice through
 the identical agent loop; the only variable is whether the DataHub MCP tools are
 in the tool list.
 
-Result: **19/20 with DataHub vs 5/20 without.** 14 of the 20 questions a new
-hire asks in week 1 are answerable *only* with the catalog. The control isn't a
-strawman — it's a capable assistant prompted to name specific tables, owners,
-and SQL; it just has no context. Full scorecard with every raw answer is
-committed in the repo.
+On our seeded catalog: **19/20 with DataHub, 5/20 without.** The control arm gets a
+capable-assistant prompt asking for specific tables, owners and SQL. It simply has
+no context to answer from.
+
+A benchmark scored on a catalog you built yourself is partly built in, so we ran
+the same 20 questions against **DataHub's own published `showcase-ecommerce`
+datapack**: 1,065 entities over seven platforms, none of them ours, loaded with one
+CLI command. Result there was **20/20 versus 3/20**, checking facts the pack
+carries. That `ORDER_DETAILS` has David Kim and Julia Novak as its stewards. That
+it is kept for a year, charged to Marketing, inside SOC 2 scope. It gives the agent
+a harder time than our own catalog does, because it loads alongside ours, so the
+search surface holds two `orders` tables, six `order_details`, and an
+`ORDER_DETAILS_REPLICA` matching the real table byte for byte across 55 columns.
+
+The decay engine got the same treatment, since a demo where the author planted the
+failure proves very little. On that datapack we dropped a column a runbook's SQL
+selects, deprecated a table a runbook routes people to, and removed an owner a
+runbook tells you to page. All through DataHub's own write APIs. The engine was
+told nothing. It caught all three, one finding each, and stayed quiet on the other
+seven entities and 43 columns. `npm run validate` exited 2. Both scorecards and the
+drill receipts are committed, and CI re-scores every raw answer on each push.
 
 ## How we built it
 
@@ -88,11 +106,19 @@ mode answers every MCP call from a built-in fixture of the same catalog our
 seed script creates, so judges can run the full product — including the eval
 benchmark — with no Docker and a free-tier API key.
 
+The hosted demo needs no API key. A real session is recorded and committed, then
+replayed as the same streamed events: the same MCP calls, the same results, the
+same text, labelled *recorded session* so nobody mistakes it for live. Paste your
+own key and it goes live.
+
 **DataHub technologies used:** DataHub MCP Server (search, get_entities,
-get_lineage, get_dataset_queries, get_dataset_health, get_usage_stats,
-save_document with mutations enabled), DataHub docker quickstart, Python SDK
-ingestion (seed script for the Northbeam demo catalog: 14 datasets, lineage,
-glossary, assertions, incidents, saved queries).
+get_lineage, get_dataset_queries, list_schema_fields, search_documents,
+save_document, add_tags, add_owners / remove_owners, with mutations enabled),
+DataHub GraphQL API (`raiseIncident`, `updateIncidentStatus`, `updateDeprecation`,
+`createTag` — incidents have no MCP tool), the OpenAPI v3 entity endpoint (schema
+rewrites for the decay drill), `datahub datapack load showcase-ecommerce`, DataHub
+docker quickstart, and Python SDK ingestion (seed script for the Northbeam demo
+catalog: 14 datasets, lineage, glossary, assertions, incidents, saved queries).
 
 ## Challenges we ran into
 
@@ -105,16 +131,46 @@ glossary, assertions, incidents, saved queries).
 - Making "the agent wrote something back" trustworthy: we kept every write-back
   human-legible (markdown documents with URNs) and every decay verdict
   LLM-free, so nothing instaboard writes into your catalog is a guess.
+- **The tool almost ate its own tail.** Raise a native Incident when a runbook
+  breaks and the next nightly sweep sees an open incident that wasn't there at
+  record time, then reports it as fresh drift. Every night, forever. Deduplicating
+  needs the incident's title, and it turns out you cannot read an incident over MCP
+  at all. `get_entities` on an incident URN answers "exists but no data could be
+  retrieved", and the entity's health summary says `causes: ["ACTIVE_INCIDENTS"]`
+  where the assertions branch returns URNs. We dropped to GraphQL and filed it.
+- Owner drift was undetectable on live catalogs and nothing said so. Our snapshot
+  collected owner URNs while skipping display names, and a runbook step says "ping
+  Priya Sharma" rather than "ping urn:li:corpuser:b2fd91.patrick1@example.com".
+  Running the drill on a catalog we hadn't authored is what surfaced it.
+
+## Contributing back
+
+Building this turned up work worth sending upstream. All of it is in the repo.
+
+- **A `datahub-onboarding` skill for `datahub-project/datahub-skills`.** The
+  onboarding and handoff workflow generalised into a registry skill, with a
+  `/catalog-onboarding` command, two evaluation cases and the router registration.
+  Written against what `mcp-server-datahub` 0.6.0 exposes.
+- **Four friction reports, each with a reproduction.** No MCP tool returns usage
+  statistics. Incidents are unreadable over MCP. Two tool schemas use multi-type
+  `anyOf` unions that make OpenAI-compatible providers 422 the whole tool list.
+  `datapack load showcase-ecommerce` quietly drops 248 MCPs on OSS, every usage and
+  assertion aspect among them, while reporting success. We checked each against the
+  existing open issues first. Two of them changed this codebase.
 
 ## Accomplishments we're proud of
 
 - The full loop closes: knowledge is captured *from* the catalog, written
   *into* the catalog, and invalidated *by* the catalog.
-- A measured, reproducible answer to "does DataHub grounding matter?" —
-  19/20 vs 5/20, deterministically scored, auditable by hand.
+- A measured, reproducible answer to "does DataHub grounding matter?". 19/20
+  against 5/20 on our catalog, **20/20 against 3/20 on DataHub's own**, scored
+  deterministically, auditable by hand, re-verified by CI on every push.
+- The decay engine held up against real breaking changes on a catalog we didn't
+  build, and its findings land in DataHub's own Incidents and tags rather than
+  stopping at a document.
 - The Chrome side panel makes DataHub itself the recording studio — no
   new tool to learn on the worst week to learn one (your last).
-- 44 tests, demo mode with zero infrastructure, and every judge-facing claim
+- 51 tests, a hosted demo that needs no API key, and every judge-facing claim
   reproducible from a clean clone.
 
 ## What we learned

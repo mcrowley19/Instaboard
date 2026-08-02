@@ -15,6 +15,22 @@ import type { ToolDef } from "./types";
  * (search / get_entities / get_lineage / get_dataset_queries / save_document)
  * answered from the fixture Northbeam catalog instead of a live GMS.
  * Lets the whole app run with zero DataHub setup (DEMO_MODE=true).
+ *
+ * NOTE — this fixture is not tool-for-tool identical to the real server, and the
+ * difference is deliberate rather than hidden. `mcp-server-datahub` 0.6.0 exposes
+ * 20 tools; two of the 7 below have no equivalent on it:
+ *
+ *   - `get_dataset_health` — the real server inlines a `health` array (and
+ *     `deprecation`) on the entity returned by `get_entities` instead.
+ *   - `get_usage_stats`    — the real server exposes no usage tool at all, and
+ *     doesn't inline query counts either. Filed upstream; see
+ *     `submission/oss/issues/01-no-usage-statistics-tool.md`.
+ *
+ * They are kept here because the fixture predates the live integration and the
+ * shapes are useful for unit tests. Everything that consumes them reads the
+ * inlined `health` first and treats the tool as an optional refinement — see
+ * `snapshotEntity` in `lib/decay.ts` — which is why the same code path works
+ * unchanged against a real DataHub, where neither tool exists.
  */
 
 export const DEMO_TOOLS: ToolDef[] = [
