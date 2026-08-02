@@ -1,11 +1,15 @@
 /**
  * instaboard eval harness.
  *
- *   npm run eval                    # both arms, demo catalog (zero setup)
+ *   npm run eval                       # both arms, demo catalog (zero setup)
  *   npm run eval -- --arm=grounded
- *   npm run eval -- --live          # run against a real DataHub via MCP
- *   npm run eval -- --concurrency=1 # gentler on a rate-limited free tier
- *   npm run eval -- --fresh         # ignore the resume cache
+ *   npm run eval -- --live             # run against a real DataHub via MCP
+ *   npm run eval -- --concurrency=1    # gentler on a rate-limited free tier
+ *   npm run eval -- --fresh            # ignore the resume cache
+ *   npm run eval -- --live --suite=showcase
+ *                                      # the same benchmark, re-pointed at
+ *                                      # DataHub's own showcase-ecommerce
+ *                                      # datapack — a catalog we didn't author
  *
  * Runs the 20-case onboarding benchmark twice through the *same* agent loop:
  * once with the DataHub MCP tool set, once with the tool list emptied. The only
@@ -29,21 +33,11 @@ import { listDataHubTools } from "../lib/mcp";
 import { CHAT_SYSTEM_PROMPT } from "../lib/prompts";
 import { isQuotaExhausted } from "../lib/providers";
 import type { AgentEvent, LLMConfig } from "../lib/types";
-import { BENCHMARK, CATEGORIES, type Category, type EvalCase } from "./benchmark";
+import type { EvalCase } from "./benchmark";
+import { SUITES, type Suite, type SuiteName } from "./suites";
 import { scoreCase, summarizeCase, type CaseResult } from "./score";
 
 /* ── Config ───────────────────────────────────────────────────────────── */
-
-/**
- * The control arm's prompt. This is deliberately NOT instaboard's system prompt
- * with the tools removed — that would be a strawman that refuses every question.
- * It is the honest counterfactual: a capable general assistant answering a new
- * hire's question with no access to the company's catalog, which is exactly what
- * a new hire gets from an off-the-shelf chatbot today.
- */
-const BLIND_SYSTEM_PROMPT = `You are a helpful assistant for a new hire joining a data team at Northbeam, a subscription-commerce company. They will ask you practical questions about the company's data warehouse: which tables to use, who owns them, how metrics are defined, and what SQL to write.
-
-Answer as helpfully and specifically as you can. Give concrete table names, column names, owners, and SQL where relevant — a vague answer is not useful to someone trying to ship their first query this week. Be concise and well structured.`;
 
 function loadDotEnv(): void {
   for (const file of [".env.local", ".env"]) {
@@ -114,7 +108,7 @@ function saveCache(cache: Cache): void {
 /** Thrown to unwind the run when the provider says we're out of quota. */
 class QuotaExhausted extends Error {}
 
-function scored(evalCase: EvalCase, run: CachedRun, error?: string): CaseResult {
+function scored(evalCase: EvalCase<string>, run: CachedRun, error?: string): CaseResult {
   const checks = scoreCase(evalCase, run.answer);
   return {
     id: evalCase.id,
@@ -130,12 +124,13 @@ function scored(evalCase: EvalCase, run: CachedRun, error?: string): CaseResult 
 }
 
 async function runOne(
-  evalCase: EvalCase,
+  evalCase: EvalCase<string>,
   arm: Arm,
   config: LLMConfig,
   groundedTools: Awaited<ReturnType<typeof listDataHubTools>>,
   cache: Cache,
-  model: string
+  model: string,
+  suite: Suite
 ): Promise<CaseResult & { cached?: boolean }> {
   const key = cacheKey(model, arm, evalCase.id);
   const hit = cache[key];
@@ -154,7 +149,7 @@ async function runOne(
   try {
     answer = await runAgent(
       config,
-      arm === "grounded" ? CHAT_SYSTEM_PROMPT : BLIND_SYSTEM_PROMPT,
+      arm === "grounded" ? CHAT_SYSTEM_PROMPT : suite.blindPrompt,
       [{ role: "user", content: evalCase.question }],
       emit,
       { tools: arm === "grounded" ? groundedTools : [] }
@@ -214,32 +209,51 @@ function summarizeArm(arm: Arm, cases: CaseResult[]): ArmSummary {
   };
 }
 
-function byCategory(cases: CaseResult[]): Record<Category, { passed: number; total: number }> {
-  const out = {} as Record<Category, { passed: number; total: number }>;
-  for (const category of CATEGORIES) {
+function byCategory(cases: CaseResult[], categories: string[]): Record<string, { passed: number; total: number }> {
+  const out: Record<string, { passed: number; total: number }> = {};
+  for (const category of categories) {
     const inCategory = cases.filter((c) => c.category === category);
     out[category] = { passed: inCategory.filter((c) => c.passed).length, total: inCategory.length };
   }
   return out;
 }
 
-function scorecard(arms: ArmSummary[], meta: { model: string; mode: string; at: string }): string {
+function scorecard(arms: ArmSummary[], meta: { model: string; mode: string; at: string }, suite: Suite): string {
   const grounded = arms.find((a) => a.arm === "grounded");
   const blind = arms.find((a) => a.arm === "blind");
-  const total = BENCHMARK.length;
+  const total = suite.cases.length;
 
   const lines: string[] = [
-    "# instaboard onboarding benchmark",
+    suite.name === "showcase"
+      ? "# instaboard onboarding benchmark — official DataHub datapack"
+      : "# instaboard onboarding benchmark",
     "",
     `_Generated ${meta.at} · model \`${meta.model}\` · catalog: ${meta.mode}_`,
     "",
-    "20 questions a new hire asks in week 1, scored deterministically against the",
-    "Northbeam catalog. Both arms run through the identical agent loop; the only",
+    `${total} questions a new hire asks in week 1, scored deterministically against`,
+    `${suite.catalog}. Both arms run through the identical agent loop; the only`,
     "difference is whether the DataHub MCP tools are in the tool list.",
     "",
-    "## Headline",
-    "",
   ];
+
+  if (suite.name === "showcase") {
+    lines.push(
+      "> **Why this suite exists.** The Northbeam scorecard runs against a catalog this",
+      "> repo seeds — so a high grounded score there is, fairly, partly by construction.",
+      "> This suite re-points the same questions at DataHub's own published",
+      "> `showcase-ecommerce` datapack: 1,065 entities across seven platforms that",
+      "> nobody here designed, loaded with one CLI command anyone can run. Every",
+      "> checked fact — owners, glossary definitions, retention periods, lineage edges —",
+      "> came out of that pack.",
+      "",
+      "> It is also a **harder** catalog. It is loaded alongside Northbeam, so the agent",
+      "> searches a warehouse with real collisions: two `orders` tables, six datasets",
+      "> called some form of `order_details`, `customers` in four platforms.",
+      ""
+    );
+  }
+
+  lines.push("## Headline", "");
 
   if (grounded && blind) {
     lines.push(
@@ -261,15 +275,15 @@ function scorecard(arms: ArmSummary[], meta: { model: string; mode: string; at: 
   lines.push("## By category", "");
   lines.push(`| Category | ${arms.map((a) => (a.arm === "grounded" ? "With DataHub" : "Control")).join(" | ")} |`);
   lines.push(`| --- | ${arms.map(() => "---").join(" | ")} |`);
-  const perArm = arms.map((a) => byCategory(a.cases));
-  for (const category of CATEGORIES) {
+  const perArm = arms.map((a) => byCategory(a.cases, suite.categories));
+  for (const category of suite.categories) {
     const cells = perArm.map((c) => `${c[category].passed}/${c[category].total}`);
     lines.push(`| ${category} | ${cells.join(" | ")} |`);
   }
   lines.push("");
 
   lines.push("## Case detail", "");
-  for (const evalCase of BENCHMARK) {
+  for (const evalCase of suite.cases) {
     lines.push(`### \`${evalCase.id}\` — ${evalCase.question}`, "");
     lines.push(`*Why it matters:* ${evalCase.stakes}`, "");
     for (const arm of arms) {
@@ -293,20 +307,18 @@ function scorecard(arms: ArmSummary[], meta: { model: string; mode: string; at: 
     "",
     "- **Scoring is deterministic.** Every check is a case-insensitive substring match",
     "  against the agent's final answer. There is no LLM judge and no partial credit —",
-    "  a case passes only if all of its checks pass. Raw answers for every case are in",
-    "  `latest.json` so any check can be verified by hand.",
+    `  a case passes only if all of its checks pass. Raw answers for every case are in`,
+    `  \`${suite.resultsPrefix}latest.json\` so any check can be verified by hand.`,
     "- **Both arms share one code path** (`runAgent` in `lib/agent.ts`). The control arm",
     "  is the same loop with `tools: []`.",
     "- **The control is not a strawman.** It gets a neutral, capable-assistant prompt",
     "  asking for specific tables, owners, and SQL — the counterfactual is an",
-    "  off-the-shelf chatbot, not a crippled one. Both prompts are in `run.ts`.",
+    "  off-the-shelf chatbot, not a crippled one. Both prompts are in `suites.ts`.",
     "- **Runs on a free API tier.** A full run is ~80 LLM calls, more than most free",
     "  daily quotas allow at once, so each completed case is cached and a re-run",
     "  resumes where it stopped. A score may therefore be assembled across sessions —",
     "  always on the one model named above, never mixed.",
-    "- **Reproduce:** `DEMO_MODE=true npm run eval` — no DataHub, no Docker.",
-    "  Add `--live` to run the same benchmark against a seeded DataHub instance,",
-    "  or `--concurrency=1` if your provider is strict about requests per minute.",
+    ...suite.reproduce,
     ""
   );
 
@@ -319,7 +331,24 @@ async function main() {
   loadDotEnv();
 
   const argv = process.argv.slice(2);
+  const suiteArg = (argv.find((a) => a.startsWith("--suite="))?.split("=")[1] || "northbeam") as SuiteName;
+  const suite = SUITES[suiteArg];
+  if (!suite) {
+    console.error(`\n  Unknown suite "${suiteArg}". Available: ${Object.keys(SUITES).join(", ")}\n`);
+    process.exit(1);
+  }
+
   const live = argv.includes("--live");
+  if (suite.requiresLive && !live) {
+    console.error(
+      `\n  The ${suite.name} suite checks facts that live only in DataHub's own datapack,\n` +
+        `  so it has no demo fixture. Run it against a live catalog:\n\n` +
+        `    npm run datahub:up\n` +
+        `    datahub datapack load showcase-ecommerce\n` +
+        `    npm run eval -- --live --suite=${suite.name}\n`
+    );
+    process.exit(1);
+  }
   if (!live) process.env.DEMO_MODE = "true";
 
   const armArg = argv.find((a) => a.startsWith("--arm="))?.split("=")[1] as Arm | undefined;
@@ -333,14 +362,14 @@ async function main() {
   const cache = loadCache(fresh);
 
   const alreadyDone = arms.reduce(
-    (n, arm) => n + BENCHMARK.filter((c) => cache[cacheKey(model, arm, c.id)]).length,
+    (n, arm) => n + suite.cases.filter((c) => cache[cacheKey(model, arm, c.id)]).length,
     0
   );
 
-  console.log(`\n  instaboard onboarding benchmark`);
-  console.log(`  ${BENCHMARK.length} cases · model ${model} · ${live ? "live DataHub" : "demo catalog"}`);
+  console.log(`\n  instaboard onboarding benchmark — ${suite.name} suite`);
+  console.log(`  ${suite.cases.length} cases · model ${model} · ${live ? "live DataHub" : "demo catalog"}`);
   console.log(`  ${groundedTools.length} DataHub MCP tools available to the grounded arm`);
-  if (alreadyDone) console.log(`  resuming — ${alreadyDone}/${BENCHMARK.length * arms.length} case-runs already cached`);
+  if (alreadyDone) console.log(`  resuming — ${alreadyDone}/${suite.cases.length * arms.length} case-runs already cached`);
   console.log();
 
   const summaries: ArmSummary[] = [];
@@ -351,8 +380,8 @@ async function main() {
     process.stdout.write(`  ${arm === "grounded" ? "with DataHub" : "control (no DataHub)"} `);
     let cases: (CaseResult & { cached?: boolean })[] = [];
     try {
-      cases = await mapPool(BENCHMARK, concurrency, async (evalCase) => {
-        const result = await runOne(evalCase, arm, config, groundedTools, cache, model);
+      cases = await mapPool(suite.cases, concurrency, async (evalCase) => {
+        const result = await runOne(evalCase, arm, config, groundedTools, cache, model, suite);
         process.stdout.write(result.cached ? "·" : result.passed ? "." : "x");
         return result;
       });
@@ -363,7 +392,7 @@ async function main() {
     }
     const summary = summarizeArm(arm, cases);
     summaries.push(summary);
-    console.log(`  ${summary.casesPassed}/${BENCHMARK.length}`);
+    console.log(`  ${summary.casesPassed}/${suite.cases.length}`);
   }
 
   if (quotaHit) {
@@ -371,28 +400,34 @@ async function main() {
     console.error(
       `\n\n  Provider quota exhausted — stopping before spending more time on retries.\n` +
         `  ${quotaHit.slice(0, 200)}\n\n` +
-        `  ${banked}/${BENCHMARK.length * arms.length} case-runs are banked in evals/results/cache.json.\n` +
+        `  ${banked}/${suite.cases.length * arms.length} case-runs are banked in evals/results/cache.json.\n` +
         `  Re-run \`npm run eval\` when the quota resets and it resumes from there.\n`
     );
     process.exit(2);
   }
 
   const at = new Date().toISOString().slice(0, 16).replace("T", " ") + " UTC";
-  const meta = { model, mode: live ? "live DataHub" : "demo catalog (fixture)", at };
+  const meta = {
+    model,
+    mode: live ? (suite.name === "showcase" ? "live DataHub + showcase-ecommerce datapack" : "live DataHub") : "demo catalog (fixture)",
+    at,
+    suite: suite.name,
+  };
 
   const outDir = path.join(process.cwd(), "evals", "results");
-  writeFileSync(path.join(outDir, "scorecard.md"), scorecard(summaries, meta));
-  writeFileSync(path.join(outDir, "latest.json"), JSON.stringify({ meta, arms: summaries }, null, 2));
+  const p = suite.resultsPrefix;
+  writeFileSync(path.join(outDir, `${p}scorecard.md`), scorecard(summaries, meta, suite));
+  writeFileSync(path.join(outDir, `${p}latest.json`), JSON.stringify({ meta, arms: summaries }, null, 2));
 
   const grounded = summaries.find((a) => a.arm === "grounded");
   const blind = summaries.find((a) => a.arm === "blind");
   if (grounded && blind) {
     console.log(
-      `\n  With DataHub: ${grounded.casesPassed}/${BENCHMARK.length}   Without: ${blind.casesPassed}/${BENCHMARK.length}   ` +
+      `\n  With DataHub: ${grounded.casesPassed}/${suite.cases.length}   Without: ${blind.casesPassed}/${suite.cases.length}   ` +
         `Delta: +${grounded.casesPassed - blind.casesPassed}\n`
     );
   }
-  console.log(`  Wrote evals/results/scorecard.md and latest.json\n`);
+  console.log(`  Wrote evals/results/${p}scorecard.md and ${p}latest.json\n`);
 
   // Non-zero exit if the grounded arm regresses — usable as a CI gate.
   const threshold = Number(process.env.EVAL_MIN_PASS || 0);

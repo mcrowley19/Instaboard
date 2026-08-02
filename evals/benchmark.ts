@@ -23,9 +23,9 @@ export type Category =
   | "sql"
   | "hallucination";
 
-export interface EvalCase {
+export interface EvalCase<C extends string = Category> {
   id: string;
-  category: Category;
+  category: C;
   question: string;
   /** Why a new hire getting this wrong actually costs the team something. */
   stakes: string;

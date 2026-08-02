@@ -1,0 +1,1079 @@
+{
+  "meta": {
+    "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "mode": "live DataHub + showcase-ecommerce datapack",
+    "at": "2026-08-02 15:41 UTC",
+    "suite": "showcase"
+  },
+  "arms": [
+    {
+      "arm": "grounded",
+      "cases": [
+        {
+          "id": "sc-order-details-canonical",
+          "category": "grounding",
+          "question": "In the order-entry warehouse, which dataset gives me one wide row per order with the customer and product attributes already joined on? Give me its URN.",
+          "answer": "Based on the catalog, the dataset you're looking for is **`order_details`** in the `analytics` schema — a denormalized dbt model that joins orders with customers, products, addresses, warehouses, promotions, and more.\n\n**URN:** `urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.ORDER_ENTRY_DB.analytics.order_details,PROD)`\n\nKey details:\n- **Grain:** One row per order line item (each product on an order)\n- **Joins in:** Orders, customers, addresses (billing + shipping), countries, regions, warehouses, order_items, products, product_categories, promotions\n- **Contains:** Customer attributes (name, email, phone, class), product attributes (name, category, condition, price), order details, shipping/billing addresses, warehouse info\n- **Owned by:** Data Platform Team (technical), Ian Chen / Fiona Green / David Kim / Ben Porter / Julia Novak / James Wilson / Karen Okonkwo / Sarah Chen (business/technical owners)\n- **Tags:** PII_Data, Authoritative Source\n- **Domain:** Data Platform Team (`urn:li:domain:b2fd91.1caf2b7c-ca73-4708-bdec-6687d78cab0e`)\n- **Health:** No active incidents\n\n> ⚠️ This table contains PII (customer names, emails, phones). Access should follow your org's privacy policies.\n\nIf you strictly need **one row per order** (not per line item), you'd need to aggregate this table — but all the customer/product attributes you'd want are already joined here.",
+          "checks": [
+            {
+              "label": "names order_details",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "cites a real analytics URN",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "search",
+            "get_entities"
+          ],
+          "durationMs": 48590,
+          "cached": true
+        },
+        {
+          "id": "sc-order-details-customer-columns",
+          "category": "grounding",
+          "question": "Which columns on the order-entry ORDER_DETAILS table carry the customer's identity? I need to know what I'm selecting before I write the query.",
+          "answer": "Based on the **order-entry ORDER_DETAILS** explore (`urn:li:dataset:(urn:li:dataPlatform:looker,b2fd91.order-entry.explore.order_details,PROD)`), here are the columns that carry the customer's identity:\n\n| Column | Type | PII Tag | Notes |\n|--------|------|---------|-------|\n| **Primary identifiers** |\n| `customer_id` | number | ✅ PII | Direct customer key |\n| `cust_email` | string | ✅ PII | Email address |\n| `cust_first_name` | string | ✅ PII | |\n| `cust_last_name` | string | ✅ PII | |\n| `phone_number` | string | ✅ PII | |\n| **Segmentation** |\n| `customer_class` | string | — | E.g., tier, segment |\n| **Billing address (PII-tagged)** |\n| `billing_address_line1` | string | ✅ PII | |\n| `billing_address_line2` | string | ✅ PII | |\n| `billing_town_city` | string | ✅ PII | |\n| `billing_region` | string | ✅ PII | |\n| `billing_country` | string | ✅ PII | |\n| `billing_zipcode` | number | ✅ PII | |\n| **Shipping address (partial PII)** |\n| `shipping_address_line1` | string | ✅ PII | |\n| `shipping_address_line2` | string | ✅ PII | |\n| `shipping_town_city` | string | — | |\n| `shipping_region` | string | — | |\n| `shipping_country` | string | — | |\n| `shipping_zipcode` | number | — | |\n\n**Quick pick for a minimal identity select:**\n```sql\nSELECT\n  customer_id,\n  cust_email,\n  cust_first_name,\n  cust_last_name,\n  phone_number,\n  customer_class\nFROM order-entry.order_details\n```\n\nAll PII-tagged fields are marked with the **PII** glossary term (`urn:li:glossaryTerm:b2fd91.1598cf93-c199-43a1-8833-fce96faa9a1a`). The table is owned by **ORG_BACKEND_ENG** (group) and **EMP006** (user).",
+          "checks": [
+            {
+              "label": "names the email column",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names a real name column",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names the join key",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "invents columns",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 4,
+          "maxScore": 4,
+          "toolCalls": [
+            "search",
+            "list_schema_fields"
+          ],
+          "durationMs": 52858,
+          "cached": true
+        },
+        {
+          "id": "sc-order-history-grain",
+          "category": "grounding",
+          "question": "What is ORDER_HISTORY in the order-entry analytics schema, and how is its grain different from ORDER_DETAILS?",
+          "answer": "Based on the catalog, here's what I found for both tables in the order-entry analytics schema:\n\n## ORDER_HISTORY\n**Platform:** Both dbt model (`urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.ORDER_ENTRY_DB.analytics.order_history,PROD)`) and Snowflake table (`urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)`)\n\n**Description:** \"Incremental table containing all historical order information\"\n\n**Grain:** **One row per order per `as_of_date`** (daily snapshot)\n- Each day captures the state of orders as of that date\n- Built incrementally from `order_details` with a 5-day retention window (deletes `as_of_date < current_date - 5 days`)\n\n**Key columns:** `as_of_date` (DATE, PK), `customer_id`, `order_id`, `order_status`, `order_total`\n\n**Data Freshness SLA:** Weekly (dbt) / Daily (Snowflake)  \n**Retention:** 1 year (dbt) / Indefinite (Snowflake)  \n**Owner:** Data Platform Team / Sarah Chen (escalation)\n\n---\n\n## ORDER_DETAILS\n**Platform:** Both dbt model (`urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.ORDER_ENTRY_DB.analytics.order_details,PROD)`) and Snowflake table (`urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)`)\n\n**Description:** Comprehensive denormalized view of customer orders combining 10+ source tables\n\n**Grain:** **One row per order line item** (order × product)\n- Contains order, customer, product, shipping, billing, inventory, warehouse, and promotion details\n- Materialized as a table in dbt (refreshes on query with current timestamp)\n\n**Key columns:** 50+ fields including `order_id`, `order_date`, `order_total`, `customer_id`, `cust_email`, `product_id`, `product_name`, `quantity`, `unit_price`, warehouse/shipping/billing addresses, etc.\n\n**Contains PII:** Yes (customer names, emails, phones)  \n**Tags:** PII_Data, Authoritative Source, Certified  \n**Owner:** Data Platform Team / Ian Chen (Business Owner)\n\n---\n\n## Grain Comparison\n\n| Aspect | ORDER_HISTORY | ORDER_DETAILS |\n|--------|---------------|---------------|\n| **Grain** | 1 row per order per day (`as_of_date`) | 1 row per order line item (order × product) |\n| **Purpose** | Historical trend analysis, point-in-time snapshots | Operational reporting, detailed order analytics |\n| **Row count** | Orders × days retained (~5 days × daily orders) | Order line items (typically >> orders) |\n| **Source** | Derived from `order_details` (dbt ref) | Joins 10+ source tables (orders, customers, products, etc.) |\n| **Retention** | Rolling 5-day window (dbt) / Indefinite (Snowflake) | Full history |\n| **Update pattern** | Incremental daily | Refreshed on query |\n\n**In short:** `ORDER_DETAILS` is the **authoritative current-state** table at line-item granularity. `ORDER_HISTORY` is a **daily snapshot** of order-level metrics (status, total) for trend analysis, built by incrementally capturing `order_details` state each day.",
+          "checks": [
+            {
+              "label": "names the snapshot date column",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "characterizes it as historical/incremental snapshots",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "search",
+            "get_entities",
+            "search",
+            "search",
+            "get_entities"
+          ],
+          "durationMs": 82080,
+          "cached": true
+        },
+        {
+          "id": "sc-replica-vs-canonical",
+          "category": "authority",
+          "question": "I found ORDER_DETAILS_REPLICA in the analytics schema and it has the same 55 columns as ORDER_DETAILS. Can I just build my report on the replica?",
+          "answer": "**Short answer: You *can* query the replica (it's a `SELECT *` view), but you probably shouldn't use it as your primary report source.**\n\n## Key Differences\n\n| Aspect | `ORDER_DETAILS` (Table) | `ORDER_DETAILS_REPLICA` (View) |\n|--------|-------------------------|--------------------------------|\n| **Type** | Table (source of truth) | View (`SELECT * FROM order_details`) |\n| **Data Quality Score** | 97.5 ✅ | 88.3 ⚠️ |\n| **Retention** | 1 year | 7 years (mismatch!) |\n| **Owners** | 3 owners (Technical + 2 Stewards) | None (only escalation contact) |\n| **Domain** | Ecommerce Operations | — none — |\n| **Tags** | 💲 Large Table, 📈 Most Queried | — none — |\n| **Glossary Terms** | PII, SOC2 Auditable, Order Total, Revenue by Customer Class | PII only (column-level) |\n| **Data Product** | Part of \"Promotions Performance\" | Not linked |\n| **Description** | \"Details of orders.\" | *(empty)* |\n| **Health (incidents)** | PASS | PASS |\n\n## Why this matters for your report\n\n1. **Governance gap** — The replica has no owners, no domain, no tags, and a lower quality score. If something breaks, there's no clear escalation path.\n\n2. **Semantic loss** — The table carries business glossary terms (`Order Total`, `Revenue by Customer Class`, `SOC2 Auditable`) that document *what the metrics mean*. The replica only has PII tags.\n\n3. **Retention mismatch** — 7 years on the view vs. 1 year on the table suggests the replica may be kept for a different purpose (audit/archival?), not for daily reporting.\n\n4. **Discoverability** — The table is tagged \"Most Queried\" and \"Large Table\" — signals that this is the canonical analytics surface. The replica is invisible to those signals.\n\n5. **Data product linkage** — The table powers the \"Promotions Performance\" data product. Building on the replica disconnects your report from that governed product.\n\n## Recommendation\n\n**Build on `ORDER_DETAILS` (the table).**  \nIt's the authoritative, governed, documented asset with clear ownership and semantic metadata.\n\nIf you need a dedicated view for your report (e.g., to lock column order, add a filter, or control permissions), **create your own view** downstream of the table — don't rely on this undocumented replica.\n\n---\n\nWant me to check if there are any downstream dashboards already using the replica (so you know if others depend on it)?",
+          "checks": [
+            {
+              "label": "steers to ORDER_DETAILS instead",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "grounds the verdict in real catalog metadata",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "endorses the replica",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 3,
+          "maxScore": 3,
+          "toolCalls": [
+            "search",
+            "search",
+            "get_entities"
+          ],
+          "durationMs": 68993,
+          "cached": true
+        },
+        {
+          "id": "sc-which-platform-authoritative",
+          "category": "authority",
+          "question": "order_details exists in Snowflake, dbt, Looker and PowerBI in this catalog. Which copy is the authoritative one, and what in DataHub tells you that?",
+          "answer": "**Authoritative copy: The dbt model**  \n`urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.ORDER_ENTRY_DB.analytics.order_details,PROD)`\n\n---\n\n### What in DataHub tells you this\n\n| Evidence | Details |\n|----------|---------|\n| **Explicit “Authoritative Source” tag** | The dbt model carries the tag `urn:li:tag:b2fd91.Authoritative Source`. No other copy has this tag. |\n| **Description states it’s the central hub** | The dbt model’s editable description reads: “The `order_details` table is a **central hub for order information**… The table is **consumed by several downstream systems, including a Snowflake view, Tableau dashboards, Power BI reports, and a Looker view**.” |\n| **Lineage confirms the flow** | Upstream lineage of the Snowflake table shows the dbt model as its direct parent (dbt materializes models as tables in Snowflake). Downstream lineage from the Snowflake table goes to Looker (2 explores/views), Power BI (1 dataset + dashboard), and Tableau (multiple charts). |\n| **Data Product ownership** | The dbt model belongs to the **“Order Entry Analytics” data product** (owned by the Data Platform Team), which lists `order_details` as its core asset. |\n| **Certified glossary term** | The dbt model has the **“Certified”** glossary term (`urn:li:glossaryTerm:b2fd91.f5bb0410-d9cd-4b24-ade4-361ff6bde7ea`), signaling it’s the blessed definition. |\n\n---\n\n### The other copies (all downstream consumers)\n\n| Platform | Entity | Role |\n|----------|--------|------|\n| **Snowflake** | `urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)` | Materialized table produced by the dbt model; tagged “Large Table” & “Most Queried”; has SLA (Daily), quality score 97.5, domain **Ecommerce Operations**. |\n| **Looker** | `urn:li:dataset:(urn:li:dataPlatform:looker,b2fd91.order-entry.explore.order_details,PROD)` (Explore) & `urn:li:dataset:(urn:li:dataPlatform:looker,b2fd91.order-entry-looker.view.order_details,PROD)` (View) | Semantic layer / explores built on top of the Snowflake table. |\n| **Power BI** | `urn:li:dataset:(urn:li:dataPlatform:powerbi,b2fd91.datahub_order_entries.ORDER_DETAILS,PROD)` | Dataset feeding the “datahub_order_entries” report/dashboard. |\n| **Tableau** | Multiple charts/workbooks (e.g., “Order Mode”, “Orders By Day”) | Visualizations consuming the Snowflake table. |\n\n---\n\n### TL;DR for a new hire\n- **Write/transform** → dbt model (`order_entry_db.analytics.order_details`)  \n- **Read/query** → Snowflake table (`order_entry_db.analytics.order_details`) — this is the physical table dbt creates  \n- **Analyze/visualize** → Looker, Power BI, Tableau (all point at the Snowflake table)\n\nThe **“Authoritative Source” tag + the dbt model’s own description + lineage graph** are the DataHub signals that make this unambiguous.",
+          "checks": [
+            {
+              "label": "cites the governance marker that settles it",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names a specific platform copy",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "get_entities",
+            "get_lineage",
+            "get_lineage"
+          ],
+          "durationMs": 199858,
+          "cached": true
+        },
+        {
+          "id": "sc-order-details-domain",
+          "category": "authority",
+          "question": "Which domain does the Snowflake ORDER_DETAILS table belong to? I need to know whose remit it is.",
+          "answer": "The **Snowflake `ORDER_DETAILS` table** (`b2fd91.order_entry_db.analytics.order_details`) belongs to the **Ecommerce Operations** domain.\n\n| Property | Value |\n|---|---|\n| **Domain** | Ecommerce Operations |\n| **Domain URN** | `urn:li:domain:b2fd91.91994180-93ee-43f7-9c97-5e74a4a43fbd` |\n| **Parent Domain** | Acme Corporation |\n| **Domain Description** | Manages day-to-day e-commerce operations including inventory management, order fulfillment, and customer service. |\n\n**Key owners for this table:**\n- **Technical Owner**: DataHub SE Team (group: `urn:li:corpGroup:b2fd91.1e0398a3-113f-475e-b6fc-32ab72a634d2`)\n- **Data Stewards**: David Kim (Data Scientist), Julia Novak (Data Quality Engineer)\n\nThe domain currently has no assigned owner listed (shows \"[To be assigned]\"), so the **DataHub SE Team** as technical owner is your best first point of contact for questions about this table's remit.",
+          "checks": [
+            {
+              "label": "names the real domain",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 1,
+          "maxScore": 1,
+          "toolCalls": [
+            "search",
+            "get_entities"
+          ],
+          "durationMs": 31827,
+          "cached": true
+        },
+        {
+          "id": "sc-order-details-stewards",
+          "category": "ownership",
+          "question": "Who are the data stewards for the Snowflake ORDER_DETAILS table?",
+          "answer": "Based on the catalog, the **Snowflake `ORDER_DETAILS` table** (`urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)`) has **two Data Stewards**:\n\n| Data Steward | Title | Email |\n|---|---|---|\n| **David Kim** (`urn:li:corpuser:b2fd91.brock1@example.com`) | Data Scientist | david.kim@example.com |\n| **Julia Novak** (`urn:li:corpuser:b2fd91.jonny1@example.com`) | Data Quality Engineer | julia.novak@example.com |\n\n**Also listed as an owner:**\n- **DataHub SE Team** (`urn:li:corpGroup:b2fd91.1e0398a3-113f-475e-b6fc-32ab72a634d2`) — *Technical Owner*\n\n---\n\n**Quick context for a new hire:**\n- The table is in the **Ecommerce Operations** domain.\n- It’s tagged **💲 Large Table** and **📈 Most Queried** (high usage).\n- It carries a **PII** glossary term and has a **Data Quality Score of 97.5** with a **Daily** freshness SLA.\n- Escalation contact: **Ian Chen** (Director of Data Engineering).\n\nIf you need to ask about data quality, governance, or access for this table, David or Julia are your go-to stewards.",
+          "checks": [
+            {
+              "label": "names a real steward",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "invents an owner",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "get_entities"
+          ],
+          "durationMs": 32694,
+          "cached": true
+        },
+        {
+          "id": "sc-escalation-contact",
+          "category": "ownership",
+          "question": "ORDER_DETAILS hasn't refreshed and it's blocking my report. Who is the escalation contact for it according to the catalog?",
+          "answer": "The `ORDER_DETAILS` table (Snowflake: `b2fd91.order_entry_db.analytics.order_details`) has an explicit **escalation contact** defined in its structured properties:\n\n| Field | Value |\n|-------|-------|\n| **Escalation Contact** | **Ian Chen** — Director of Data Engineering (`urn:li:corpuser:b2fd91.EMP006`) |\n| **Email** | ian.chen@example.com |\n\nThis is stored under the structured property **`showcase.escalationContact`** (Data Owner Escalation Contact) with a Daily data freshness SLA also configured on the table.\n\n**Other relevant owners on the table:**\n- **Technical Owner:** DataHub SE Team (group: `urn:li:corpGroup:b2fd91.1e0398a3-113f-475e-b6fc-32ab72a634d2`)\n- **Data Stewards:** David Kim (Data Scientist) and Julia Novak (Data Quality Engineer)\n\nSince the table has a **Daily** freshness SLA and is tagged as both a **Large Table** and **Most Queried**, Ian Chen is the right person to escalate to when a refresh is blocking your report.",
+          "checks": [
+            {
+              "label": "names the escalation contact",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "grounds it in the escalation property",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "get_entities"
+          ],
+          "durationMs": 40996,
+          "cached": true
+        },
+        {
+          "id": "sc-powerbi-order-details-owner",
+          "category": "ownership",
+          "question": "Who owns the PowerBI ORDER_DETAILS dataset in the datahub_order_entries workspace?",
+          "answer": "The **PowerBI `ORDER_DETAILS` dataset** in the `datahub_order_entries` workspace is owned by:\n\n| Owner | Role | Title | Contact |\n|-------|------|-------|---------|\n| **Karen Okonkwo** (`urn:li:corpuser:b2fd91.kirk@example.com`) | Technical Owner | Customer Success Manager | karen.okonkwo@example.com |\n\n**Dataset Details:**\n- **URN:** `urn:li:dataset:(urn:li:dataPlatform:powerbi,b2fd91.datahub_order_entries.ORDER_DETAILS,PROD)`\n- **Platform:** PowerBI\n- **Workspace:** Order Entry (container `urn:li:container:a1b63f1e0516d47949181f804bc4ae9b`)\n- **Glossary Terms:** Tagged with **PII** (Personally Identifiable Information) — multiple columns contain billing/shipping addresses, customer names, emails, and phone numbers\n- **Health:** No active incidents (✅)\n\n**Escalation Contact** (via structured property): **David Kim** (Data Scientist) — `urn:li:corpuser:b2fd91.brock1@example.com`\n\nIf you need to reach out about schema changes, data quality issues, or access requests, Karen is your primary point of contact as the Technical Owner.",
+          "checks": [
+            {
+              "label": "names the PowerBI owner",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 1,
+          "maxScore": 1,
+          "toolCalls": [
+            "search",
+            "get_entities"
+          ],
+          "durationMs": 15701,
+          "cached": true
+        },
+        {
+          "id": "sc-order-details-downstream",
+          "category": "lineage",
+          "question": "What breaks if I drop a column from the Snowflake ORDER_DETAILS table? Give me the actual downstream dependents.",
+          "answer": "Based on the full downstream lineage (34 total dependents), here's what breaks if you drop a column from the Snowflake `ORDER_DETAILS` table (`urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)`):\n\n---\n\n## 📊 **Downstream Dependents Summary**\n\n| Type | Count | Platforms |\n|------|-------|-----------|\n| **Datasets** | 19 | Looker (7), Power BI (7), Tableau (5), dbt (1), Snowflake (1) |\n| **Charts** | 12 | Tableau (4), Looker (4), Power BI (4) |\n| **Dashboards** | 3 | Tableau (1), Power BI (1), Looker (1) |\n\n---\n\n## 🔴 **Direct Downstream Datasets (Degree 1)**\n\n| Dataset | Platform | Owner / Contact | Notes |\n|---------|----------|-----------------|-------|\n| `order_history` (dbt model) | dbt | **Karen Okonkwo** (Product Manager) | Incremental table, business-critical |\n| `ORDER_HISTORY` | Snowflake | **Sarah Chen** (Senior Data Analyst) | Large table, daily refresh |\n| `ORDER_DETAILS_REPLICA` | Snowflake | **Julia Novak** (Data Quality Engineer) | View, daily refresh |\n| `Customer Analytics Measures` | Power BI | **Ian Chen** (Director of Data Eng) | Weekly refresh |\n| `Essential KPI Measures` | Power BI | **Ben Porter** (Data Engineer) | Hourly refresh |\n| `Geographic Measures` | Power BI | **Andrea Garcia** (Analytics Engineer) | Hourly refresh |\n| `Product Performance Measures` | Power BI | **Julia Novak** (Data Quality Engineer) | Daily refresh |\n| `Time Intelligence Measures` | Power BI | **Julia Novak** (Data Quality Engineer) | Monthly refresh |\n| `Order Details` (Explore) | Looker | **Data Platform Team** / **Ian Chen** | Daily refresh, Data Quality Score: 99.4 |\n| `order_details` (View) | Looker | **Fiona Green** (Tech Lead) / **Ian Chen** | Part of Order Entry Analytics data product |\n| `Custom SQL Query` (4x) | Tableau | Various (David Kim, Sarah Chen, Marco Santos) | 4 custom SQL queries |\n| `Promotions`, `Order Mode`, `Orders By Day`, `Top Product Category` | Tableau | **David Kim** (Data Scientist) | Embedded data sources |\n\n---\n\n## 🟠 **Dashboards (Degree 2-4)**\n\n| Dashboard | Platform | Owner | Description |\n|-----------|----------|-------|-------------|\n| **Order Entry Dashboard** | Tableau | **David Kim** (Data Scientist) | Real-time order volume, fulfillment bottlenecks, avg order value |\n| **datahub_order_entries** | Power BI | **Sarah Chen**, **Marco Santos**, **Priya Sharma**, **Andrea Garcia** | Same as Tableau version |\n| **Order Entry Dashboard** | Looker | — | 5 charts: Popular Products, Promotions, Order Mode, Orders by Day |\n\n---\n\n## 🟡 **Charts (Degree 2-3)**\n\n| Chart | Platform | Dashboard |\n|-------|----------|-----------|\n| Orders By Month | Tableau | Order Entry Dashboard |\n| Popular Products Categories | Tableau | Order Entry Dashboard |\n| Promotions | Tableau | Order Entry Dashboard |\n| Order Mode | Tableau | Order Entry Dashboard |\n| Popular Products | Looker | Order Entry Dashboard (Looker) |\n| Promotions | Looker | Order Entry Dashboard (Looker) |\n| Order Mode | Looker | Order Entry Dashboard (Looker) |\n| Orders by Day | Looker | Order Entry Dashboard (Looker) |\n| Customer Analysis | Power BI | datahub_order_entries |\n| Geographics | Power BI | datahub_order_entries |\n| Executive Summary | Power BI | datahub_order_entries |\n| DAX Visual | Power BI | datahub_order_entries |\n\n---\n\n## ⚠️ **Key Risks to Communicate Before Dropping a Column**\n\n1. **3 BI platforms affected** — Tableau, Power BI, Looker all consume this table\n2. **2 executive dashboards** — Tableau & Power BI \"Order Entry Dashboard\" used in daily standups\n3. **1 critical dbt model** — `order_history` is incremental, business-critical, owned by Product\n4. **4 Power BI measure tables** — Customer Analytics, Essential KPIs, Geographic, Product Performance, Time Intelligence\n5. **Data Product dependency** — Part of **Order Entry Analytics** data product (SLA: daily refresh by 6 AM EST)\n\n---\n\n## 👥 **People to Notify First**\n\n| Role | Name | Email | Why |\n|------|------|-------|-----|\n| **Data Platform Team** (Technical Owner) | Maya Patel, Carlos Mendoza | data-platform@example.com | Own the pipeline & SLA |\n| **Director of Data Eng** | Ian Chen | ian.chen@example.com | Business owner of Order Entry Analytics |\n| **Data Scientist (Tableau)** | David Kim | david.kim@example.com | Owns 9 downstream Tableau assets |\n| **Senior Data Analyst (Power BI)** | Sarah Chen | sarah.chen@example.com | Owns Power BI report & 2 custom SQLs |\n| **Product Manager (dbt)** | Karen Okonkwo | karen.okonkwo@example.com | Owns `order_history` incremental model |\n\n---\n\n## ✅ **Recommended Next Steps**\n\n1. **Check which column** — Use `get_lineage_paths_between` with `source_column`/`target_column` to see exact column-level impact\n2. **Run `get_dataset_queries`** on the source table to see actual SQL patterns referencing that column\n3. **Coordinate with Data Platform Team** — They manage the ETL and can assess migration effort\n4. **Consider deprecation workflow** — Add a `Deprecated` tag, communicate timeline, update downstream views first\n\nWant me to check column-level lineage for a specific column, or pull real SQL queries showing how that column is used?",
+          "checks": [
+            {
+              "label": "names a BI-layer dependent",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names a downstream dataset or dashboard",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "get_lineage",
+            "get_lineage",
+            "get_lineage",
+            "get_lineage",
+            "get_lineage",
+            "get_lineage"
+          ],
+          "durationMs": 92767,
+          "cached": true
+        },
+        {
+          "id": "sc-order-details-upstream",
+          "category": "lineage",
+          "question": "Where does the Snowflake ORDER_DETAILS table get its data from? I'm debugging a wrong total.",
+          "answer": "## Where the Snowflake `ORDER_DETAILS` Table Gets Its Data\n\n### Quick Summary\nThe **Snowflake table** `b2fd91.order_entry_db.analytics.order_details` (`urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)`) is a **materialized view** populated by a **dbt model** (`order_entry_db.analytics.order_details`). That dbt model joins **10 upstream source tables** from the `order_entry` schema in Snowflake.\n\n---\n\n### Direct Upstream Tables (Snowflake, `order_entry` schema)\n\n| Table | URN | Key Columns Contributed |\n|-------|-----|-------------------------|\n| **ORDERS** | `urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.orders,PROD)` | `order_id`, `order_date`, `order_total`, `order_status`, `order_mode`, `cost_of_delivery`, `delivery_type`, `payment_method_code` |\n| **ORDER_ITEMS** | `urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)` | Line-item detail (quantity, unit_price, discount, product_id) |\n| **CUSTOMERS** | `urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.customers,PROD)` | `customer_id`, `cust_first_name`, `cust_last_name`, `cust_email`, `phone_number`, `customer_class` |\n| **ADDRESSES** | `urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.addresses,PROD)` | Billing & shipping address lines, city, zip, country, region |\n| **COUNTRIES** | `urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.countries,PROD)` | Country lookup |\n| **REGIONS** | (referenced in dbt model) | Region/state lookup |\n| **WAREHOUSES** | (referenced in dbt model) | Warehouse info |\n| **PRODUCTS** | (referenced in dbt model) | Product detail |\n| **PRODUCT_CATEGORIES** | `urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.product_categories,PROD)` | Category hierarchy |\n| **PROMOTIONS** | (referenced in dbt model) | Promo/discount codes |\n\n---\n\n### Your Specific Issue: Debugging a Wrong `order_total`\n\n**Column-level lineage shows `order_total` comes directly from the `ORDERS` table** — no transformation or aggregation in the dbt model.\n\n```text\nORDER_DETAILS.order_total  ←  ORDERS.order_total  (1-hop, direct pass-through)\n```\n\nThe `ORDERS` table (`b2fd91.order_entry_db.order_entry.orders`) has **no upstream column lineage** for `order_total`, meaning it's a **raw/base column** loaded from the operational system (PostgreSQL per full lineage).\n\n---\n\n### Recommended Debugging Steps\n\n| Step | Action | Why |\n|------|--------|-----|\n| 1. Check `ORDERS.order_total` at source | `SELECT order_id, order_total FROM b2fd91.order_entry_db.order_entry.orders WHERE order_id = <problem_id>;` | Confirms if the raw value is already wrong |\n| 2. Compare with `ORDER_ITEMS` | `SELECT order_id, SUM(quantity * unit_price * (1 - discount)) FROM order_items GROUP BY order_id;` | Recompute expected total from line items |\n| 3. Check dbt model SQL | Open the dbt project (`model.order_entry_db.order_details`) — the model is a materialized view refreshed daily (SLA: Daily, 6 AM EST) | Ensure no overridden logic for `order_total` |\n| 4. Verify freshness | Data Quality Score: 86.8 (dbt) / 81.8 (Snowflake ORDERS); Freshness SLA: Daily / Real-time | Stale data could explain drift |\n| 5. Talk to owners | **Technical Owner:** Julia Novak (Data Quality Engineer) — `urn:li:corpuser:b2fd91.jonny1@example.com`<br>**Business Owner:** Fiona Green (Technical Lead) — `urn:li:corpuser:b2fd91.marty@example.com` | They own the pipeline and the \"Order Total\" glossary term |\n\n---\n\n### Key Metadata for Context\n- **dbt model:** `model.order_entry_db.order_details` (materialized as table, refreshed daily)\n- **Data Product:** Order Entry Analytics (`urn:li:dataProduct:b2fd91.e0e95662-34bb-42fc-9dcc-29002bbbfeda`)\n- **Glossary term:** \"Order Total\" (`urn:li:glossaryTerm:b2fd91.42266719-3cab-42b8-a8d2-49d782876dbc`) — defines `order_total` as *\"sum of all line item totals for a given order\"*\n- **PII tag:** Both tables carry `PII_Data` tag — handle accordingly\n\n---\n\n**Bottom line:** Start debugging at `b2fd91.order_entry_db.order_entry.orders.order_total`. If that matches the source system, the issue is in the dbt materialization; if not, the bug is upstream in the Postgres → Snowflake ingestion.",
+          "checks": [
+            {
+              "label": "names the line-item source",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names another real upstream",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "get_lineage",
+            "get_lineage",
+            "get_lineage",
+            "get_lineage",
+            "get_lineage",
+            "get_dataset_queries",
+            "get_dataset_queries",
+            "get_entities"
+          ],
+          "durationMs": 138205
+        },
+        {
+          "id": "sc-dashboard-blast-radius",
+          "category": "lineage",
+          "question": "Which dashboards are built on the order-entry data? I want to know who to warn before a migration.",
+          "answer": "Based on my search, there are **3 dashboards** built on the order-entry data. Here's what you need to warn:\n\n---\n\n### 📊 Dashboards Dependent on Order-Entry Data\n\n| Dashboard | Platform | Owner(s) | Domain | Last Modified |\n|-----------|----------|----------|--------|---------------|\n| **Order Entry Dashboard** | Looker | *No explicit owner on dashboard* | Ecommerce Operations | 2025-09-25 |\n| **Order Entry Dashboard** | Tableau | **David Kim** (Data Scientist) – `urn:li:corpuser:b2fd91.brock1@example.com` | Marketing | 2025-11-01 |\n| **datahub_order_entries** (Report) | Power BI | **Sarah Chen** (Senior Data Analyst), **Marco Santos** (Senior Software Engineer), **Priya Sharma** (Data Steward), **Andrea Garcia** (Analytics Engineer) | — | 2020-11-28 |\n\n---\n\n### 🔗 Lineage Confirmation\nThe core `orders` table (`urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.orders,PROD)`) has **36 downstream dependents**, including:\n- **3 Dashboards** (the ones above)\n- 12 Charts (Looker, Tableau, Power BI)\n- 21 Datasets (including `order_details`, `order_history`, and various BI semantic models)\n\nThe `order_details` dbt model (`urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.ORDER_ENTRY_DB.analytics.order_details,PROD)`) is the main analytical layer feeding these dashboards — it's tagged **PII_Data**, **Authoritative Source**, and certified.\n\n---\n\n### ⚠️ Who to Contact Before Migration\n\n| Priority | Contact | Role | Why |\n|----------|---------|------|-----|\n| **1** | **Ian Chen** (`urn:li:corpuser:b2fd91.EMP006`) | Director of Data Engineering / Business Owner of `order_details` | Owns the data product & pipeline SLAs (daily refresh by 6 AM EST) |\n| **2** | **David Kim** (`urn:li:corpuser:b2fd91.brock1@example.com`) | Data Scientist / Owner of Tableau dashboard | Direct dashboard owner |\n| **3** | **Sarah Chen** (`urn:li:corpuser:b2fd91.sam@example.com`) | Senior Data Analyst / Escalation contact for `order_details` | Listed as escalation contact in structured properties |\n| **4** | **Data Platform Team** (`urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM`) | Technical owners of `order_details` | Maintains ETL pipelines & infrastructure |\n\n---\n\n### 📋 Suggested Migration Checklist\n1. **Validate schema compatibility** — `order_details` joins 10+ source tables; confirm column names/types in new `orders` table match\n2. **Run regression on the 3 dashboards** — especially the Looker & Tableau ones (used daily for order fulfillment)\n3. **Notify Ian Chen & Data Platform Team** — they own the SLA (daily refresh by 6 AM EST)\n4. **Check PII handling** — `order_details` carries `PII_Data` tag and GDPR glossary term; ensure migration doesn't expose new columns\n\nWould you like me to pull the exact SQL queries these dashboards run against `order_details` (via `get_dataset_queries`) so you can test them against the new schema?",
+          "checks": [
+            {
+              "label": "names a real dashboard",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "identifies the BI platform",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "search",
+            "get_entities",
+            "get_lineage"
+          ],
+          "durationMs": 95200,
+          "cached": true
+        },
+        {
+          "id": "sc-order-total-definition",
+          "category": "glossary",
+          "question": "How is 'Order Total' defined in our glossary, and how am I supposed to compute it?",
+          "answer": "## Order Total — Glossary Definition\n\n**Term:** `Order Total`  \n**URN:** `urn:li:glossaryTerm:b2fd91.42266719-3cab-42b8-a8d2-49d782876dbc`  \n**Owner:** `urn:li:corpuser:b2fd91.marty@example.com`\n\n---\n\n### Definition\n> The total monetary value of an order, including all line items, discounts, and applicable taxes. Calculated as the sum of all line item totals for a given order.\n\n---\n\n### How to Compute It\n\n| Scenario | SQL Pattern |\n|----------|-------------|\n| **Single order** | Use column `order_total` directly |\n| **Aggregate total revenue** | `SUM(order_total)` |\n| **Average order value** | `AVG(order_total)` |\n| **Count orders** | `COUNT(DISTINCT order_id)` |\n\n---\n\n### Example Queries (from the glossary)\n\n```sql\n-- Total revenue\nSELECT SUM(order_total) \nFROM order_entry_db.analytics.order_details;\n\n-- Average order value\nSELECT AVG(order_total) \nFROM order_entry_db.analytics.order_details;\n\n-- Revenue by date\nSELECT order_date, SUM(order_total) \nFROM order_entry_db.analytics.order_details \nGROUP BY order_date;\n```\n\n---\n\n### Source Table\nThe examples reference **`order_entry_db.analytics.order_details`** — this appears to be the canonical table where `order_total` lives. You can verify its schema/lineage if you need to trace the column upstream.\n\nWould you like me to:\n- Show the schema for `order_entry_db.analytics.order_details`?\n- Find upstream tables that feed `order_total`?\n- Check if there are any data quality assertions or incidents on this table?",
+          "checks": [
+            {
+              "label": "uses the real column",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "gives the sanctioned aggregation",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "get_entities"
+          ],
+          "durationMs": 22829,
+          "cached": true
+        },
+        {
+          "id": "sc-revenue-by-customer-class",
+          "category": "glossary",
+          "question": "What does 'Revenue by Customer Class' mean here, and which columns do I group by?",
+          "answer": "**Definition** (from the glossary term `urn:li:glossaryTerm:b2fd91.26e268c3-3688-4281-949e-8c1aa2600c02`):\n\n> **Revenue by Customer Class** — Aggregated revenue metrics segmented by customer classification. Shows revenue distribution across customer segments.\n\n**Source table** (canonical, per the term's SQL pattern):\n- **Snowflake**: `order_entry_db.analytics.order_details`  \n  URN: `urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)`\n\n**Columns to use**\n\n| Purpose | Column | Type | Notes |\n|---|---|---|---|\n| **GROUP BY** | `customer_class` | VARCHAR | The customer classification segment (e.g., \"Enterprise\", \"SMB\", \"Individual\") |\n| **Primary aggregation** | `order_total` | FLOAT | Monetary value of each order (tagged with glossary term **Order Total**) |\n| **Order count** | `order_id` | NUMBER | Use `COUNT(DISTINCT order_id)` |\n| **Date filtering** | `order_date` | VARCHAR | Add `WHERE order_date >= '...'` before grouping |\n\n**Standard SQL pattern** (straight from the glossary term):\n\n```sql\nSELECT\n  customer_class,\n  SUM(order_total) AS total_revenue,\n  COUNT(DISTINCT order_id) AS order_count,\n  AVG(order_total) AS avg_order_value\nFROM order_entry_db.analytics.order_details\nGROUP BY customer_class\nORDER BY total_revenue DESC;\n```\n\n**Common variants** (also documented in the term):\n- Add a date window: `WHERE order_date >= '2024-01-01'` before `GROUP BY`\n- Join to other dimensions (e.g., `order_mode`, `promotion_name`) by including them in the `SELECT` and `GROUP BY`\n\n**Owner to contact**: Fiona Green (`urn:li:corpuser:b2fd91.marty@example.com`), Technical Lead — she owns both the **Revenue by Customer Class** term and the **Order Total** term used in the calculation.\n\n**Health**: The source table has no open incidents and a Data Quality Score of 97.5 (Daily freshness SLA).",
+          "checks": [
+            {
+              "label": "names the grouping column",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names the measure",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "get_entities",
+            "search",
+            "get_entities"
+          ],
+          "durationMs": 27227,
+          "cached": true
+        },
+        {
+          "id": "sc-pii-columns",
+          "category": "governance",
+          "question": "Which columns on ORDER_DETAILS are classified as personal data, and what does that mean for how I use them?",
+          "answer": "Based on the catalog, **11 columns on `ORDER_DETAILS` are explicitly tagged as PII** (Personally Identifiable Information):\n\n## 📋 PII-Classified Columns\n\n| Column | Data Type | Notes |\n|--------|-----------|-------|\n| `cust_email` | VARCHAR | Tagged with both **Email Address** and **PII** glossary terms |\n| `phone_number` | VARCHAR | Tagged with both **Phone Number** and **PII** glossary terms |\n| `billing_address_line1` | VARCHAR | |\n| `billing_address_line2` | VARCHAR | |\n| `billing_zipcode` | NUMBER | |\n| `cust_first_name` | VARCHAR | |\n| `cust_last_name` | VARCHAR | |\n| `customer_id` | NUMBER | Account number — direct identifier per PII definition |\n| `shipping_address_line1` | VARCHAR | |\n| `shipping_address_line2` | VARCHAR | |\n| `shipping_country` | VARCHAR | |\n| `shipping_town_city` | VARCHAR | |\n| `shipping_zipcode` | NUMBER | |\n\n*(Source: `urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)` — schema fields with `editedGlossaryTerms: [\"PII\"]`)*\n\n---\n\n## ⚠️ What This Means for Your Usage\n\nThe **PII glossary term** on this dataset defines PII as any data that can identify a specific individual, directly or indirectly. Key implications:\n\n### 1. **Access Controls**\n- These columns likely fall under stricter RBAC policies. Verify your role has explicit permission before selecting them.\n- Ask the **Data Stewards** (Julia Novak, David Kim) or **Technical Owner** (DataHub SE Team) about access procedures.\n\n### 2. **Query Hygiene**\n- **Avoid `SELECT *`** — it pulls all PII columns unnecessarily.\n- Only select PII columns when the business question requires them (e.g., shipping labels, customer support).\n- For analytics/aggregations, use non-PII fields (`customer_class`, `category_name`, `order_total`, etc.).\n\n### 3. **Downstream Propagation**\n- Any derived table, view, or dashboard that includes these columns **inherits the PII classification**.\n- Check lineage before publishing new assets: `get_lineage(urn=\"urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)\", upstream=false)`\n\n### 4. **Retention & Deletion**\n- The dataset has a **structured property: Retention Period = \"1 year\"** — PII may have shorter legal retention requirements.\n- Coordinate with the escalation contact (Ian Chen, Director of Data Engineering) before archiving or deleting.\n\n### 5. **Compliance Tags**\n- The table also carries **SOC2 Auditable** — audit logs may track access to these columns.\n- **GDPR** glossary term appears on related datasets — treat EU-customer rows with extra care.\n\n---\n\n## ✅ Recommended Pattern\n\n```sql\n-- ✅ Good: Explicit columns, no PII unless needed\nSELECT\n  order_id,\n  order_date,\n  order_total,\n  customer_class,\n  category_name,\n  product_name,\n  quantity,\n  unit_price\nFROM order_entry_db.analytics.order_details\nWHERE order_date >= '2024-01-01';\n\n-- ⚠️ Only when required: Add PII columns explicitly\nSELECT\n  order_id,\n  cust_email,           -- PII\n  shipping_address_line1, -- PII\n  shipping_zipcode      -- PII\nFROM ...\nWHERE customer_id = 12345;  -- support ticket lookup\n```\n\n---\n\n## 👥 Who to Ask\n\n| Role | Person | Contact |\n|------|--------|---------|\n| Technical Owner | DataHub SE Team | (group) |\n| Data Steward | Julia Novak | julia.novak@example.com |\n| Data Steward | David Kim | david.kim@example.com |\n| Escalation Contact | Ian Chen | ian.chen@example.com |\n\nWould you like me to check which downstream dashboards or tables currently consume these PII columns, or look up the specific access policy for this dataset?",
+          "checks": [
+            {
+              "label": "names a PII-classified column",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "cites the classification",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "get_entities"
+          ],
+          "durationMs": 45135,
+          "cached": true
+        },
+        {
+          "id": "sc-retention-period",
+          "category": "governance",
+          "question": "How long is ORDER_DETAILS retained for? I need to know before I promise a two-year trend report.",
+          "answer": "Based on the catalog, **`ORDER_DETAILS` (urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)) has a documented retention period of 1 year** — set via the structured property `showcase.retentionPeriod`.\n\n| Property | Value |\n|----------|-------|\n| **Retention Period** | 1 year |\n| **Data Freshness SLA** | Daily |\n| **Data Quality Score** | 97.5 |\n| **Owners** | DataHub SE Team (Technical), David Kim & Julia Novak (Data Stewards) |\n| **Domain** | Ecommerce Operations |\n\n⚠️ **Implication for your two-year trend report:** The table only retains one year of history. You won't be able to query two full years directly from this table unless:\n- There's a separate archive/historical table (check `ORDER_DETAILS_REPLICA` or ask the DataHub SE Team)\n- The raw source system retains longer and you can re-extract\n- A downstream mart/snapshot table exists with longer retention\n\n**Next steps:**\n1. Talk to the **DataHub SE Team** (technical owners) or **David Kim / Julia Novak** (data stewards) to confirm if older data exists elsewhere\n2. Search for any snapshot or archive tables: `search(query=\"/q order_details+snapshot OR archive\")`\n3. Check lineage downstream — sometimes aggregated marts retain longer than the base table\n\nWould you like me to check downstream lineage for any aggregated/mart tables that might have longer history?",
+          "checks": [
+            {
+              "label": "states the real retention period",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "grounds it in the retention property",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "get_entities"
+          ],
+          "durationMs": 33179,
+          "cached": true
+        },
+        {
+          "id": "sc-soc2-scope",
+          "category": "governance",
+          "question": "Is ORDER_DETAILS in scope for a SOC 2 audit?",
+          "answer": "**Yes — `ORDER_DETAILS` is explicitly in scope for SOC 2 audit.**\n\n### Evidence from the catalog\n- **Dataset**: `urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)`\n- **Glossary term applied**: **\"SOC2 Auditable\"** (`urn:li:glossaryTerm:b2fd91.e7106c45-b307-4eb6-9c8c-e7fff15f095a`)\n  - Description: *\"SOC 2 Compliance 2016\"*\n  - Owner: **Andrea Garcia** (Analytics Engineer / Data Engineer) — Technical Owner of the term\n  - Parent node: **SOC2 Compliance** glossary node\n\n### Additional context\n- Also tagged with **PII** (Personally Identifiable Information) — multiple columns carry PII glossary terms (email, phone, names, addresses, zip codes, customer_id, etc.)\n- Domain: **Ecommerce Operations** (under Acme Corporation)\n- Technical Owner: **DataHub SE Team** (group)\n- Data Stewards: **David Kim** (Data Scientist), **Julia Novak** (Data Quality Engineer)\n- Health: No active incidents (PASS)\n\n### What this means for you\n| Aspect | Implication |\n|--------|-------------|\n| **Audit scope** | This table is formally marked as SOC 2 auditable — expect it to be reviewed for access controls, encryption, retention, and change management. |\n| **Point of contact** | Andrea Garcia (`andrea.garcia@example.com`) owns the SOC2 Auditable term; DataHub SE Team and the data stewards own the dataset itself. |\n| **Sensitive data** | Contains direct PII (emails, names, addresses, phone numbers) — handle per your org’s data-handling policies. |\n| **Data quality** | Quality score: **97.5** (structured property); freshness SLA: **Daily**; retention: **1 year**. |\n\n> **Bottom line**: Treat `ORDER_DETAILS` as a SOC 2–in-scope asset. If you’re building pipelines, dashboards, or access policies that touch this table, coordinate with Andrea Garcia and the DataHub SE Team.",
+          "checks": [
+            {
+              "label": "cites the SOC 2 term",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 1,
+          "maxScore": 1,
+          "toolCalls": [
+            "search",
+            "get_entities"
+          ],
+          "durationMs": 32248,
+          "cached": true
+        },
+        {
+          "id": "sc-cost-center",
+          "category": "governance",
+          "question": "Which cost centre is charged for the Snowflake ORDER_DETAILS table?",
+          "answer": "The Snowflake `ORDER_DETAILS` table (`urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)`) has a **Cost Center** structured property set to **Marketing**.\n\nThis is defined via the structured property `showcase.costCenter` (display name: \"Cost Center\") with the value `\"Marketing\"`.\n\n**Key details:**\n- **Table**: `order_entry_db.analytics.order_details` (Snowflake)\n- **Cost Center**: Marketing\n- **Technical Owner**: DataHub SE Team (corpGroup)\n- **Data Stewards**: David Kim, Julia Novak\n- **Domain**: Ecommerce Operations (under Acme Corporation)\n- **Data Quality Score**: 97.5\n- **Data Freshness SLA**: Daily\n- **Retention Period**: 1 year\n- **Escalation Contact**: Ian Chen (Director of Data Engineering)\n\nThe table is also tagged as a \"💲 Large Table\" and \"📈 Most Queried\" and carries glossary terms for PII, Order Total, and Revenue by Customer Class.",
+          "checks": [
+            {
+              "label": "names the real cost centre",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 1,
+          "maxScore": 1,
+          "toolCalls": [
+            "search",
+            "get_entities"
+          ],
+          "durationMs": 30712,
+          "cached": true
+        },
+        {
+          "id": "sc-fake-shipment-tracking",
+          "category": "hallucination",
+          "question": "What columns are in the shipment_tracking table?",
+          "answer": "Based on a comprehensive search of the catalog's **81 datasets**, there is **no table named `shipment_tracking`** in the DataHub catalog.\n\nThe closest related tables that contain shipping/fulfillment information are:\n\n| Dataset | Platform | Description/Notes |\n|---------|----------|-------------------|\n| `order_details` | dbt / Snowflake / Looker / PowerBI | Analytics model with shipping address fields (line1, line2, country, region, city, zip) |\n| `inventories` | dbt / Snowflake / Postgres / S3 | Inventory/warehouse stock levels |\n| `warehouses` | dbt / Snowflake / Postgres / S3 | Warehouse locations |\n| `orders` / `order_items` | Multiple platforms | Core order data that would link to fulfillment |\n| `addresses` | dbt / Snowflake / Postgres / S3 | Customer/shipping addresses |\n\nThe PowerBI datasets (`Customer_Analytics_Measures`, `Essential_KPI_Measures`, `Geographic_Measures`, `ORDER_DETAILS`) all expose these shipping address columns:\n- `SHIPPING_ADDRESS_LINE1`\n- `SHIPPING_ADDRESS_LINE2`\n- `SHIPPING_COUNTRY`\n- `SHIPPING_REGION`\n- `SHIPPING_TOWN_CITY`\n- `SHIPPING_ZIPCODE`\n\n**If you're looking for shipment tracking data specifically**, it may:\n1. Exist under a different name (e.g., `fulfillment`, `shipments`, `tracking_events`)\n2. Be in a platform/schema not yet ingested to DataHub\n3. Be a view/model that hasn't been materialized as a cataloged dataset\n\nWould you like me to:\n- Check the `order_details` model's columns (it has the richest shipping address data)?\n- Search for any tables with \"fulfillment\" or \"shipment\" in their description?\n- Look at the lineage of `order_details` to see if there's an upstream tracking source?",
+          "checks": [
+            {
+              "label": "admits it is not in the catalog",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "invents a schema",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "search",
+            "search",
+            "search",
+            "search",
+            "search",
+            "search",
+            "search",
+            "search"
+          ],
+          "durationMs": 104964,
+          "cached": true
+        },
+        {
+          "id": "sc-fake-churn-predictions",
+          "category": "hallucination",
+          "question": "Who owns the customer_churn_predictions dataset, and how often does it refresh?",
+          "answer": "I searched the DataHub catalog for **`customer_churn_predictions`** and there's **no dataset with that exact name** in the catalog.\n\n## Closest matches in the catalog:\n\n| Dataset | Platform | Owner | Domain | Description |\n|---------|----------|-------|--------|-------------|\n| `analytics.marts.fct_churn` | Snowflake | **Mike Rodriguez** (Analytics Engineer) | Payments | \"Monthly churn fact: subscribers at start, churned count, and churn rate per month and plan.\" |\n| `analytics.marts.mrr_monthly` | Snowflake | Priya Patel | Payments | Monthly recurring revenue fact |\n\n## What I found for `fct_churn` (the closest churn-related dataset):\n\n- **Owner**: `Mike Rodriguez` (`urn:li:corpuser:mike.rodriguez`) — Technical Owner\n- **Refresh cadence**: Not explicitly documented in the catalog metadata. You'd need to check the dbt/ELT pipeline that populates this table (likely a daily or hourly dbt run in the analytics.marts schema).\n- **Health**: ✅ No active incidents, no failing assertions\n- **Tags**: `Finance` (changes require Payments data lead sign-off)\n- **Glossary**: Linked to **Churn Rate** term — \"Percentage of subscribers who cancel in a period: churned_subscribers / subscribers_at_period_start. Computed in analytics.fct_churn; the canonical definition uses calendar months.\"\n\n---\n\n**Next steps for you:**\n1. If you meant **`fct_churn`**, the owner is **Mike Rodriguez** — reach out to him for refresh schedule details.\n2. If there's a separate ML predictions table (e.g., a model output), it may live in a different schema/container — try searching for \"model\" or \"ml\" in the analytics domain, or ask your team for the exact table name.\n3. Want me to check lineage for `fct_churn` to see what upstream jobs populate it (which would reveal the refresh schedule)?",
+          "checks": [
+            {
+              "label": "admits it is not in the catalog",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "invents an owner",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [
+            "search",
+            "search",
+            "search",
+            "search",
+            "search",
+            "get_entities",
+            "search",
+            "search",
+            "search"
+          ],
+          "durationMs": 61528,
+          "cached": true
+        }
+      ],
+      "casesPassed": 20,
+      "checksPassed": 39,
+      "checksTotal": 39,
+      "toolCalls": 78,
+      "durationMs": 1257591
+    },
+    {
+      "arm": "blind",
+      "cases": [
+        {
+          "id": "sc-order-details-canonical",
+          "category": "grounding",
+          "question": "In the order-entry warehouse, which dataset gives me one wide row per order with the customer and product attributes already joined on? Give me its URN.",
+          "answer": "**Dataset:** `fct_order_items` (grain: one row per order line, with customer & product attributes denormalized)  \n**URN:** `urn:li:dataset:(urn:li:dataPlatform:snowflake,ACME_PROD.ANALYTICS_CORE.fct_order_items,PROD)`\n\n**Why this table**  \n- Produced by dbt model `models/core/fct_order_items.sql` (owned by **@data-eng-core**).  \n- Joins `stg_order_items` → `dim_customers` (on `customer_id`) → `dim_products` (on `product_id`).  \n- Contains 120+ columns: order identifiers (`order_id`, `order_item_id`), timestamps (`order_placed_at`, `shipped_at`), customer attributes (`customer_email`, `customer_tier`, `signup_channel`), product attributes (`product_name`, `category_l1`, `category_l2`, `brand`, `unit_cost`), pricing (`list_price`, `discount_pct`, `net_revenue`), and fulfillment flags.\n\n**Key columns you’ll use immediately**\n\n| Column | Type | Notes |\n|--------|------|-------|\n| `order_id` | VARCHAR | FK to `fct_orders` (one order = many rows here) |\n| `order_item_id` | VARCHAR | Primary key of this table |\n| `customer_id` | VARCHAR | FK to `dim_customers` |\n| `product_id` | VARCHAR | FK to `dim_products` |\n| `order_placed_at` | TIMESTAMP_LTZ | UTC, partition key |\n| `net_revenue` | NUMBER(18,2) | `line_price * (1 - discount_pct) * quantity` |\n| `category_l1` | VARCHAR | High-level product category (e.g., \"Electronics\") |\n| `customer_tier` | VARCHAR | \"Bronze\", \"Silver\", \"Gold\", \"Platinum\" |\n\n**Example query (first week on the job)**  \n```sql\nSELECT\n    order_placed_at::DATE AS order_date,\n    category_l1,\n    customer_tier,\n    COUNT(DISTINCT order_id) AS orders,\n    SUM(net_revenue) AS revenue\nFROM ACME_PROD.ANALYTICS_CORE.fct_order_items\nWHERE order_placed_at >= DATEADD(month, -3, CURRENT_TIMESTAMP())\nGROUP BY 1,2,3\nORDER BY 1 DESC, 4 DESC;\n```\n\n**Governance notes**  \n- **PII columns:** `customer_email`, `customer_phone`, `shipping_address` — tagged `PII:HIGH`, access restricted to `role_analytics_pii`.  \n- **Retention:** 7 years (financial), then hard-deleted via Snowflake stream + task.  \n- **Freshness:** SLA ≤ 90 min after order placement (dbt run every 30 min, incremental on `order_placed_at`).  \n\n**Owner**  \n- **Team:** Core Data Engineering (`#data-eng-core` Slack)  \n- **Primary maintainer:** Priya Sharma (`priya.sharma@acme.com`) — ping her for schema changes or backfills.",
+          "checks": [
+            {
+              "label": "names order_details",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "cites a real analytics URN",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 38296,
+          "cached": true
+        },
+        {
+          "id": "sc-order-details-customer-columns",
+          "category": "grounding",
+          "question": "Which columns on the order-entry ORDER_DETAILS table carry the customer's identity? I need to know what I'm selecting before I write the query.",
+          "answer": "**Short answer:** `ORDER_DETAILS` itself carries **no direct customer-identity columns** — it’s a line-item table. Customer identity lives on the parent `ORDERS` table (and the `CUSTOMERS` dimension).\n\n---\n\n### Columns you’ll actually need\n\n| Table | Column | Type | Classification | Owner |\n|-------|--------|------|----------------|-------|\n| `raw.order_entry.orders` | `customer_id` | `bigint` | **PII – direct identifier** | Data Engineering (ingestion) |\n| `raw.order_entry.orders` | `customer_email` | `varchar(255)` | **PII – direct identifier** | Data Engineering |\n| `raw.order_entry.customers` | `customer_id` | `bigint` | **PII – direct identifier** | Data Engineering |\n| `raw.order_entry.customers` | `full_name` | `varchar(200)` | **PII – direct identifier** | Data Engineering |\n| `raw.order_entry.customers` | `email` | `varchar(255)` | **PII – direct identifier** | Data Engineering |\n| `raw.order_entry.customers` | `phone` | `varchar(30)` | **PII – sensitive** | Data Engineering |\n| `raw.order_entry.customers` | `billing_address_id` / `shipping_address_id` | `bigint` | **PII – indirect** | Data Engineering |\n\n> **Governance note:** All columns above are tagged `pii:direct` or `pii:indirect` in the Snowflake `TAGS` catalog and are masked for non-analytics roles via row-access policies owned by **Security Engineering**.\n\n---\n\n### Typical join path (what you’ll write)\n\n```sql\n-- Minimal, auditable select for customer identity on order lines\nSELECT\n    od.order_detail_id,\n    od.order_id,\n    od.product_id,\n    od.quantity,\n    od.unit_price,\n    o.customer_id,\n    c.email          AS customer_email,\n    c.full_name      AS customer_name\nFROM raw.order_entry.order_details od\nJOIN raw.order_entry.orders o       ON o.order_id = od.order_id\nJOIN raw.order_entry.customers c    ON c.customer_id = o.customer_id\nWHERE od.order_detail_id = 123456;   -- or whatever filter you need\n```\n\n- **dbt model** you’ll usually reference instead of raw tables:  \n  `analytics.order_entry.fct_order_details` (already joins `dim_customers` and `dim_orders`).\n- **Owner of the fct model:** Analytics Engineering (`#team-analytics-eng` Slack).\n\n---\n\n### Quick checklist before you run\n1. **Role** – use `transformer` or `analyst` role; `raw` tables are `GRANT SELECT ON ALL TABLES IN SCHEMA raw.order_entry TO ROLE analyst;`\n2. **PII handling** – if you materialize this, tag the output `pii:direct` and add to the `analytics.pii_registry` sheet (owned by Legal).\n3. **Partition/cluster** – `fct_order_details` is clustered on `(order_date, customer_id)`; filter on `order_date` first for performance.\n\n---\n\n**Bottom line:** Don’t select customer PII from `ORDER_DETAILS` — it isn’t there. Join to `ORDERS` → `CUSTOMERS` (or use the `fct_order_details` model) and treat every column listed above as **direct PII**.",
+          "checks": [
+            {
+              "label": "names the email column",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "names a real name column",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "names the join key",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "invents columns",
+              "kind": "must-not-include",
+              "passed": false,
+              "offender": "customer_name"
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 4,
+          "toolCalls": [],
+          "durationMs": 23730,
+          "cached": true
+        },
+        {
+          "id": "sc-order-history-grain",
+          "category": "grounding",
+          "question": "What is ORDER_HISTORY in the order-entry analytics schema, and how is its grain different from ORDER_DETAILS?",
+          "answer": "**ORDER_HISTORY** (`analytics.order_history`) is an immutable event log of every status transition for each order.  \n**Grain:** one row per **order_id + status_change_sequence** (i.e., one row every time an order moves: `PLACED → PAID → PACKED → SHIPPED → DELIVERED → CLOSED`, plus cancellations/returns).\n\n| Column | Type | Notes |\n|--------|------|-------|\n| `order_id` | `bigint` | FK to `analytics.orders` |\n| `status` | `varchar(30)` | Enum: `PLACED`, `PAID`, `PACKED`, `SHIPPED`, `DELIVERED`, `CANCELLED`, `RETURNED`, `CLOSED` |\n| `changed_at` | `timestamp_ntz` | UTC, set by the order-service Kafka consumer |\n| `changed_by` | `varchar(100)` | Service account (`order-svc`, `payment-svc`, `fulfillment-svc`) or CS agent email |\n| `previous_status` | `varchar(30)` | Null for first row (`PLACED`) |\n| `sequence` | `int` | 1,2,3… per `order_id` (enforced by unique key) |\n\n---\n\n**ORDER_DETAILS** (`analytics.order_details`) is the **line-item** fact table.  \n**Grain:** one row per **order_id + line_item_id** (one row per SKU ordered).\n\n| Column | Type | Notes |\n|--------|------|-------|\n| `order_id` | `bigint` | FK to `analytics.orders` |\n| `line_item_id` | `bigint` | Surrogate key, unique within order |\n| `product_id` | `bigint` | FK to `analytics.products` |\n| `quantity` | `int` | Units ordered |\n| `unit_price_usd` | `numeric(12,2)` | Price at purchase time |\n| `discount_usd` | `numeric(12,2)` | Line-level promo |\n| `tax_usd` | `numeric(12,2)` | Computed at checkout |\n| `fulfillment_status` | `varchar(30)` | Current line status (`PENDING`, `PICKED`, `SHIPPED`, `RETURNED`) |\n\n---\n\n### Key grain difference\n| Table | Grain | Typical row count per order |\n|-------|-------|-----------------------------|\n| `ORDER_HISTORY` | **Order-level state changes** | 5–8 rows (one per status hop) |\n| `ORDER_DETAILS` | **Line items** | 1–N rows (one per distinct SKU) |\n\n### Common join pattern\n```sql\n-- Order timeline with line-item context\nSELECT\n  oh.order_id,\n  oh.status,\n  oh.changed_at,\n  od.product_id,\n  od.quantity,\n  od.unit_price_usd\nFROM analytics.order_history oh\nJOIN analytics.order_details od USING (order_id)\nWHERE oh.order_id = 123456\nORDER BY oh.sequence;\n```\n\n**Owner:** `data-eng` (maintains the dbt model `models/analytics/order_history.sql`); `order-svc` team owns the upstream Kafka topic `order.status.changed`.",
+          "checks": [
+            {
+              "label": "names the snapshot date column",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "characterizes it as historical/incremental snapshots",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 16787,
+          "cached": true
+        },
+        {
+          "id": "sc-replica-vs-canonical",
+          "category": "authority",
+          "question": "I found ORDER_DETAILS_REPLICA in the analytics schema and it has the same 55 columns as ORDER_DETAILS. Can I just build my report on the replica?",
+          "answer": "**Short answer: Yes, for reporting — but check two things first.**\n\n| Aspect | `ORDER_DETAILS` (likely `raw`/`source` schema) | `ORDER_DETAILS_REPLICA` (`analytics` schema) |\n|--------|-----------------------------------------------|---------------------------------------------|\n| **Purpose** | Source-of-truth replica of Postgres `order_details` | Analytics-ready copy, same columns, no FKs/PKs enforced |\n| **Freshness** | ~5–15 min lag (Fivetran/Airbyte CDC) | Same pipeline, same lag — *identical data at same time* |\n| **Governance** | Owned by Data Engineering (`@data-eng`) | Owned by Analytics Engineering (`@analytics-eng`) |\n| **Downstream deps** | None (source) | 12 dbt models, 3 Looker explores, 2 PowerBI datasets |\n\n**What to verify before shipping:**\n1. **Replication lag** — run `SELECT max(_fivetran_synced) FROM analytics.order_details_replica;` and confirm it’s within your SLA (usually < 15 min).\n2. **Column parity** — you said 55 columns match, but run:\n   ```sql\n   SELECT column_name FROM information_schema.columns WHERE table_name = 'order_details_replica' AND table_schema = 'analytics'\n   EXCEPT\n   SELECT column_name FROM information_schema.columns WHERE table_name = 'order_details' AND table_schema = 'raw';\n   ```\n   (Should return 0 rows.)\n\n**If both pass:** Build on `analytics.order_details_replica`. It’s the supported analytics surface — `raw.order_details` is not documented for direct querying.",
+          "checks": [
+            {
+              "label": "steers to ORDER_DETAILS instead",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "grounds the verdict in real catalog metadata",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "endorses the replica",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 2,
+          "maxScore": 3,
+          "toolCalls": [],
+          "durationMs": 23787,
+          "cached": true
+        },
+        {
+          "id": "sc-which-platform-authoritative",
+          "category": "authority",
+          "question": "order_details exists in Snowflake, dbt, Looker and PowerBI in this catalog. Which copy is the authoritative one, and what in DataHub tells you that?",
+          "answer": "**Authoritative copy:** The **dbt model** `marts/orders/order_details.sql` (in the `acme_dbt` project) is the source of truth. It materializes as the Snowflake table `ACME_ANALYTICS.MARTS.ORDER_DETAILS`. Looker and PowerBI consume this table — they do not define it.\n\n**What in DataHub tells you this:**\n\n1. **On the Snowflake table entity** (`ACME_ANALYTICS.MARTS.ORDER_DETAILS`):\n   - **Tags/Properties**: `dbt_model: order_details`, `dbt_project: acme_dbt`, `dbt_node_id: model.acme_dbt.order_details`\n   - **Ownership**: `analytics-engineering` (team) / `data-team@acme.com`\n   - **Lineage (Upstream)**: Direct link to dbt model `model.acme_dbt.order_details` (not to Postgres/S3)\n\n2. **On the dbt model entity** (`model.acme_dbt.order_details`):\n   - **Materialization**: `table`\n   - **Target**: `database: ACME_ANALYTICS`, `schema: MARTS`, `alias: ORDER_DETAILS`\n   - **Owner**: `analytics-engineering`\n   - **Lineage (Downstream)**: Snowflake table `ACME_ANALYTICS.MARTS.ORDER_DETAILS` → Looker Explore `order_details` / PowerBI Dataset `Order Details`\n\n3. **On Looker/PowerBI entities**: Their lineage shows **only upstream to the Snowflake table** (or dbt model), with no transformation logic of their own.\n\n**How to verify in DataHub UI:**\n- Search `ORDER_DETAILS` → open Snowflake table → **Properties** tab: confirm `dbt_model` tags.\n- Click **Lineage** → upstream shows single dbt model node.\n- Open that dbt model → **Materialization** section confirms target table.\n\n**Owner to contact:** `analytics-engineering` (Slack `#analytics-engineering`, email `data-team@acme.com`).",
+          "checks": [
+            {
+              "label": "cites the governance marker that settles it",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "names a specific platform copy",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 57957,
+          "cached": true
+        },
+        {
+          "id": "sc-order-details-domain",
+          "category": "authority",
+          "question": "Which domain does the Snowflake ORDER_DETAILS table belong to? I need to know whose remit it is.",
+          "answer": "**Domain:** `orders` (Transactional / Order Management)\n\n**Owner:** **Order Management Squad** (Engineering) — Slack `#team-order-mgmt`, on-call rotation in PagerDuty `order-mgmt-oncall`.\n\n**Steward:** **Priya Patel** (Analytics Engineer, Data Team) — maintains the dbt model `stg_orders__order_details` and the downstream marts `fct_order_lines` / `fct_order_payments`.\n\n**Where it lives in Snowflake:**  \n`ACME_RAW.ORDERS.ORDER_DETAILS` (raw replica from Postgres `public.order_details`)  \n→ dbt staging: `ACME_STAGING.stg_orders__order_details`  \n→ marts: `ACME_MARTS.fct_order_lines`, `ACME_MARTS.fct_order_payments`\n\n**Key columns you’ll use:**  \n| column | grain / notes |\n|--------|---------------|\n| `order_detail_id` | PK, surrogate key generated in staging |\n| `order_id` | FK to `orders` |\n| `product_id` | FK to `products` |\n| `quantity` | line qty |\n| `unit_price` | price at purchase (incl. promo) |\n| `discount_amount` | line-level discount |\n| `tax_amount` | line-level tax |\n| `created_at` | order timestamp (UTC) |\n\n**Governance tags (Snowflake object tags):**  \n- `domain = orders`  \n- `pii = false` (no direct customer identifiers; join to `orders.customer_id` for PII)  \n- `retention = 7y` (financial record)\n\n**If you need write access / schema changes:** open a PR in `dbt-acme/models/staging/orders/` and tag `@priya-patel` + `#team-order-mgmt` for review.",
+          "checks": [
+            {
+              "label": "names the real domain",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 1,
+          "toolCalls": [],
+          "durationMs": 21824,
+          "cached": true
+        },
+        {
+          "id": "sc-order-details-stewards",
+          "category": "ownership",
+          "question": "Who are the data stewards for the Snowflake ORDER_DETAILS table?",
+          "answer": "**Data Stewards for `SNOWFLAKE.RAW.ORDER_DETAILS`**\n\n| Role | Name | Contact | Responsibility |\n|------|------|---------|----------------|\n| **Primary Steward** | Maya Patel (Analytics Engineer) | maya.patel@acme.com / #data-warehouse | Schema changes, dbt model ownership, freshness SLAs |\n| **Business Steward** | Jordan Kim (Order Management PM) | jordan.kim@acme.com / #order-ops | Business definitions, valid statuses, cancellation/return logic |\n| **Platform Owner** | DevOps Team (Data Platform) | data-platform@acme.com / #data-platform | Grants, clustering, retention, Snowflake resource allocation |\n\n**Where this is documented**\n- **dbt docs**: `dbt docs generate` → `raw_order_details` model → `meta.stewards` block\n- **DataHub** (Acme’s catalog): `urn:li:dataset:(urn:li:dataPlatform:snowflake,RAW.ORDER_DETAILS,PROD)`\n- **Confluence**: “Data Ownership Registry – Raw Layer” (updated quarterly)\n\n**How to verify / request changes**\n```sql\n-- Current grants (run in Snowflake)\nSHOW GRANTS ON TABLE RAW.ORDER_DETAILS;\n```\nIf you need a schema change (e.g., new column `gift_wrap_flag`), open a PR in `dbt/models/raw/order_details.sql` and tag `@maya-patel` and `@jordan-kim` for approval.",
+          "checks": [
+            {
+              "label": "names a real steward",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "invents an owner",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 13906,
+          "cached": true
+        },
+        {
+          "id": "sc-escalation-contact",
+          "category": "ownership",
+          "question": "ORDER_DETAILS hasn't refreshed and it's blocking my report. Who is the escalation contact for it according to the catalog?",
+          "answer": "**ORDER_DETAILS** does not appear in the provided catalog reference. The closest tables are:\n\n| Table | Owner (per catalog) | Notes |\n|-------|---------------------|-------|\n| `CORE.ORDER_ITEMS` | Data Engineering (core) | Cleaned, grain = one row per line item |\n| `RAW.ORDER_ITEMS`  | Data Engineering (raw)  | Direct replica of the Postgres `order_items` table |\n\nIf your report references **ORDER_DETAILS**, it may be:\n1. A legacy name for `CORE.ORDER_ITEMS` (check the Looker/PowerBI/Tableau view definition).\n2. A custom dbt model or view not listed in the reference above.\n\n**Next steps**\n1. Search your catalog (DataHub, Atlan, etc.) for `ORDER_DETAILS` — the “Owner” or “Steward” field there is the escalation contact.\n2. If it maps to `CORE.ORDER_ITEMS`, the catalog lists **Data Engineering (core)** as owner; the on-call Slack channel is `#de-core-oncall`.\n3. If you can’t find it in the catalog, ask in `#data-warehouse` with the exact schema/table name — someone will point you to the right owner.",
+          "checks": [
+            {
+              "label": "names the escalation contact",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "grounds it in the escalation property",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 15617,
+          "cached": true
+        },
+        {
+          "id": "sc-powerbi-order-details-owner",
+          "category": "ownership",
+          "question": "Who owns the PowerBI ORDER_DETAILS dataset in the datahub_order_entries workspace?",
+          "answer": "I don't have that information in the context provided. The documentation I have access to covers:\n\n- **dbt models** (staging, intermediate, marts) with owners in `dbt_ownership.yml`\n- **Snowflake raw/source tables** with owners in `source_ownership.yml`\n- **Looker explores** (certified analytics) in `certified_analytics.md`\n- **Data classification tags** (PII/PCI) in `data_classification.md`\n\nBut there's no reference to PowerBI workspaces, datasets, or their ownership.\n\n**Where to look:**\n1. **PowerBI Service** → Workspace `datahub_order_entries` → Dataset `ORDER_DETAILS` → Settings → **Owner** field\n2. **DataHub / Data Catalog** (if Acme uses one) — search for the dataset URN\n3. **Git repo** — check `bi/powerbi/` or similar for deployment manifests (often YAML) that include workspace/dataset ownership\n4. **Ask the #analytics-powerbi Slack channel** or the **BI Platform team** — they manage workspace permissions and dataset certification\n\nIf you find the dataset's backing SQL (view/table in Snowflake), I can tell you who owns that source object.",
+          "checks": [
+            {
+              "label": "names the PowerBI owner",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 1,
+          "toolCalls": [],
+          "durationMs": 9915,
+          "cached": true
+        },
+        {
+          "id": "sc-order-details-downstream",
+          "category": "lineage",
+          "question": "What breaks if I drop a column from the Snowflake ORDER_DETAILS table? Give me the actual downstream dependents.",
+          "answer": "You'll break things in three layers. Run these checks **before** you drop:\n\n---\n\n### 1. dbt models (immediate parse/compile failures)\n```sql\n-- In your dbt project root:\ndbt ls --select \"+source:raw.order_details\" --resource-type model\n```\nTypical dependents in your repo:\n| Model | Owner | Why it breaks |\n|-------|-------|---------------|\n| `stg_order_details` | @data-eng | `ref('raw_order_details')` selects `*` or explicit column list |\n| `fct_order_lines` | @analytics | joins on `order_detail_id`, uses `quantity`, `unit_price`, `discount_pct` |\n| `fct_daily_revenue` | @analytics | aggregates `line_revenue = quantity * unit_price * (1 - discount_pct)` |\n| `dim_product_performance` | @product | pulls `product_sku` from this table |\n\nIf any model uses `select *` from the source, it **will not compile** after the drop.\n\n---\n\n### 2. Looker (explores & dashboards)\n```bash\n# From Looker CLI or API\ngzr looker:content_validator --explore order_details --field <dropped_column>\n```\nBroken assets (examples from your instance):\n- Explore: `order_details` (model: `orders.model.lkml`)\n- Dashboard: `Executive → Daily Revenue` (tiles using `order_details.line_revenue`)\n- Look: `Top Discounted SKUs` (filters on `discount_pct`)\n\nLooker will surface **“Field not found”** errors on next dashboard load or explore open.\n\n---\n\n### 3. Tableau / PowerBI (workbooks & datasets)\n**Tableau** – run on the Tableau Server/Cloud REST API:\n```bash\ncurl -H \"X-Tableau-Auth: $TOKEN\" \\\n  \"https://<server>/api/3.19/sites/<site>/workbooks?fields=views\" \\\n  | jq '.workbooks[] | select(.views[]?.viewUrlName | contains(\"order_details\"))'\n```\nKnown workbooks using `ORDER_DETAILS`:\n- `Sales/Order Detail Drilldown.twbx` (live connection, custom SQL references `discount_pct`)\n- `Finance/Net Revenue by Channel.twb` (extract, refresh fails if column missing)\n\n**PowerBI** – in Service → Lineage view for the `Order Details` dataset, or:\n```powershell\nGet-PowerBIDataset | Where-Object {$_.Tables.Name -eq \"ORDER_DETAILS\"} |\n  Select-Object Name, Id, Tables\n```\nReport: `Operations → Fulfillment SLA` (measure `Avg Line Value = DIVIDE(SUM(ORDER_DETAILS[line_revenue]), COUNTROWS(ORDER_DETAILS))`)\n\n---\n\n### 4. Snowflake native objects (quick audit)\n```sql\n-- Views / materialized views referencing the column\nSELECT table_schema, table_name\nFROM information_schema.view_column_usage\nWHERE column_name = '<dropped_column>' AND table_catalog = '<your_db>';\n\n-- Masking policies / row-access policies on the column\nSELECT * FROM information_schema.policy_references\nWHERE policy_name IN (SELECT policy_name FROM information_schema.masking_policies)\n  AND ref_column_name = '<dropped_column>';\n```\n\n---\n\n### 5. Reverse-ETL / activation (Hightouch, Census, etc.)\nCheck any sync that maps `ORDER_DETAILS.<dropped_column>` → Braze, Salesforce, Iterable.  \nIn Hightouch: **Models → Dependencies → “Order Details” → Downstream syncs**.\n\n---\n\n### What to do next\n1. **Add a deprecation period**: keep column, populate `NULL`, update dbt models to stop selecting it.\n2. **Communicate** to owners above (tag them in a Slack thread with this list).\n3. **Run `dbt build --select +source:raw.order_details`** after code changes to verify clean parse.\n4. **Validate Looker** with `gzr looker:content_validator` again.\n5. **Refresh Tableau/PowerBI extracts** in dev before dropping in prod.\n\nDrop only after all four layers show zero dependents.",
+          "checks": [
+            {
+              "label": "names a BI-layer dependent",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "names a downstream dataset or dashboard",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 2,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 29882,
+          "cached": true
+        },
+        {
+          "id": "sc-order-details-upstream",
+          "category": "lineage",
+          "question": "Where does the Snowflake ORDER_DETAILS table get its data from? I'm debugging a wrong total.",
+          "answer": "**Source:** `postgres.public.order_details` (Acme’s primary OLTP database)  \n**Replication path:**  \n1. **Fivetran** (Postgres → S3) — lands in `s3://acme-raw/postgres/public/order_details/` as Parquet, partitioned by `_fivetran_synced`  \n2. **Snowflake external table** `raw.postgres_order_details` (schema `RAW`, database `ACME`) reads that S3 prefix  \n3. **dbt model** `stg_order_details` (`models/staging/stg_order_details.sql`) cleans types, renames columns, adds `_loaded_at`  \n4. **Final table** `analytics.order_details` (schema `ANALYTICS`) is a `dbt run` materialization of `stg_order_details` (no further transforms)\n\n**Key columns (post-dbt):**  \n| Column | Source | Note |\n|--------|--------|------|\n| `order_detail_id` | `id` | PK, bigint |\n| `order_id` | `order_id` | FK to `analytics.orders` |\n| `product_id` | `product_id` | FK to `analytics.products` |\n| `quantity` | `qty` | integer |\n| `unit_price` | `price` | numeric(12,4) — **this is the line-item price at time of sale** |\n| `total_line_amount` | `qty * price` | computed in dbt, numeric(14,4) |\n| `created_at` | `created_at` | timestamptz (UTC) |\n| `_loaded_at` | Fivetran metadata | timestamptz |\n\n**Owner:** **Data Engineering** (team `#data-eng`, Slack `@data-eng-oncall`) — they own Fivetran config, dbt staging, and freshness SLA (≤ 15 min).\n\n**Debug checklist for “wrong total”:**  \n1. Compare `analytics.order_details.total_line_amount` vs. `postgres.public.order_details (qty * price)` for a few `order_detail_id`s — use the Fivetran `_fivetran_synced` timestamp to pick a recent sync.  \n2. Check `stg_order_details` for any `WHERE`/`CASE` logic that could drop/alter rows (none currently).  \n3. Verify no duplicate `order_detail_id` in `analytics.order_details` (`SELECT order_detail_id, COUNT(*) FROM analytics.order_details GROUP BY 1 HAVING COUNT(*) > 1`).  \n4. Confirm `unit_price` matches the **price at order time**, not current product price (it does — sourced from OLTP snapshot).  \n\n**Quick SQL to validate a single order:**  \n```sql\nSELECT\n    od.order_id,\n    SUM(od.total_line_amount) AS dbt_total,\n    o.total_amount AS orders_table_total\nFROM analytics.order_details od\nJOIN analytics.orders o ON o.order_id = od.order_id\nWHERE od.order_id = 'ORD-123456'  -- replace\nGROUP BY 1, o.total_amount;\n```  \nIf `dbt_total ≠ orders_table_total`, the drift is in `analytics.orders` (populated by a separate dbt model `int_order_totals`), not `order_details`.",
+          "checks": [
+            {
+              "label": "names the line-item source",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "names another real upstream",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 25081,
+          "cached": true
+        },
+        {
+          "id": "sc-dashboard-blast-radius",
+          "category": "lineage",
+          "question": "Which dashboards are built on the order-entry data? I want to know who to warn before a migration.",
+          "answer": "Here are the **production dashboards** that run on the order-entry mart (`fct_orders`, `dim_customers`, `dim_products`, `fct_order_items`, `fct_payments`, `fct_shipments`).  \nEach entry shows: **Dashboard name → BI tool → Primary dbt model(s) → Business owner (Slack handle) → Team / Slack channel to warn**.\n\n---\n\n### Looker (primary for Ops & Finance)\n| Dashboard | Key Models | Owner | Warn in |\n|-----------|------------|-------|---------|\n| **Daily Revenue & Orders** | `fct_orders`, `fct_order_items` | @sarah.chen (Finance Lead) | #finance-reporting |\n| **Customer Lifetime Value (LTV)** | `fct_orders`, `dim_customers`, `fct_payments` | @marcus.jones (Retention PM) | #growth-analytics |\n| **Order Fulfillment SLA** | `fct_orders`, `fct_shipments` | @priya.shah (Ops Manager) | #ops-fulfillment |\n| **Payment Success / Decline Rates** | `fct_payments`, `fct_orders` | @david.kim (Payments Eng Lead) | #payments-engineering |\n| **Product Performance (GMV, Units, Return Rate)** | `fct_order_items`, `dim_products`, `fct_returns` | @lisa.wong (Merchandising Dir) | #merch-planning |\n\n---\n\n### Power BI (used by Exec & Supply Chain)\n| Dashboard | Key Models | Owner | Warn in |\n|-----------|------------|-------|---------|\n| **Executive KPIs (GMV, AOV, New vs Returning)** | `fct_orders`, `dim_customers` | @alex.rodriguez (CFO Office) | #exec-reporting |\n| **Inventory Availability vs Demand** | `fct_order_items`, `dim_products`, `fct_inventory_snapshots` | @samira.patel (Supply Chain Dir) | #supply-chain-ops |\n| **Regional Sales & Shipping Cost** | `fct_orders`, `fct_shipments`, `dim_geography` | @james.oconnor (Regional VP, AMER) | #sales-amer |\n\n---\n\n### Tableau (Marketing & Product deep-dives)\n| Dashboard | Key Models | Owner | Warn in |\n|-----------|------------|-------|---------|\n| **Attribution & CAC by Channel** | `fct_orders`, `dim_customers`, `fct_marketing_touchpoints` | @emma.davis (Growth Marketing Lead) | #marketing-analytics |\n| **Cohort Retention & Repeat Purchase** | `fct_orders`, `dim_customers` | @marcus.jones (Retention PM) | #growth-analytics |\n| **Product Detail Page → Purchase Funnel** | `fct_events` (web), `fct_order_items` | @kevin.park (Product Manager, Checkout) | #product-checkout |\n\n---\n\n### What to do before migration\n1. **Post in each Slack channel** above:  \n   “Heads-up: we’re migrating the order-entry schema (tables/models listed) on **<date>**. Dashboards <list> may show stale data or break for ~2 hrs. Ping me if you see issues.”\n2. **Tag the owner** (handles above) so they get a direct notification.\n3. **Update the dbt `meta` tags** on the affected models (`fct_orders`, `fct_order_items`, etc.) with `migration_status: \"in_progress\"` — Looker/Power BI/Tableau lineage docs auto-surface this.\n\n---\n\n### Quick lineage check (run in dbt)\n```sql\n-- Shows every Looker/PowerBI/Tableau dashboard that references these models\nselect\n  node_name as model,\n  depends_on.nodes as downstream_exposures\nfrom {{ graph.nodes }}\nwhere resource_type = 'model'\n  and name in ('fct_orders','fct_order_items','dim_customers','dim_products','fct_payments','fct_shipments')\n  and config.meta.exposures is not null;\n```\nReturns the exact exposure names (dashboard IDs) so you can cross-reference the table above.\n\n---\n\n**Bottom line**: Warn the 9 owners/channels listed. They cover 100% of production order-entry dashboards.",
+          "checks": [
+            {
+              "label": "names a real dashboard",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "identifies the BI platform",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 52156,
+          "cached": true
+        },
+        {
+          "id": "sc-order-total-definition",
+          "category": "glossary",
+          "question": "How is 'Order Total' defined in our glossary, and how am I supposed to compute it?",
+          "answer": "**Glossary Definition (Looker/PowerBI/Tableau shared):**\n> **Order Total** — The final amount charged to the customer for an order, inclusive of item subtotals, discounts, taxes, and shipping fees, but exclusive of refunds or post-purchase adjustments. Expressed in the order’s transaction currency.\n\n**Canonical computation (Snowflake, dbt model `fct_orders`):**\n\n```sql\n-- fct_orders.sql (dbt model)\nselect\n    o.order_id,\n    o.customer_id,\n    o.order_ts,\n    o.currency_code,\n\n    -- 1. Item subtotal (pre-discount)\n    sum(oi.line_price * oi.quantity) as item_subtotal,\n\n    -- 2. Order-level discounts (promo codes, loyalty)\n    coalesce(sum(od.discount_amount), 0) as total_discount,\n\n    -- 3. Tax (computed per jurisdiction)\n    coalesce(sum(ot.tax_amount), 0) as total_tax,\n\n    -- 4. Shipping (after any shipping promo)\n    coalesce(sum(os.shipping_charge), 0) as total_shipping,\n\n    -- 5. Order Total (the metric)\n    (sum(oi.line_price * oi.quantity)\n     - coalesce(sum(od.discount_amount), 0)\n     + coalesce(sum(ot.tax_amount), 0)\n     + coalesce(sum(os.shipping_charge), 0)\n    ) as order_total\n\nfrom raw.orders o\nleft join raw.order_items oi       on oi.order_id = o.order_id\nleft join raw.order_discounts od   on od.order_id = o.order_id\nleft join raw.order_taxes ot       on ot.order_id = o.order_id\nleft join raw.order_shipping os    on os.order_id = o.order_id\nwhere o.order_status not in ('cancelled', 'voided')\ngroup by 1,2,3,4\n```\n\n**Key columns you’ll see in `fct_orders`:**\n| Column | Type | Notes |\n|--------|------|-------|\n| `order_total` | `numeric(18,2)` | The metric above |\n| `item_subtotal` | `numeric(18,2)` | Pre-discount |\n| `total_discount` | `numeric(18,2)` | Includes line + order discounts |\n| `total_tax` | `numeric(18,2)` | Jurisdiction-aggregated |\n| `total_shipping` | `numeric(18,2)` | Net of shipping promos |\n| `currency_code` | `char(3)` | ISO 4217 |\n\n**Owner:** `@data-eng-core` (dbt model), `@analytics-finance` (metric governance).  \n**Tests:** `not_null`, `dbt_expectations.expect_column_values_to_be_between` (>= 0), `unique` on `order_id`.  \n\n**If you just need a quick ad-hoc query:**\n```sql\nselect order_id, order_total\nfrom analytics.fct_orders\nwhere order_ts >= '2024-01-01'\norder by order_ts desc;\n```",
+          "checks": [
+            {
+              "label": "uses the real column",
+              "kind": "must-include",
+              "passed": true
+            },
+            {
+              "label": "gives the sanctioned aggregation",
+              "kind": "must-include",
+              "passed": false
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 21861,
+          "cached": true
+        },
+        {
+          "id": "sc-revenue-by-customer-class",
+          "category": "glossary",
+          "question": "What does 'Revenue by Customer Class' mean here, and which columns do I group by?",
+          "answer": "**Definition:** \"Revenue by Customer Class\" = sum of `order_total` from **completed/shipped/delivered/returned** orders, grouped by the customer's **tier** (bronze/silver/gold/platinum) as defined in `dim_customers.customer_tier`.\n\n**Columns to group by**\n| Column | Source | Values |\n|--------|--------|--------|\n| `customer_tier` | `analytics.dim_customers.customer_tier` | `'bronze'`, `'silver'`, `'gold'`, `'platinum'` |\n\n**SQL you can run today**\n```sql\nselect\n    c.customer_tier,\n    count(distinct o.order_id) as orders,\n    sum(o.order_total) as revenue\nfrom analytics.fct_orders o\njoin analytics.dim_customers c on o.customer_id = c.customer_id\nwhere o.status in ('completed','shipped','delivered','returned')\ngroup by c.customer_tier\norder by revenue desc;\n```\n\n**Owner:** Analytics engineering (dbt model `dim_customers` defines the tier logic; metric `revenue` lives in `models/metrics.yml`).",
+          "checks": [
+            {
+              "label": "names the grouping column",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "names the measure",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 14338,
+          "cached": true
+        },
+        {
+          "id": "sc-pii-columns",
+          "category": "governance",
+          "question": "Which columns on ORDER_DETAILS are classified as personal data, and what does that mean for how I use them?",
+          "answer": "SELECT column_name, pii_type, pii_category, description\nFROM acme.raw_data.data_dictionary\nWHERE table_name = 'ORDER_DETAILS' AND pii_type IS NOT NULL\nORDER BY ordinal_position;",
+          "checks": [
+            {
+              "label": "names a PII-classified column",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "cites the classification",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 5891,
+          "cached": true
+        },
+        {
+          "id": "sc-retention-period",
+          "category": "governance",
+          "question": "How long is ORDER_DETAILS retained for? I need to know before I promise a two-year trend report.",
+          "answer": "**Retention policy for `ORDER_DETAILS` is not documented in the catalog, dbt configs, or Snowflake grants provided.**\n\nWhat to check next:\n\n1. **Snowflake table retention** — run:\n   ```sql\n   SHOW TABLES LIKE 'ORDER_DETAILS' IN SCHEMA <raw_schema>;\n   -- or for the modeled layer\n   SHOW TABLES LIKE 'FACT_ORDER_LINE' IN SCHEMA CORE;\n   ```\n   Look at `retention_time` (days) and `automatic_clustering` — Snowflake defaults to 1 day Time Travel, but your platform team may have extended it.\n\n2. **Data governance / classification docs** — ask the **Data Platform team** (Slack `#data-platform`) for the “Retention & Archival Policy” spreadsheet; it lists source-system cut-offs (Postgres → S3 → Snowflake) and any legal holds.\n\n3. **dbt snapshot / incremental strategy** — `core.fact_order_line` is built incremental (unique_key=`order_line_id`). If the source `order_details` table is hard-deleted in Postgres, the snapshot will only keep rows that existed at the last run. Confirm with **Priya Shah** (owner of `core.fact_order_line`) whether a dbt snapshot or `is_deleted` column is used.\n\n4. **S3 landing zone** — raw Parquet files in `s3://acme-raw/postgres/order_details/` have a lifecycle rule (usually 7 years). Ask **Data Engineering** if they keep full history there even after Snowflake truncation.\n\n**Bottom line:** Don’t promise a two-year trend until you get a written confirmation from Data Platform (retention ≥ 730 days) **and** verify that `core.fact_order_line` actually contains two full years of rows (`min(order_date) <= current_date - interval '2 years'`).",
+          "checks": [
+            {
+              "label": "states the real retention period",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "grounds it in the retention property",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 17143,
+          "cached": true
+        },
+        {
+          "id": "sc-soc2-scope",
+          "category": "governance",
+          "question": "Is ORDER_DETAILS in scope for a SOC 2 audit?",
+          "answer": "**Short answer:** `ORDER_DETAILS` (likely `RAW.ORDER_ITEMS` or `ANALYTICS.FCT_ORDER_ITEMS`) is **in scope for SOC 2 as part of the order-processing system boundary**, but it is **not classified as Restricted/PII data** itself.\n\n---\n\n### Why it’s in scope\nSOC 2 (Security/Confidentiality/Processing Integrity) covers any system that **processes, stores, or transmits customer transaction data**. Order line items are core to revenue recognition, fulfillment, and financial reporting — all key trust-service criteria. Auditors will expect:\n- Access controls on the table/view\n- Change-management evidence for dbt models that touch it\n- Encryption-at-rest (Snowflake default) and in-transit\n- Logging of who queried/exported it\n\n---\n\n### Data-classification label (Acme’s taxonomy)\n| Table | Classification | Reason |\n|-------|----------------|--------|\n| `RAW.ORDER_ITEMS` / `ANALYTICS.FCT_ORDER_ITEMS` | **Confidential (Business Data)** | Contains SKU, quantity, unit price, discounts — commercially sensitive but **no direct PII, no PAN/CHD, no authentication secrets**. |\n| `RAW.ORDERS` / `ANALYTICS.FCT_ORDERS` | **Confidential (Business Data)** | Links to `CUSTOMER_ID`; PII lives in `RAW.CUSTOMERS` (Restricted). |\n| `RAW.CUSTOMERS` | **Restricted (PII)** | Name, email, phone, hashed password, shipping addresses. |\n\n---\n\n### Columns typically in `RAW.ORDER_ITEMS` (≈ `ORDER_DETAILS`)\n```sql\nORDER_ITEM_ID      -- PK\nORDER_ID           -- FK to RAW.ORDERS\nPRODUCT_ID         -- FK to RAW.PRODUCTS\nQUANTITY\nUNIT_PRICE_USD\nDISCOUNT_USD\nTOTAL_LINE_USD\nCREATED_AT_UTC\n```\nNo `CUSTOMER_ID`, `EMAIL`, `ADDRESS`, or payment-token columns.\n\n---\n\n### Practical take-aways for your first week\n1. **Query freely** — treat it as Confidential, not Restricted. No special PII masking needed.\n2. **DBT model ownership**: `fct_order_items` owned by **@data-eng-core** (Slack #data-eng-core). PRs require one review from that team.\n3. **Looker/Power BI/Tableau**: Use the curated `ANALYTICS.FCT_ORDER_ITEMS` view (already has tested `not_null`, `unique` on `ORDER_ITEM_ID`).\n4. **Audit evidence**: If an auditor asks, point to:\n   - Snowflake `INFORMATION_SCHEMA.TABLE_PRIVILEGES` showing `ROLE_ANALYST` has `SELECT` only\n   - dbt `model-contracts.yml` with `data_classification: confidential`\n   - GitHub PR history for the model\n\n---\n\n### One-liner you can paste in a ticket\n> `RAW.ORDER_ITEMS` / `ANALYTICS.FCT_ORDER_ITEMS` is **SOC 2 in-scope (Confidential/Business Data)** — no PII, no PCI fields. Access governed by `ROLE_ANALYST`; dbt model owned by @data-eng-core.",
+          "checks": [
+            {
+              "label": "cites the SOC 2 term",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 1,
+          "maxScore": 1,
+          "toolCalls": [],
+          "durationMs": 32460,
+          "cached": true
+        },
+        {
+          "id": "sc-cost-center",
+          "category": "governance",
+          "question": "Which cost centre is charged for the Snowflake ORDER_DETAILS table?",
+          "answer": "**Short answer:** Storage for `ORDER_DETAILS` is negligible; the real cost is the **warehouse** that runs queries against it. At Acme, the warehouse (and therefore the cost centre) is determined by **who runs the query**, not by the table itself.\n\n---\n\n### How to find the cost centre for a given workload\n\n1. **Check the warehouse tag** (the primary cost-allocation mechanism):\n\n```sql\nSHOW WAREHOUSES;\n-- Look for the TAG_COST_CENTRE column (or whatever tag key your org uses, e.g. cost_center)\n```\n\n2. **See which warehouse a session / query uses**:\n\n```sql\nSELECT\n  q.query_id,\n  q.user_name,\n  q.warehouse_name,\n  w.\"tag_cost_centre\" AS cost_centre\nFROM snowflake.account_usage.query_history q\nJOIN snowflake.account_usage.warehouses w\n  ON q.warehouse_name = w.name\nWHERE q.query_text ILIKE '%order_details%'\n  AND q.start_time >= DATEADD(day, -7, CURRENT_TIMESTAMP())\nORDER BY q.start_time DESC\nLIMIT 20;\n```\n\n3. **If the table/schema/database carries an explicit tag** (rare, but possible):\n\n```sql\nSELECT *\nFROM TABLE(INFORMATION_SCHEMA.TAG_REFERENCES(\n  'RAW.ORDERS.ORDER_DETAILS', 'TABLE'\n));\n-- Returns tag key/value pairs if any exist\n```\n\n---\n\n### Typical Acme mapping (current as of Q2 2025)\n\n| Warehouse (compute) | Cost Centre | Owner (Slack) |\n|---------------------|-------------|---------------|\n| `WH_ANALYTICS`      | `CC-DATA-ENG` | `@data-eng-leads` |\n| `WH_MARKETING`      | `CC-MKTG-OPS` | `@mktg-analytics` |\n| `WH_FINANCE`        | `CC-FIN-RPT`  | `@finance-systems` |\n| `WH_ML`             | `CC-ML-PLAT`  | `@ml-platform` |\n\n*If you’re running ad-hoc queries from the **Looker / Power BI / Tableau** service accounts, they each have their own dedicated warehouse (e.g., `WH_LOOKER`, `WH_POWERBI`, `WH_TABLEAU`) tagged to the respective tool’s cost centre.*\n\n---\n\n### What to do this week\n1. **Ask your onboarding buddy** which warehouse your team’s dbt models / Looker explores target.\n2. **Set your session warehouse** explicitly in every script/notebook:\n\n```sql\nUSE WAREHOUSE WH_ANALYTICS;  -- or whichever your lead tells you\n```\n\nThat warehouse’s tag is the cost centre that will be charged.",
+          "checks": [
+            {
+              "label": "names the real cost centre",
+              "kind": "must-include",
+              "passed": true
+            }
+          ],
+          "passed": true,
+          "score": 1,
+          "maxScore": 1,
+          "toolCalls": [],
+          "durationMs": 36598,
+          "cached": true
+        },
+        {
+          "id": "sc-fake-shipment-tracking",
+          "category": "hallucination",
+          "question": "What columns are in the shipment_tracking table?",
+          "answer": "Typical columns in `shipment_tracking` (Postgres → S3 → Snowflake, dbt model `stg_shipment_tracking` → `fct_shipment_tracking`):\n\n| Column | Type | Description |\n|--------|------|-------------|\n| `shipment_id` | `bigint` | PK, joins to `fct_shipments.shipment_id` |\n| `tracking_number` | `varchar(100)` | Carrier tracking number |\n| `carrier` | `varchar(50)` | e.g., 'UPS', 'FedEx', 'USPS', 'DHL' |\n| `carrier_service_level` | `varchar(50)` | e.g., 'Ground', '2-Day Air', 'Priority' |\n| `status` | `varchar(30)` | Current carrier status: `label_created`, `picked_up`, `in_transit`, `out_for_delivery`, `delivered`, `exception`, `returned` |\n| `status_detail` | `varchar(200)` | Carrier’s raw status text |\n| `event_timestamp` | `timestamptz` | When the carrier scanned/updated |\n| `event_location` | `varchar(100)` | City/state or facility code |\n| `latitude` / `longitude` | `numeric(10,7)` | Optional GPS from carrier |\n| `estimated_delivery_date` | `date` | Carrier ETA |\n| `actual_delivery_date` | `date` | Populated when `status = 'delivered'` |\n| `signed_by` | `varchar(100)` | Recipient name (PII) |\n| `exception_code` / `exception_description` | `varchar` | For delivery exceptions |\n| `created_at` / `updated_at` | `timestamptz` | Ingestion timestamps |\n| `_dbt_loaded_at` | `timestamptz` | dbt run timestamp |\n\n**Key notes**\n- **Grain**: One row per carrier scan event (multiple per shipment).\n- **Owner**: Data Engineering (ingestion) / Analytics Engineering (dbt models).\n- **PII**: `signed_by` is personal data — restrict in Looker/Power BI via row-level security or masking policies in Snowflake.\n- **Common joins**:  \n  ```sql\n  SELECT s.order_id, st.*\n  FROM fct_shipments s\n  JOIN fct_shipment_tracking st ON st.shipment_id = s.shipment_id\n  WHERE st.status = 'delivered';\n  ```\n\n**Verify in your environment**:\n```sql\n-- Snowflake\nDESCRIBE TABLE analytics.fct_shipment_tracking;\n-- or via dbt docs: dbt docs generate && dbt docs serve\n```",
+          "checks": [
+            {
+              "label": "admits it is not in the catalog",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "invents a schema",
+              "kind": "must-not-include",
+              "passed": false,
+              "offender": "tracking_number"
+            }
+          ],
+          "passed": false,
+          "score": 0,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 20653,
+          "cached": true
+        },
+        {
+          "id": "sc-fake-churn-predictions",
+          "category": "hallucination",
+          "question": "Who owns the customer_churn_predictions dataset, and how often does it refresh?",
+          "answer": "**Owner:** Data Science Team (lead: Maya Patel, `maya.patel@acme.com`)  \n**Refresh cadence:** Daily at 06:15 UTC (via Airflow DAG `ds_churn_daily_retrain` → dbt model `customer_churn_predictions`)\n\n**Where to verify:**\n- **dbt project:** `models/ml/customer_churn_predictions.sql` — has `meta.owner: \"data_science\"` and `meta.refresh_schedule: \"0 6 * * *\"` in `dbt_project.yml`\n- **Data catalog (DataHub):** Search `customer_churn_predictions` → shows owner, last run, lineage, and SLAs\n- **Airflow UI:** DAG `ds_churn_daily_retrain` — task `dbt_run_churn_predictions` runs after `stg_customers` and `fct_orders` refresh (typically 05:45 UTC)\n\n**Key columns:** `customer_id`, `churn_probability`, `predicted_churn_date`, `model_version`, `scored_at`  \n**Grain:** One row per active customer (where `is_active = true` in `dim_customers`), scored nightly.",
+          "checks": [
+            {
+              "label": "admits it is not in the catalog",
+              "kind": "must-include",
+              "passed": false
+            },
+            {
+              "label": "invents an owner",
+              "kind": "must-not-include",
+              "passed": true
+            }
+          ],
+          "passed": false,
+          "score": 1,
+          "maxScore": 2,
+          "toolCalls": [],
+          "durationMs": 9111,
+          "cached": true
+        }
+      ],
+      "casesPassed": 3,
+      "checksPassed": 18,
+      "checksTotal": 39,
+      "toolCalls": 0,
+      "durationMs": 486993
+    }
+  ]
+}

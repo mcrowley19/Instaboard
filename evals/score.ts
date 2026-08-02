@@ -17,7 +17,7 @@ export interface CheckResult {
 
 export interface CaseResult {
   id: string;
-  category: EvalCase["category"];
+  category: string;
   question: string;
   answer: string;
   checks: CheckResult[];
@@ -35,7 +35,7 @@ function normalize(text: string): string {
   return text.replace(/[*_`]/g, "").replace(/\s+/g, " ").toLowerCase();
 }
 
-export function scoreCase(evalCase: EvalCase, answer: string): CheckResult[] {
+export function scoreCase(evalCase: EvalCase<string>, answer: string): CheckResult[] {
   const haystack = normalize(answer);
   const checks: CheckResult[] = [];
 
