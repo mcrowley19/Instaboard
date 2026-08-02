@@ -1,0 +1,15 @@
+{
+  "skills": ["datahub-onboarding"],
+  "query": "I'm an analytics engineer starting on the revenue team Monday. There seem to be four different revenue tables in DataHub — which one should I actually use, and who should I talk to?",
+  "expected_behavior": [
+    "Calls get_usage_stats (or the datahub CLI usage aspect) for the candidate revenue datasets and ranks them by 30-day query count and distinct users",
+    "Calls get_dataset_health on the recommended dataset before recommending it",
+    "Flags any deprecated candidate explicitly and names its replacement instead of recommending it",
+    "Identifies actual owners from the ownership aspect as the people to talk to, with ownership type",
+    "Surfaces glossary terms attached to the recommended dataset for the company's metric definitions, quoting the glossary rather than paraphrasing from general knowledge",
+    "Cites real recorded queries from get_dataset_queries, or states 'no recorded queries' if there are none",
+    "Offers to save the orientation as a document in DataHub via save_document, linked to the datasets it references",
+    "Does NOT recommend a table based on its name, row count, or creation date instead of usage",
+    "Does NOT invent SQL examples or owner names not present in the catalog"
+  ]
+}
