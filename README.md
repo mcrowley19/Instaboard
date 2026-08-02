@@ -26,7 +26,12 @@ selects, deprecates a table it routes you to, and moves the owner it tells you t
 page**, through DataHub's own write APIs, and checks that revalidation catches all
 three. Then it restores the catalog and checks the runbook goes green again.
 
-**29 assertions. Non-zero exit if any fails. Last run: 29/29.**
+**29 assertions. Non-zero exit if any fails. Last run: 29/29 — on both catalogs.**
+
+```bash
+npm run prove                        # the catalog this repo seeds
+npm run prove -- --catalog=showcase  # DataHub's own showcase-ecommerce datapack
+```
 
 ```
 4/7  validate — should be clean
@@ -46,11 +51,16 @@ three. Then it restores the catalog and checks the runbook goes green again.
 ```
 
 The decay engine is told nothing about the breaking changes. It re-reads the
-catalog and works out what happened. Receipts:
-[`prove-loop-receipts.json`](examples/live/prove-loop-receipts.json), walked
+catalog and works out what happened. Receipts for both runs:
+[northbeam](examples/live/prove-loop-receipts.json),
+[showcase-ecommerce](examples/live/prove-loop-receipts-showcase.json), walked
 through in [`docs/loop-verification.md`](docs/loop-verification.md). CI re-verifies
-the committed receipts on every push, so a stale or partial capture fails the
-build.
+both on every push, so a stale or partial capture fails the build.
+
+Running it on DataHub's datapack immediately earned its keep: it caught a real
+weakness in the rename detector (a full token reorder,
+`cost_of_delivery` → `delivery_cost_usd`, scored 0.06 on edit distance and fell
+below the threshold) and one over-strict assertion of our own. Both fixed.
 
 ![Validating a runbook against live DataHub](docs/media/validate-live.gif)
 
@@ -64,6 +74,19 @@ failing freshness assertion on step 1, and writes the warning back to the catalo
 ---
 
 ## How the loop works
+
+**0. Draft, before anyone records anything.** A year-old catalog already holds
+the queries people ran, the lineage of what feeds what, who owns which table and
+what has been failing. `npm run draft -- --query=revenue` reads that and produces
+a first pass — health check, upstream checks, the recorded SQL, downstream blast
+radius — so the tool is useful on day one in any DataHub, and the person leaving
+corrects a draft instead of facing a blank page.
+
+What a catalog cannot supply is *why step 2 exists*. So drafted steps are marked
+`inferred`, their reasons read as evidence rather than as remembered intent, and
+every surface that renders one says **"Draft runbook — nobody recorded this"**. A
+draft that impersonated a colleague's judgement would defeat the point of the
+project. [Sample](examples/drafts/).
 
 **1. Capture.** Someone leaving hits ● Record and just does the task in DataHub.
 Every page becomes a step; they annotate the *why*. The agent enriches each step
@@ -119,6 +142,47 @@ a broken one, so it works as a cron job or a CI gate.
 
 ---
 
+## How good is the detector? Precision and recall on injected drift.
+
+The proof loop breaks three things and catches three things. That is a
+demonstration with N=1 per kind, and it only measures recall — it says nothing
+about how often the engine fires when nothing is wrong, which is the number that
+decides whether a team keeps it switched on.
+
+```bash
+npm run bench:drift
+```
+
+plants known drifts across every stored runbook, mixed with **decoys** — real
+catalog changes that no runbook depends on and that must produce nothing — then
+validates blind and scores both.
+
+| | Result |
+| --- | --- |
+| Planted drifts detected | **6/6** across 3 kinds (column dropped, column renamed, deprecated) |
+| Decoys that produced a finding | **0 of 6** |
+| Unexplained findings | **0** |
+| Precision · recall · F1 | **100% · 100% · 100%** |
+| Catalog changes restored afterwards | 12/12 |
+
+[Full run](examples/live/drift-benchmark.json). Three things make that number
+mean something rather than flatter us:
+
+- **A baseline pass.** Findings that pre-date the injection are excluded from the
+  false-positive count, so a runbook that was already stale isn't blamed on the
+  engine — and isn't quietly used to pad it either.
+- **Independent ground truth.** Which columns a step "really" reads is derived by
+  tokenising its SQL, not by asking the engine's own reference matcher. Otherwise
+  recall would be the harness agreeing with itself.
+- **Decoys on datasets runbooks actually read.** Two of the six drop a column
+  from a table a runbook uses, where no step mentions that column. The engine
+  holds a snapshot of those entities and has to stay quiet anyway. Decoys on
+  unrelated tables are nearly free to pass; these are not.
+
+Recall is counted per planted drift and precision per finding, on purpose: one
+drift legitimately produces several findings when two runbooks read the same
+table, and both are right.
+
 ## Does grounding in DataHub actually help? Three arms, two catalogs.
 
 `evals/` holds a 20-question onboarding benchmark — the questions a real new hire
@@ -165,11 +229,19 @@ Everything above is a real run. These are the places where a reader should
 discount us, and we would rather name them than have them found.
 
 **The proof loop is one machine, one version, and not a pass rate.** `npm run
-prove` has passed 29/29 repeatedly during development, always on the same macOS
-laptop against DataHub 1.5.0.6 from the OSS quickstart. It has never run on
-DataHub Cloud, never on another DataHub version, and never in CI — CI re-verifies
-the committed receipts, which is a weaker check. Three breaking changes, one of
-each kind, is N=1 per kind.
+prove` has passed 29/29 repeatedly during development on both catalogs, always on
+the same macOS laptop against DataHub 1.5.0.6 from the OSS quickstart. It has
+never run on DataHub Cloud, never on another DataHub version, and never in CI —
+CI re-verifies the committed receipts, which is a weaker check.
+
+**The drift benchmark is still small, and does not cover every kind.** Six
+planted drifts and six decoys is enough to catch a broken detector, not enough to
+put a confidence interval on 100%. The last run covered three of the four drift
+kinds: no `owner-removed` drift was planted, because the planner only plants one
+when a step names an owner whose username tokens appear in its prose, and none of
+the stored runbooks happened to qualify. So the owner path is proved by the proof
+loop (twice, on both catalogs) and not by the benchmark. Both numbers come from
+one run on one catalog family; neither is a distribution.
 
 **The decay engine checks five kinds of claim, and misses the worst kind.** It
 catches an entity that vanished, a referenced column that vanished, a table
@@ -186,14 +258,26 @@ about it, and a column reached through `SELECT *` or an alias is invisible. The
 first produces a spurious claim; the second produces a missing one.
 
 **Rename detection is string similarity, and the weakest rule we ship.** It scores
-candidates at `0.6 × token overlap + 0.4 × edit distance`, proposes above 0.55,
-and refuses when the top two are within 0.1 of each other. `net_amount_usd` →
-`net_revenue_usd` scores 0.64. That is comfortably a "propose it and mark it
-`medium` confidence", which is what happens — but a coincidentally similar name
-would be proposed just as readily, and a genuine rename to something unrelated
-(`net_amount_usd` → `settled_value`) will not be found at all. It lands in the
-"needs a person" list instead, which is the right failure, but it is still a miss.
-The human reviewing the diff is the actual check here, not the score.
+candidates at `0.75 × token overlap + 0.25 × edit distance`, treats "every content
+word survived" as a strong signal, proposes above 0.55, and refuses when the top
+two are within 0.1 of each other. A coincidentally similar name would be proposed
+just as readily as a real rename, and a genuine rename to something unrelated
+(`net_amount_usd` → `settled_value`) will not be found at all — it lands in the
+"needs a person" list, which is the right failure but still a miss. The human
+reviewing the diff is the actual check here, not the score.
+
+This rule has already been wrong once in a way we only found by running on a
+catalog we didn't build: the original weighting scored
+`cost_of_delivery` → `delivery_cost_usd` at 0.49 and missed it, because edit
+distance punishes reordering far harder than a reader would. Assume there are
+more cases like that one.
+
+**Drafted runbooks are a starting point, not knowledge.** Everything a draft
+contains is derived from catalog evidence, and the reason a step exists is not in
+any catalog. A draft is worth having because correcting one is much cheaper than
+writing from nothing — but a team that files drafts without correcting them has
+automated the production of plausible documents, which is worse than having none.
+The labelling is deliberate and load-bearing.
 
 **Owner matching can collide.** Owners are matched by normalised substring, so two
 people whose display names share a substring could be confused. We have not hit it
@@ -369,11 +453,13 @@ reads were already there, and a new hire needs them on day one:
 
 | Script | Purpose |
 | --- | --- |
-| `npm run prove` | **the whole loop end to end, 29 assertions** |
+| `npm run prove` | **the whole loop end to end, 29 assertions** (`-- --catalog=showcase` for DataHub's datapack) |
+| `npm run draft` | draft runbooks from catalog evidence, no recording needed (`--query=`, `--urn=`, `--save`) |
+| `npm run bench:drift` | plant known drift + decoys, score the detector's precision and recall |
 | `npm run validate` | sweep every runbook for decay; write notes, assertions, properties, incidents and tags back |
 | `npm run propose` | derive corrections as reviewable diffs (`--apply`, `--pr`) |
 | `npm run examples` | export stored runbooks to `examples/runbooks/` |
-| `npm test` | vitest suite (147 tests, MCP and GMS mocked) |
+| `npm test` | vitest suite (181 tests, MCP and GMS mocked) |
 | `npm run eval` | the 20-case benchmark, all three arms (`-- --suite=showcase`) |
 | `npm run eval:verify` | re-score the committed answers for both suites — CI runs this |
 | `npm run showcase:drill` | `record` / `break` / `receipts` / `restore` on DataHub's own datapack |
@@ -428,19 +514,21 @@ lib/            mcp.ts (MCP client) · agent.ts (loop) · decay.ts (validation)
                 provenance.ts (claims, fingerprints, pins) · remediate.ts (corrections + diff)
                 sweep.ts (the unattended pass) · native-writeback.ts (incidents + tags)
                 structured-state.ts (assertions + structured properties)
-                warehouse-introspection.ts (the benchmark's third arm)
+                draft-runbook.ts (drafting from evidence) · drift-injection.ts (the drift benchmark)
+                warehouse-introspection.ts (the eval's third arm)
                 datahub-graphql.ts (what MCP has no tool for) · gms-aspects.ts (drill writes)
                 replay.ts (zero-key demo) · providers.ts · prompts.ts · demo-*.ts
 evals/          benchmark.ts + benchmark-showcase.ts (20 cases each) · suites.ts
                 score.ts · run.ts · verify.ts · transcripts.ts · results/
 extension/      Chrome side panel · entity-from-url.js (the detection contract)
-scripts/        prove-loop.ts (the one-command proof) · seed_datahub.py
-                showcase-drill.ts · validate-runbooks.ts · propose-fixes.ts
-                export-examples.ts · capture-replay.ts · live-receipts.ts
-examples/       runbooks/ (five real ones + validation reports) · proposals/
-                live/ (dated receipts from live runs)
+scripts/        prove-loop.ts (the one-command proof) · drift-benchmark.ts
+                draft-runbooks.ts · seed_datahub.py · showcase-drill.ts
+                validate-runbooks.ts · propose-fixes.ts · export-examples.ts
+                capture-replay.ts · live-receipts.ts
+examples/       runbooks/ (five real ones + validation reports) · drafts/ · proposals/
+                live/ (dated receipts from live runs, both catalogs)
 submission/oss/ the upstream skill PR, the friction reports, the entity-detection package
-tests/          vitest suite (147 tests)
+tests/          vitest suite (181 tests)
 ```
 
 ## Security notes
