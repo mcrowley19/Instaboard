@@ -162,9 +162,10 @@ export default function Landing() {
         <div className="lp-head-body">
           <div>
             <p className="lp-lede">
-              <strong>instaboard</strong> reads your live DataHub catalog and answers the questions
-              their replacement would have asked them, with real table names and the owner to go
-              talk to.
+              <strong>instaboard</strong> is an AI assistant that gets new data hires up to speed.
+              Ask it anything about your warehouse — which table holds revenue, who owns it, what
+              breaks if you change a column — and it answers from your live DataHub catalog, with
+              real table names and the person to go talk to.
             </p>
             <div className="lp-acts">
               <Link className="lp-cta" href="/chat">
@@ -184,8 +185,9 @@ export default function Landing() {
           <div>
             <h2 className="lp-h2">It works off the catalog you already run.</h2>
             <p className="lp-sub">
-              The agent is handed the live MCP tool list and picks what it needs mid-answer, so what
-              comes back matches whatever landed in this morning&rsquo;s ingestion.
+              Nothing is pre-written. Each question makes the agent query DataHub on the spot, so
+              answers reflect what&rsquo;s in the warehouse today — not what a wiki said last
+              quarter.
             </p>
 
             <div className="lp-trace" ref={traceRef}>
