@@ -11,6 +11,7 @@
     "test:watch": "vitest",
     "eval": "tsx evals/run.ts",
     "eval:verify": "tsx evals/verify.ts",
+    "eval:transcripts": "tsx evals/transcripts.ts",
     "validate": "tsx scripts/validate-runbooks.ts",
     "receipts:live": "tsx scripts/live-receipts.ts",
     "seed": "uv run --with acryl-datahub scripts/seed_datahub.py",
