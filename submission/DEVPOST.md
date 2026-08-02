@@ -69,13 +69,25 @@ descriptions become `DescriptionProposal` documents for owners to review).
 `evals/` holds a 20-question onboarding benchmark — the questions a real new
 hire asks in week 1 — scored **deterministically** against the catalog: every
 check is a substring match on facts that live in DataHub (real URNs, owners,
-columns). No LLM judge, no partial credit. The same 20 cases run twice through
-the identical agent loop; the only variable is whether the DataHub MCP tools are
-in the tool list.
+columns). No LLM judge, no partial credit.
 
-On our seeded catalog: **19/20 with DataHub, 5/20 without.** The control arm gets a
-capable-assistant prompt asking for specific tables, owners and SQL. It simply has
-no context to answer from.
+Two arms would have measured the wrong thing. "With tools" beating "without
+tools" partly measures *having tools*, not *having DataHub*. So there are three,
+all through the identical agent loop:
+
+| Suite | With DataHub | **Warehouse schema only** | No tools |
+| --- | --- | --- | --- |
+| our seeded catalog | **19/20** | 9/20 | 5/20 |
+| DataHub's `showcase-ecommerce` | **20/20** | 4/20 | 3/20 |
+
+The middle arm is the interesting one: the same agent connected to the warehouse
+the way an engineer connects without a catalog — `information_schema`, table and
+column names and types, read from the same catalog stripped to what a database
+connection would return. On DataHub's own datapack it scores **one case above
+answering from memory**, and it made *more* tool calls than the grounded arm
+doing it (118 versus 78). Listing every table does not tell you which of six
+identically-named copies people use, who owns it, or what the company means by
+"active user". The gap is the metadata, not the tooling.
 
 A benchmark scored on a catalog you built yourself is partly built in, so we ran
 the same 20 questions against **DataHub's own published `showcase-ecommerce`
@@ -87,8 +99,16 @@ a harder time than our own catalog does, because it loads alongside ours, so the
 search surface holds two `orders` tables, six `order_details`, and an
 `ORDER_DETAILS_REPLICA` matching the real table byte for byte across 55 columns.
 
-The decay engine got the same treatment, since a demo where the author planted the
-failure proves very little. On that datapack we dropped a column a runbook's SQL
+**The whole loop runs as one command.** `npm run prove` starts DataHub, ingests a
+catalog, captures a runbook, validates it clean, then renames a column the
+runbook's SQL selects, deprecates a table it routes you to and moves the owner it
+names — through DataHub's own write APIs — and asserts that revalidation catches
+all three, writes the drift back, and proposes the correction, before restoring
+the catalog and checking it goes green again. 29 assertions, non-zero exit if any
+fails, 29/29 on the last run, receipts committed and re-verified by CI.
+
+The decay engine got the same treatment on a catalog we didn't build, since a demo
+where the author planted the failure proves very little. On that datapack we dropped a column a runbook's SQL
 selects, deprecated a table a runbook routes people to, and removed an owner a
 runbook tells you to page. All through DataHub's own write APIs. The engine was
 told nothing. It caught all three, one finding each, and stayed quiet on the other
@@ -148,12 +168,23 @@ catalog: 14 datasets, lineage, glossary, assertions, incidents, saved queries).
 Building this turned up work worth sending upstream. All of it is filed.
 
 - **[datahub-skills#79](https://github.com/datahub-project/datahub-skills/pull/79)**,
-  a `datahub-onboarding` skill. The onboarding and handoff workflow generalised
-  into a registry skill, with a `/catalog-onboarding` command, two evaluation
-  cases and the router registration. Written against what `mcp-server-datahub`
-  0.6.0 exposes, which meant rewriting a draft that called two tools the server
-  does not have.
-- **Four friction reports, each with a reproduction.**
+  a `datahub-onboarding` skill. The onboarding, capture and validation workflow
+  generalised into a registry skill, with a `/catalog-onboarding` command, three
+  evaluation cases and the router registration. Written against what
+  `mcp-server-datahub` 0.6.0 exposes, which meant rewriting a draft that called
+  two tools the server does not have. A
+  [follow-up commit](https://github.com/datahub-project/datahub-skills/pull/79#issuecomment-5159658074)
+  adds claim-level provenance, write-back as catalog state, and catalog-derived
+  corrections.
+- **[datahub#18818](https://github.com/datahub-project/datahub/issues/18818)**, the
+  reusable one: there is no supported way for a browser integration to know which
+  entity a DataHub page is showing. A `dataFlow` is served at `/pipelines/` and a
+  `dataJob` at `/tasks/`; 11 of 31 routes don't match their entity type, the
+  mapping is published nowhere, and nothing on the page states the entity. Filed
+  with a dependency-free reference implementation and 16 test vectors captured
+  from a running DataHub. We shipped the obvious-and-wrong version ourselves and
+  found it only by pulling the route table out of the frontend bundle.
+- **Five friction reports, each with a reproduction.**
   [#171](https://github.com/acryldata/mcp-server-datahub/issues/171): no MCP tool
   returns usage statistics.
   [#172](https://github.com/acryldata/mcp-server-datahub/issues/172): incidents
@@ -164,16 +195,19 @@ Building this turned up work worth sending upstream. All of it is filed.
   [datahub#18815](https://github.com/datahub-project/datahub/issues/18815):
   `datapack load showcase-ecommerce` quietly drops 248 MCPs on OSS, every usage
   and assertion aspect among them, while reporting success.
-- A fifth thing we hit was already filed, so it got a
+  [datahub#18817](https://github.com/datahub-project/datahub/issues/18817):
+  `deleteAssertion` rejects the CUSTOM assertions `upsertCustomAssertion` creates.
+- One more thing we hit was already filed, so it got a
   [comment confirming it still reproduces on 1.6.0.17](https://github.com/datahub-project/datahub/issues/18497#issuecomment-5159253562)
-  rather than a duplicate. Two of the four changed this codebase.
+  rather than a duplicate. Two of them changed this codebase.
 
 ## Accomplishments we're proud of
 
 - The full loop closes: knowledge is captured *from* the catalog, written
   *into* the catalog, and invalidated *by* the catalog.
-- A measured, reproducible answer to "does DataHub grounding matter?". 19/20
-  against 5/20 on our catalog, **20/20 against 3/20 on DataHub's own**, scored
+- A measured, reproducible answer to "does DataHub grounding matter?", with the
+  arm that isolates metadata from tooling. 19/20 / 9/20 / 5/20 on our catalog,
+  **20/20 / 4/20 / 3/20 on DataHub's own**, scored
   deterministically, auditable by hand, re-verified by CI on every push.
 - The decay engine held up against real breaking changes on a catalog we didn't
   build, and its findings land in DataHub's own Incidents and tags rather than
