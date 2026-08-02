@@ -1,4 +1,5 @@
 import { callDataHubTool } from "./mcp";
+import { datahubGraphQL } from "./datahub-graphql";
 import type { EntitySnapshot, DecayFinding, DecayReport, Handoff } from "./types";
 
 /**
@@ -77,6 +78,61 @@ function countByStatus(node: unknown, key: string, status: string): number {
 }
 
 /**
+ * Pull the identities of the people and groups who own an entity.
+ *
+ * Ownership nests differently per shape: the demo fixture inlines strings, live
+ * GMS nests `{owner: {urn, properties: {displayName}}, ownershipType: {...}}`.
+ * We read `ownership.owners[].owner` specifically rather than deep-scanning,
+ * because a deep scan also sweeps up ownership *type* labels ("Data Steward")
+ * and the owners of attached glossary terms — neither of which owns this
+ * dataset, and both of which would produce false "owner changed" findings.
+ *
+ * `displayName` is the identity that matters: a runbook step says "ping Priya
+ * Sharma", never "ping urn:li:corpuser:b2fd91.patrick1@example.com". Without it,
+ * owner drift can never be detected against a live catalog.
+ */
+function ownerIdentities(parsed: unknown): string[] {
+  const out: string[] = [];
+
+  // `get_entities` returns a bare array (live GMS) or `{entities: [...]}` (demo
+  // fixture). Read ownership off the entity root only — a deep scan would also
+  // pick up the owners of the glossary terms attached to it, who don't own the
+  // dataset, and the ownership *type* labels ("Data Steward"), which aren't
+  // people at all. Both produce false "owner changed" findings.
+  const root = parsed as Record<string, unknown> | unknown[];
+  const wrapped = !Array.isArray(root) && Array.isArray((root as Record<string, unknown>)?.entities);
+  const entities = wrapped
+    ? ((root as Record<string, unknown>).entities as unknown[])
+    : Array.isArray(root)
+      ? root
+      : [root];
+  for (const entity of entities) {
+    if (!entity || typeof entity !== "object") continue;
+    const e = entity as Record<string, unknown>;
+    const ownership = e.ownership as Record<string, unknown> | undefined;
+    // Live GMS: {ownership: {owners: [...]}}. Demo fixture: {owners: [...]}.
+    const list = (ownership?.owners ?? e.owners) as unknown;
+    for (const entry of Array.isArray(list) ? list : list ? [list] : []) {
+      if (typeof entry === "string") {
+        out.push(entry);
+        continue;
+      }
+      if (!entry || typeof entry !== "object") continue;
+      const owner = ((entry as Record<string, unknown>).owner ?? entry) as Record<string, unknown>;
+      if (typeof owner === "string") {
+        out.push(owner);
+        continue;
+      }
+      const props = (owner.properties ?? owner.info ?? {}) as Record<string, unknown>;
+      for (const candidate of [props.displayName, owner.username, owner.name, props.email, owner.urn]) {
+        if (typeof candidate === "string" && candidate) out.push(candidate);
+      }
+    }
+  }
+  return [...new Set(out)];
+}
+
+/**
  * Live DataHub inlines a summary `health` array on entities
  * (`{type: "ASSERTIONS"|"INCIDENTS", status: "FAIL", causes: [urns]}`) instead
  * of the per-assertion lists the demo fixture uses. Read both shapes.
@@ -87,11 +143,51 @@ function applyHealthSummary(parsed: unknown, snapshot: EntitySnapshot): void {
     if (!entry || typeof entry !== "object") continue;
     const e = entry as Record<string, unknown>;
     if (String(e.status ?? "").toUpperCase() !== "FAIL") continue;
-    const count = Array.isArray(e.causes) && e.causes.length > 0 ? e.causes.length : 1;
+    // `causes` is sometimes a list of assertion URNs and sometimes a single
+    // marker string ("ACTIVE_INCIDENTS"); the `message` carries the real count
+    // ("1 active incident", "2 of 3 assertions are failing").
+    const causes = Array.isArray(e.causes) ? e.causes.filter((c): c is string => typeof c === "string") : [];
+    const urnCauses = causes.filter((c) => c.startsWith("urn:li:"));
+    const fromMessage = Number(String(e.message ?? "").match(/(\d+)/)?.[1] ?? 0);
+    const count = urnCauses.length || fromMessage || 1;
     const type = String(e.type ?? "").toUpperCase();
     if (type === "ASSERTIONS") snapshot.failingAssertions = Math.max(snapshot.failingAssertions, count);
     if (type === "INCIDENTS") snapshot.openIncidents = Math.max(snapshot.openIncidents, count);
   }
+}
+
+/**
+ * Don't let the tool's own write-back read back as new drift.
+ *
+ * When a sweep finds a broken runbook it raises an Incident on the dataset. The
+ * next sweep then sees an open incident that wasn't there at record time and
+ * reports it as fresh drift — instaboard flagging instaboard, every night,
+ * forever. So discount the incidents this tool raised: they are titled
+ * "Stale runbook: <runbook>".
+ *
+ * This has to go over GraphQL. The entity's inlined health summary reports
+ * `causes: ["ACTIVE_INCIDENTS"]` rather than the incident URNs, and reading an
+ * incident by URN through `get_entities` returns "exists but no data could be
+ * retrieved" — incidents are simply not readable over MCP today. In demo mode
+ * there is no GMS behind the fixture, the call fails fast, and the count is
+ * left alone.
+ */
+async function discountSelfRaisedIncidents(snapshot: EntitySnapshot): Promise<void> {
+  if (snapshot.openIncidents === 0) return;
+
+  const res = await datahubGraphQL<{
+    dataset: { incidents: { incidents: { title: string }[] } } | null;
+  }>(
+    `query($urn: String!) {
+       dataset(urn: $urn) { incidents(state: ACTIVE, start: 0, count: 50) { incidents { title } } }
+     }`,
+    { urn: snapshot.urn }
+  );
+
+  const open = res.data?.dataset?.incidents?.incidents;
+  if (!open) return;
+  const ours = open.filter((i) => /^stale runbook:/i.test(i.title ?? "")).length;
+  if (ours > 0) snapshot.openIncidents = Math.max(0, snapshot.openIncidents - ours);
 }
 
 /**
@@ -124,15 +220,7 @@ export async function snapshotEntity(urn: string): Promise<EntitySnapshot> {
   if (notFound) return base;
 
   const names = flatStrings(collect(parsed, "name"));
-  // Owner identity nests differently per shape: demo inlines strings, live GMS
-  // nests {owner: {urn, username, ...}} — collect every identity string found.
-  const ownerNodes = collect(parsed, "owners");
-  const owners = [
-    ...new Set([
-      ...flatStrings(ownerNodes),
-      ...flatStrings(ownerNodes.flatMap((o) => [...collect(o, "username"), ...collect(o, "name"), ...collect(o, "urn")])),
-    ]),
-  ];
+  const owners = ownerIdentities(parsed);
   const snapshot: EntitySnapshot = {
     ...base,
     exists: true,
@@ -144,9 +232,11 @@ export async function snapshotEntity(urn: string): Promise<EntitySnapshot> {
     failingAssertions: countByStatus(parsed, "assertions", "fail"),
   };
   applyHealthSummary(parsed, snapshot);
+  await discountSelfRaisedIncidents(snapshot);
 
   // A dedicated health tool, where one exists, is authoritative over whatever
-  // happens to be inlined on the entity.
+  // happens to be inlined on the entity. The live `mcp-server-datahub` has no
+  // such tool — it inlines `health` above — so this is the demo fixture's path.
   const health = await callDataHubTool("get_dataset_health", { urn });
   if (!health.isError) {
     const h = parseToolJson(health.content);
