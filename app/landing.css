@@ -185,14 +185,6 @@
   margin: 0 auto;
 }
 
-.lp-head-top {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 24px;
-  padding-bottom: 13px;
-}
-
 .lp-head-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

@@ -137,10 +137,6 @@ export default function Landing() {
       </header>
 
       <section className="lp-head">
-        <div className="lp-head-top">
-          <span className="key">onboarding copilot for data teams</span>
-          <span className="key">reads: datahub · via: mcp</span>
-        </div>
         <div className="rule" />
 
         <div className="lp-head-hero">
