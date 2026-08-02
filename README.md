@@ -22,8 +22,14 @@ instaboard is a DataHub-native agent for both halves of that problem:
   DataHub*, with a live "you're on this page" indicator and per-step "ask the coach."
 - **Validate** — and because captured knowledge rots, instaboard re-checks every
   runbook against live DataHub: columns that vanished, tables since deprecated,
-  assertions now failing, owners who no longer own the thing. Findings are written
-  back to the catalog so the staleness is visible where the runbook lives.
+  assertions now failing, owners who no longer own the thing. Every claim is pinned to
+  the catalog version it was checked against, the drift is written back as a failing
+  assertion, structured properties, a tag and an incident **assigned to whoever owns the
+  data now** — and the correction comes back as a diff for a human to approve.
+
+`npm run prove` runs that whole loop against a real DataHub in one command, breaking the
+catalog on purpose and asserting that revalidation catches it. 29 checks, non-zero exit if
+any fails.
 
 That last loop is the point. Institutional knowledge that can't tell you it's wrong
 is a liability, and it's the part every "write it to the wiki" workflow gets wrong.
@@ -136,12 +142,30 @@ runbook written back with its document URN. See
   recording, new incidents, assertions that started failing, and owners who have moved on.
   Proved against real breaking changes on DataHub's own datapack:
   [see the drill](docs/showcase-verification.md).
-- **🚨 Write-back into DataHub's native primitives** — a drift note sits in a document
-  until somebody opens it. When a sweep finds a runbook that would now fail if followed,
-  it raises a real **Incident** on the affected dataset, typed from the finding and linked
-  to the note, and tags everything that drifted **`Stale Runbook`**. The finding turns up
-  in the workflows a data team already watches, and "which tables have rotted runbooks?"
-  becomes a search query. A nightly sweep re-uses the incident it opened last night.
+- **🔗 A provenance chain, claim by claim** — a runbook isn't stale or fresh; each thing it
+  asserts about the catalog is. So every step is broken into **claims** ("this column
+  exists", "Mike owns this table"), and each claim is pinned to a content fingerprint of
+  the exact catalog aspect it was validated against. Revalidation reports `18 of 19 claims
+  still hold` and, for the one that broke, the whole chain: *validated 2026-07-01 against
+  `health@6f3f70fb7154`; that aspect now reads `health@b3b7361fb1ae`*. The fingerprints hash
+  public catalog facts, so anyone holding the runbook and a DataHub connection can recompute
+  them — that is what makes it a provenance chain rather than a claim of one.
+- **🚨 Write-back as structured state, not just prose** — a drift note sits in a document
+  until somebody opens it. So a sweep also writes state a person walks into: a **custom
+  assertion** per (runbook, dataset) that fails while the runbook is stale and passes when
+  it validates clean, carrying the specific breaking change and the provenance chain in its
+  result properties; **structured properties** holding the runbook's status, the change that
+  broke it, and every validated-against pin; a **`Stale Runbook`** tag on everything that
+  drifted; and a real **Incident**, typed from the finding, on any dataset where a step
+  would now fail. Clean runs are written too — a dataset that is only written to when
+  something breaks can't tell "fine" from "nobody checked".
+- **📬 Closing the loop** — the incident is **assigned to whoever owns that dataset today**,
+  which in the owner-drift case is precisely the person the runbook has never heard of.
+  Then `npm run propose` derives the correction from the catalog — the renamed column, the
+  replacement named in a deprecation note, the current owner — and emits it as a **unified
+  diff for a human to approve**, with the evidence behind every edit and an explicit list of
+  what it refused to guess at. `--apply` accepts it; `--pr` opens it as a pull request.
+  [Worked example](examples/proposals/monthly-revenue-close.md).
 - **💬 Chat assistant** — plain-English Q&A grounded in DataHub metadata, with every MCP
   call visible in an expandable tool trace. Runs on the hosted demo with no API key at
   all, replaying a committed recording of a real session.
@@ -173,33 +197,65 @@ runbook written back with its document URN. See
    *recorded session* label so you always know which you are looking at. Paste a key in
    Settings and it goes live. Locally: `npm install`, `echo "DEMO_MODE=true" > .env.local`,
    `npm run dev`.
-2. **Watch the headline loop.** Go to `/handoffs`, open the sample runbook, hit **Validate
-   against DataHub**. You get a deterministic staleness verdict on step 1, written back to
-   the catalog three ways: a drift note carrying the document URN DataHub reports, a native
-   Incident on the affected dataset, and a `Stale Runbook` tag. `npm run validate` does the
-   same sweep unattended and exits non-zero on a broken runbook, so you can cron it.
-3. **Check it on a catalog we didn't build.** See
+2. **Prove the whole loop in one command.** With Docker available:
+
+   ```bash
+   npm run prove
+   ```
+
+   Starts DataHub if it isn't up, ingests a sample catalog, captures a runbook against it,
+   validates it clean, then **renames a column the runbook's SQL selects, deprecates a table
+   it routes you to, and moves the owner it tells you to page** — through DataHub's own
+   write APIs — and checks that revalidation catches all three, writes the drift back, and
+   proposes the correction. Then it puts the catalog back and checks the runbook goes green
+   again. **29 assertions, non-zero exit if any fails.** Last run:
+   [`prove-loop-receipts.json`](examples/live/prove-loop-receipts.json), walked through in
+   [`docs/loop-verification.md`](docs/loop-verification.md). CI re-verifies the committed
+   receipts on every push, so a stale or partial capture fails the build.
+
+   The decay engine is told nothing about the changes. It re-reads the catalog and works out
+   what happened.
+
+3. **Watch the same loop in the UI.** Go to `/handoffs`, open the sample runbook, hit
+   **Validate against DataHub**. You get a deterministic staleness verdict on step 1, with
+   the provenance chain for every claim, written back to the catalog: a drift note carrying
+   the document URN DataHub reports, a failing runbook-validity assertion, structured
+   properties naming the change, a native Incident assigned to the current owner, and a
+   `Stale Runbook` tag. `npm run validate` does the same sweep unattended and exits non-zero
+   on a broken runbook, so you can cron it.
+4. **Read the runbooks themselves.** [`examples/runbooks/`](examples/runbooks/) ships five
+   real ones — the runbook as written back to DataHub, the JSON with its full catalog
+   baseline and every pinned claim, and the validation report with the provenance block. All
+   generated output; none of it hand-maintained.
+5. **Check it on a catalog we didn't build.** See
    [`docs/showcase-verification.md`](docs/showcase-verification.md). Against DataHub's own
    `showcase-ecommerce` datapack the benchmark scores **20/20 vs 3/20**, and a decay drill
    drops a column a runbook selects, deprecates a table a runbook routes people to, and
    moves an owner a runbook tells you to page. All three get caught, one finding each,
    nothing else fires. [Receipts](examples/live/showcase-decay-receipts.json).
    [The incident in DataHub](docs/screenshots/showcase-stale-runbook-tag-and-incident.jpg).
-4. **Audit the measurement.** [`scorecard.md`](evals/results/scorecard.md) and
+6. **Audit the measurement.** [`scorecard.md`](evals/results/scorecard.md) and
    [`showcase-scorecard.md`](evals/results/showcase-scorecard.md) ship with every raw
-   answer, and CI re-scores them on each push. `npm test` runs 51 unit tests.
+   answer, and CI re-scores them on each push. `npm test` runs 106 unit tests covering the
+   decay engine, the provenance chain, the structured write-back, the incident assignment
+   and the correction proposer.
 
 Against the judging criteria. **Use of DataHub**: reads the MCP tool set, and writes back
 through documents (runbooks, decay notes, learning paths, description proposals) as well as
-DataHub's own operational primitives, so a finding lands somewhere a data team already
-watches. **Originality**: capture, replay and decay make this an onboarding product rather
-than another lineage guard, and the Chrome side panel turns DataHub itself into the
-recording surface. **Technical execution**: a decay engine with no LLM in it, a two-catalog
-benchmark that CI re-verifies, an eval runner that resumes across free-tier quota walls, and
-one agent loop shared by the app, the extension and the benchmark. **Real-world
-usefulness**: the fortnight around every departure and every new hire, which data platform
-teams pay for today. **Open source**: a skill sent upstream plus four friction reports with
-reproductions, described under [Contributing back](#contributing-back-upstream).
+DataHub's own operational primitives — tags, structured properties, custom assertions and
+assigned incidents — so a finding lands somewhere a data team already watches.
+**Originality**: capture, replay and decay make this an onboarding product rather than
+another lineage guard; the Chrome side panel turns DataHub itself into the recording
+surface; and every claim carries a provenance chain back to the catalog version that
+justified it. **Technical execution**: a decay engine with no LLM in it, one command that
+proves the whole loop against a real catalog with 29 assertions, 106 unit tests, a
+two-catalog benchmark that CI re-verifies, an eval runner that resumes across free-tier
+quota walls, and one agent loop shared by the app, the extension and the benchmark.
+**Real-world usefulness**: the fortnight around every departure and every new hire, which
+data platform teams pay for today — and a correction proposed as a diff, so the fix costs a
+review rather than an afternoon. **Open source**: a skill sent upstream plus five friction
+reports with reproductions, described under
+[Contributing back](#contributing-back-upstream).
 
 ## Quick start
 
@@ -330,11 +386,14 @@ forwarded to your own server per request), or `LLM_PROVIDER` / `LLM_API_KEY` in
 | --- | --- |
 | `npm run dev` | start the app on :3000 |
 | `npm run build` / `npm start` | production build / serve |
-| `npm test` | vitest suite (45 tests, MCP mocked) |
+| `npm test` | vitest suite (106 tests, MCP and GMS mocked) |
 | `npm run eval` | the 20-case onboarding benchmark, both arms (`-- --suite=showcase` for DataHub's catalog) |
 | `npm run eval:verify` | re-score the committed answers for both suites — CI runs this on every push |
 | `npm run eval:transcripts` | render the hallucination / health-trap transcripts from committed answers |
-| `npm run validate` | sweep every runbook for decay; write notes, incidents and tags back to DataHub |
+| `npm run prove` | **the whole loop, end to end, with 29 assertions** — start DataHub, ingest, capture, validate clean, break the catalog, catch it, write back, propose the fix, restore |
+| `npm run validate` | sweep every runbook for decay; write notes, assertions, properties, incidents and tags back to DataHub |
+| `npm run propose` | derive corrections for stale runbooks as reviewable diffs (`--apply`, `--pr`) |
+| `npm run examples` | export the stored runbooks to `examples/runbooks/` |
 | `npm run showcase:drill` | `record` / `break` / `receipts` / `restore` — the decay drill on DataHub's own datapack |
 | `npm run capture:replay` | record a real session for the zero-key hosted demo |
 | `npm run receipts:live` | re-capture the live-DataHub verification receipts |
@@ -347,16 +406,22 @@ forwarded to your own server per request), or `LLM_PROVIDER` / `LLM_API_KEY` in
 app/            page.tsx (landing) · (app)/ signed-in pages · api/ routes
 components/     Sidebar, ToolTrace, Markdown, SettingsModal
 lib/            mcp.ts (MCP client) · agent.ts (loop) · decay.ts (validation)
+                provenance.ts (claims, fingerprints, pins) · remediate.ts (corrections + diff)
                 sweep.ts (the unattended pass) · native-writeback.ts (incidents + tags)
-                datahub-graphql.ts (what MCP has no tool for) · replay.ts (zero-key demo)
-                providers.ts (LLMs) · prompts.ts · demo-catalog.ts · demo-mcp.ts
+                structured-state.ts (assertions + structured properties)
+                datahub-graphql.ts (what MCP has no tool for) · gms-aspects.ts (drill writes)
+                replay.ts (zero-key demo) · providers.ts (LLMs) · prompts.ts
+                demo-catalog.ts · demo-mcp.ts
 evals/          benchmark.ts + benchmark-showcase.ts (20 cases each) · suites.ts
                 score.ts · run.ts · verify.ts · transcripts.ts · results/
 extension/      Chrome side panel
-scripts/        seed_datahub.py · showcase-drill.ts · capture-replay.ts
-                validate-runbooks.ts · live-receipts.ts
+scripts/        prove-loop.ts (the one-command proof) · seed_datahub.py
+                showcase-drill.ts · validate-runbooks.ts · propose-fixes.ts
+                export-examples.ts · capture-replay.ts · live-receipts.ts
+examples/       runbooks/ (five real ones + their validation reports) · proposals/
+                live/ (dated receipts from live runs)
 submission/oss/ the upstream skill PR and the friction reports
-tests/          vitest suite
+tests/          vitest suite (106 tests)
 ```
 
 ## Contributing back upstream
@@ -371,7 +436,12 @@ registration. It is written against what `mcp-server-datahub` 0.6.0 exposes, whi
 it reads `health` and `deprecation` off `get_entities` rather than reaching for tools that
 aren't there.
 
-**Four friction reports, each with a reproduction.**
+A follow-up commit on the same PR adds the parts proved out since: claim-level provenance
+pinning, writing staleness back as tags, structured properties, assertions and assigned
+incidents, and proposing the catalog-supported correction for human approval — plus a third
+evaluation case covering the write-back path and its negative cases.
+
+**Five friction reports, each with a reproduction.**
 
 | Report | What |
 | --- | --- |
@@ -379,6 +449,7 @@ aren't there.
 | [mcp-server-datahub#172](https://github.com/acryldata/mcp-server-datahub/issues/172) | `get_entities` on an incident URN errors, and health reports `causes: ["ACTIVE_INCIDENTS"]` where the assertions branch of the same field returns URNs |
 | [mcp-server-datahub#173](https://github.com/acryldata/mcp-server-datahub/issues/173) | Two tool schemas use multi-type `anyOf` unions that make OpenAI-compatible providers 422 the whole tool list |
 | [datahub#18815](https://github.com/datahub-project/datahub/issues/18815) | `showcase-ecommerce` loses 248 MCPs on OSS, every usage and assertion aspect among them, and still reports success |
+| [`05-deleteassertion…`](submission/oss/issues/05-deleteassertion-rejects-custom-assertions.md) | `deleteAssertion` errors with "Unsupported Assertion Type CUSTOM" on an assertion `upsertCustomAssertion` created two calls earlier; only the CLI can remove it |
 
 Each was checked against the existing open issues first. A fifth thing we hit, the
 `datapack --help` crash, was already filed as
@@ -388,8 +459,8 @@ rather than a duplicate.
 
 Two of them changed this codebase.
 [#172](https://github.com/acryldata/mcp-server-datahub/issues/172) is why
-`lib/datahub-graphql.ts` exists, and why `discountSelfRaisedIncidents` in `lib/decay.ts`
-has to be there so the sweep stops reading its own incidents as drift.
+`lib/datahub-graphql.ts` exists, and why `discountSelfWrittenState` in `lib/decay.ts`
+has to be there so the sweep stops reading its own incidents and assertions as drift.
 
 ## Security notes
 

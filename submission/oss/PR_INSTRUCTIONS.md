@@ -5,10 +5,12 @@ Two upstream contributions came out of building instaboard. All of them are file
 | What | Where | Status |
 | --- | --- | --- |
 | `datahub-onboarding` skill | [datahub-skills#79](https://github.com/datahub-project/datahub-skills/pull/79) | open |
+| ↳ follow-up commit: validation write-back and correction steps | same PR | ready to push, see §1a |
 | No MCP tool returns usage statistics | [mcp-server-datahub#171](https://github.com/acryldata/mcp-server-datahub/issues/171) | open |
 | Incidents are unreadable over MCP | [mcp-server-datahub#172](https://github.com/acryldata/mcp-server-datahub/issues/172) | open |
 | `anyOf` union schemas get 422'd by providers | [mcp-server-datahub#173](https://github.com/acryldata/mcp-server-datahub/issues/173) | open |
 | Datapack drops Cloud-only aspects on OSS | [datahub#18815](https://github.com/datahub-project/datahub/issues/18815) | open |
+| `deleteAssertion` rejects CUSTOM assertions | `issues/05-…` | ready to file |
 | `datapack --help` crash still on 1.6.0.17 | [comment on datahub#18497](https://github.com/datahub-project/datahub/issues/18497#issuecomment-5159253562) | existing issue |
 
 The sections below record how each was put together, and stay here so the work is
@@ -156,6 +158,57 @@ version files.
 
 ---
 
+## 1a. The follow-up commit on the same PR
+
+Steps 9 and 10 were written after the skill went up, once the corresponding parts of
+instaboard had been built and proved out end to end against a live catalog
+(`npm run prove`, 29/29 checks). They close the loop the original skill only opened: it
+detected staleness and warned about it, but left the finding in the chat and the fix to
+whoever read it.
+
+What the follow-up adds:
+
+- **Step 8 gains claim-level pinning.** Each claim a document makes records the aspect it
+  depends on and a content fingerprint of that aspect's facts, so a verdict is reproducible
+  by anyone with the document and a catalog connection. Report "18 of 19 claims still hold",
+  not "stale".
+- **Step 9, write the staleness back as state.** `StaleRunbook` tag, runbook status and the
+  specific breaking change as structured properties, an assertion that fails while the
+  runbook is stale, and an incident on any dataset where a step would now fail — assigned to
+  whoever owns that dataset today. Includes the two rules that only show up in practice:
+  write the clean result too, and discount your own writes on the next pass or the tool
+  flags itself forever.
+- **Step 10, propose the correction.** A table of what the catalog can and cannot support a
+  fix for, presented as a diff for human approval. Including the pronoun rule: replacing a
+  departed owner's name without repointing the pronouns that referred to them produces a new
+  false statement about a real person.
+- **Boundary and Red Flags updated.** The skill now writes metadata in exactly one situation
+  — recording the result of validating a document it is responsible for — and says so, with
+  general enrichment and quality management still routed to `/datahub-enrich` and
+  `/datahub-quality`.
+- **A third evaluation**, `evaluations/runbook-drift-writeback.json`, covering the
+  write-back and correction path, including the negative cases: no auto-apply, no guessed
+  rename when two candidates are comparable, no runbook edit in response to a health
+  problem, and no counting your own incident as fresh drift.
+
+To push it onto the open PR:
+
+```bash
+gh repo fork datahub-project/datahub-skills --clone   # if not already cloned
+cd datahub-skills
+git fetch origin && git checkout feat/datahub-onboarding-skill
+cp -r <instaboard>/submission/oss/skills/datahub-onboarding skills/
+pre-commit run --all-files
+git add skills/datahub-onboarding
+git commit -m "feat: add validation write-back and correction steps to datahub-onboarding"
+git push
+```
+
+Then add a comment on the PR summarising the additions, since the original description does
+not mention Steps 9 and 10.
+
+---
+
 ## 2. The friction reports
 
 Four write-ups with reproduction steps are in `issues/`. Each is a complete issue body;
@@ -167,6 +220,7 @@ file with `gh issue create -R <repo> --title "<first heading>" --body-file <file
 | `02-incidents-unreadable.md` | `acryldata/mcp-server-datahub` | `get_entities` on an incident URN errors; the entity's health reports `causes: ["ACTIVE_INCIDENTS"]` instead of URNs, unlike the assertions branch of the same field |
 | `03-anyof-union-schemas-rejected-by-providers.md` | `acryldata/mcp-server-datahub` | Multi-type `anyOf` unions in two tool schemas make OpenAI-compatible providers reject the whole tool list with a 422 |
 | `04-showcase-datapack-drops-cloud-only-aspects.md` | `datahub-project/datahub` | `datapack load showcase-ecommerce` quietly drops 248 MCPs on OSS, every usage and assertion aspect among them, while still reporting success |
+| `05-deleteassertion-rejects-custom-assertions.md` | `datahub-project/datahub` | `deleteAssertion` errors with "Unsupported Assertion Type CUSTOM" on assertions `upsertCustomAssertion` created two calls earlier; only the CLI can remove them |
 
 Checked against the open issue lists on both repos before writing; none of these is a
 duplicate. The incident write-tool requests (#136, #143, #145, #153) are all about
