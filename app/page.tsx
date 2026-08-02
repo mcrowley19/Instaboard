@@ -79,7 +79,7 @@ export default function Landing() {
   const [played, setPlayed] = useState(0);
   const tableRef = useReveal<HTMLTableElement>();
   const rulerRef = useReveal<HTMLDivElement>();
-  const surfacesRef = useReveal<HTMLDivElement>();
+  const extRef = useReveal<HTMLDivElement>();
 
   // Step through the tool trace once, when it first scrolls into view.
   useEffect(() => {
@@ -125,6 +125,9 @@ export default function Landing() {
         <nav className="lp-bar-meta">
           <a href="#answers" className="hide-sm">
             answers
+          </a>
+          <a href="#extension" className="hide-sm">
+            extension
           </a>
           <a href="#handoffs" className="hide-sm">
             handoffs
@@ -185,9 +188,9 @@ export default function Landing() {
           <div>
             <h2 className="lp-h2">It works off the catalog you already run.</h2>
             <p className="lp-sub">
-              Nothing is pre-written. Each question makes the agent query DataHub on the spot, so
-              answers reflect what&rsquo;s in the warehouse today — not what a wiki said last
-              quarter.
+              Nothing is pre-written. Each question makes the agent query DataHub on the spot,
+              through the official DataHub MCP server, so answers reflect what&rsquo;s in the
+              warehouse today — not what a wiki said last quarter.
             </p>
 
             <div className="lp-trace" ref={traceRef}>
@@ -260,6 +263,68 @@ export default function Landing() {
         </div>
       </section>
 
+      <section className="band" id="extension">
+        <div className="band-grid">
+          <div className="band-rail">extension</div>
+          <div>
+            <h2 className="lp-h2">A side panel that rides along inside DataHub.</h2>
+            <p className="lp-sub">
+              The Chrome extension reads the URN of whatever DataHub page you have open and
+              explains it in place — no tab-switching, no pasting table names. It&rsquo;s a thin
+              client on the same agent, so no API keys ever touch the browser.
+            </p>
+
+            <div className="lp-ext lp-reveal" ref={extRef} aria-hidden="true">
+              <div className="lp-ext-chrome">
+                <span className="dots">
+                  <i /><i /><i />
+                </span>
+                <span className="url">acme.datahub.com/dataset/fct_revenue</span>
+              </div>
+              <div className="lp-ext-body">
+                <div className="lp-ext-dh">
+                  <div className="dh-title">
+                    fct_revenue <span>snowflake · prod</span>
+                  </div>
+                  <div className="dh-label">schema</div>
+                  <div className="sk" style={{ width: "72%" }} />
+                  <div className="sk" style={{ width: "58%" }} />
+                  <div className="sk" style={{ width: "64%" }} />
+                  <div className="dh-label">lineage</div>
+                  <div className="sk" style={{ width: "80%" }} />
+                  <div className="sk" style={{ width: "46%" }} />
+                  <div className="dh-label">queries</div>
+                  <div className="sk" style={{ width: "66%" }} />
+                  <div className="sk" style={{ width: "52%" }} />
+                </div>
+                <aside className="lp-ext-panel">
+                  <div className="lp-ext-head">
+                    <i>i</i> instaboard <span className="key">side panel</span>
+                  </div>
+                  <div className="lp-ext-urn">on this page: fct_revenue</div>
+                  <div className="lp-ext-q">Explain this table</div>
+                  <p className="lp-ext-a">
+                    Finance&rsquo;s revenue mart, owned by Sarah Chen. Fed by{" "}
+                    <b>stripe_payments</b> and <b>orders</b>; 212 queries this month. One freshness
+                    assertion failing since Tuesday — check before you report off it.
+                  </p>
+                  <div className="lp-chips">
+                    <span>explain this table</span>
+                    <span>who owns it</span>
+                    <span>record a handoff</span>
+                  </div>
+                </aside>
+              </div>
+            </div>
+
+            <p className="lp-note">
+              Everything the panel does also lives in the web app, alongside a week-one learning
+              path and a ramp checklist generated from the catalog.
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section className="band" id="handoffs">
         <div className="band-grid">
           <div className="band-rail">handoffs</div>
@@ -290,46 +355,6 @@ export default function Landing() {
               The finished runbook is saved back into DataHub through <code>save_document</code> and
               linked to the datasets it touches.
             </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="band">
-        <div className="band-grid">
-          <div className="band-rail">surfaces</div>
-          <div>
-            <h2 className="lp-h2">The same agent turns up in two places.</h2>
-            <div className="lp-surfaces lp-reveal" ref={surfacesRef}>
-              <div className="lp-surface">
-                <h3>Web app</h3>
-                <span className="key">localhost:3000</span>
-                <p>
-                  Chat with the tool trace open, a week-one learning path generated from live
-                  catalog exploration, a lineage explainer that tells you what breaks, and a
-                  checklist you tick off as you ramp.
-                </p>
-                <div className="lp-chips">
-                  <span>chat</span>
-                  <span>learning path</span>
-                  <span>lineage</span>
-                  <span>handoffs</span>
-                  <span>progress</span>
-                </div>
-              </div>
-              <div className="lp-surface">
-                <h3>Chrome side panel</h3>
-                <span className="key">extension/</span>
-                <p>
-                  It rides along inside DataHub, reads the URN of whatever page you have open, and
-                  explains it there. Thin client, so no keys ever go in the extension.
-                </p>
-                <div className="lp-chips">
-                  <span>explain this table</span>
-                  <span>who owns it</span>
-                  <span>record a handoff</span>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
       </section>
