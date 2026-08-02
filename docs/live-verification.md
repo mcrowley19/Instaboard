@@ -23,6 +23,16 @@ npm run receipts:live                # re-captures every receipt below
 | Write-back | `save_document` created `urn:li:document:shared-147cf125-30d0-43ad-b328-54e516cbc178`, linked to the affected datasets |
 | Read-back | a follow-up `search` returns that same document URN — the write is in the catalog, not just claimed |
 
+## Seen in the DataHub UI
+
+- [The stale-runbook note rendered in DataHub](screenshots/stale-runbook-note-in-datahub.jpg)
+  at the exact URN in the receipt (`urn:li:document:shared-147cf125-…`), linked
+  to the affected datasets.
+- [`payment_health_daily`'s Quality tab](screenshots/payment-health-failing-assertion.jpg)
+  showing the failing assertion the decay engine keyed on.
+- [Animated capture of the validation flow](media/validate-live.gif) running
+  against this live stack.
+
 ## Why this matters
 
 The demo fixture and the live path share one code path (`lib/decay.ts`,

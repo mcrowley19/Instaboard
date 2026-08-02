@@ -27,6 +27,14 @@ instaboard is a DataHub-native agent for both halves of that problem:
 That last loop is the point. Institutional knowledge that can't tell you it's wrong
 is a liability, and it's the part every "write it to the wiki" workflow gets wrong.
 
+![Validating a runbook against live DataHub](docs/media/validate-live.gif)
+*Recorded against a live DataHub: one click re-validates Priya's runbook, flags
+the failing freshness assertion on step 1, and writes the warning back to the
+catalog ("✓ flagged in DataHub"). [The note as it appears inside
+DataHub](docs/screenshots/stale-runbook-note-in-datahub.jpg) · [the failing
+assertion it detected](docs/screenshots/payment-health-failing-assertion.jpg) ·
+[dated receipts](docs/live-verification.md).*
+
 ---
 
 ## Does grounding in DataHub actually help? We measured it.
