@@ -81,7 +81,7 @@ case details (the hallucination case is the memorable one).*
 
 > "Does grounding in DataHub actually matter? We measured it: a 20-question
 > new-hire benchmark, scored deterministically against the catalog — real
-> URNs, real owners, no LLM judge. Same agent, same model: 15 out of 20 with
+> URNs, real owners, no LLM judge. Same agent, same model: 19 out of 20 with
 > DataHub's MCP tools, 5 without. Asked about a table that doesn't exist, the
 > grounded agent says so; the control invents a schema."
 

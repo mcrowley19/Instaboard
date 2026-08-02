@@ -6,7 +6,7 @@ back). Tagline and description below.*
 
 ---
 
-**Tagline (60 chars):**
+**Tagline (Devpost limit 120 chars):**
 Capture leaving engineers' knowledge in DataHub — and know when it goes stale.
 
 ---
@@ -66,8 +66,8 @@ columns). No LLM judge, no partial credit. The same 20 cases run twice through
 the identical agent loop; the only variable is whether the DataHub MCP tools are
 in the tool list.
 
-Result: **15/20 with DataHub vs 5/20 without.** Half the questions a new hire
-asks in week 1 are answerable *only* with the catalog. The control isn't a
+Result: **19/20 with DataHub vs 5/20 without.** 14 of the 20 questions a new
+hire asks in week 1 are answerable *only* with the catalog. The control isn't a
 strawman — it's a capable assistant prompted to name specific tables, owners,
 and SQL; it just has no context. Full scorecard with every raw answer is
 committed in the repo.
@@ -106,7 +106,7 @@ glossary, assertions, incidents, saved queries).
 - The full loop closes: knowledge is captured *from* the catalog, written
   *into* the catalog, and invalidated *by* the catalog.
 - A measured, reproducible answer to "does DataHub grounding matter?" —
-  15/20 vs 5/20, deterministically scored, auditable by hand.
+  19/20 vs 5/20, deterministically scored, auditable by hand.
 - The Chrome side panel makes DataHub itself the recording studio — no
   new tool to learn on the worst week to learn one (your last).
 - 44 tests, demo mode with zero infrastructure, and every judge-facing claim

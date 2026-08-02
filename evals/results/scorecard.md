@@ -1,6 +1,6 @@
 # instaboard onboarding benchmark
 
-_Generated 2026-07-31 21:35 UTC · model `nvidia/nemotron-3-ultra-550b-a55b:free` · catalog: demo catalog (fixture)_
+_Generated 2026-08-02 09:40 UTC · model `nvidia/nemotron-3-ultra-550b-a55b:free` · catalog: demo catalog (fixture)_
 
 20 questions a new hire asks in week 1, scored deterministically against the
 Northbeam catalog. Both arms run through the identical agent loop; the only
@@ -10,20 +10,20 @@ difference is whether the DataHub MCP tools are in the tool list.
 
 | | Cases passed | Checks passed | DataHub calls |
 | --- | --- | --- | --- |
-| **With DataHub (MCP)** | **15/20** | 34/44 | 86 |
+| **With DataHub (MCP)** | **19/20** | 43/44 | 86 |
 | Without DataHub (control) | 5/20 | 21/44 | 0 |
 
-**10 of 20 onboarding questions are answerable only with the catalog.**
+**14 of 20 onboarding questions are answerable only with the catalog.**
 
 ## By category
 
 | Category | With DataHub | Control |
 | --- | --- | --- |
-| grounding | 1/3 | 0/3 |
+| grounding | 2/3 | 0/3 |
 | ownership | 2/2 | 0/2 |
-| lineage | 2/3 | 0/3 |
-| health-trap | 3/4 | 2/4 |
-| usage | 1/2 | 1/2 |
+| lineage | 3/3 | 0/3 |
+| health-trap | 4/4 | 2/4 |
+| usage | 2/2 | 1/2 |
 | glossary | 2/2 | 1/2 |
 | sql | 2/2 | 0/2 |
 | hallucination | 2/2 | 1/2 |
@@ -44,11 +44,7 @@ difference is whether the DataHub MCP tools are in the tool list.
 
 *Why it matters:* Recomputing MRR by hand from payments is the classic new-hire mistake that produces a second, wrong number.
 
-- **With DataHub: FAIL** (0/3)
-  - missed: names mrr_monthly
-  - missed: names its upstream fact
-  - missed: cites the URN
-  - error: openrouter returned no choices
+- **With DataHub: PASS** (3/3)
 - **Control: FAIL** (1/3)
   - missed: names its upstream fact
   - missed: cites the URN
@@ -77,15 +73,12 @@ difference is whether the DataHub MCP tools are in the tool list.
 - **With DataHub: PASS** (1/1)
 - **Control: FAIL** (0/1)
   - missed: names James Okafor
-  - error: openrouter returned no choices
 
 ### `email-blast-radius` — What breaks if I change the email column on the users table?
 
 *Why it matters:* Shipping a column change without the downstream list is how a mart silently breaks overnight.
 
-- **With DataHub: FAIL** (0/2)
-  - missed: names the staging model
-  - missed: names the downstream dim
+- **With DataHub: PASS** (2/2)
 - **Control: FAIL** (1/2)
   - missed: names the downstream dim
 
@@ -111,10 +104,7 @@ difference is whether the DataHub MCP tools are in the tool list.
 
 *Why it matters:* events is deprecated. Building on it means rebuilding the report in a month.
 
-- **With DataHub: FAIL** (1/3)
-  - missed: flags it as deprecated
-  - missed: points to the replacement
-  - error: openrouter returned no choices
+- **With DataHub: PASS** (3/3)
 - **Control: FAIL** (1/3)
   - missed: flags it as deprecated
   - missed: points to the replacement
@@ -153,10 +143,7 @@ difference is whether the DataHub MCP tools are in the tool list.
 
 *Why it matters:* It is a plumbing model with 19 queries in 30 days — important to understand, not to prioritize.
 
-- **With DataHub: FAIL** (0/2)
-  - missed: characterizes it as staging/intermediate
-  - missed: grounds in low usage or points to the fact table
-  - error: openrouter returned no choices
+- **With DataHub: PASS** (2/2)
 - **Control: PASS** (2/2)
 
 ### `mrr-definition` — How do we calculate MRR here?

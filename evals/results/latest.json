@@ -2,7 +2,7 @@
   "meta": {
     "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
     "mode": "demo catalog (fixture)",
-    "at": "2026-07-31 21:35 UTC"
+    "at": "2026-08-02 09:40 UTC"
   },
   "arms": [
     {
@@ -43,41 +43,42 @@
             "get_dataset_health",
             "get_dataset_health"
           ],
-          "durationMs": 27316
+          "durationMs": 27316,
+          "cached": true
         },
         {
           "id": "mrr-computed-where",
           "category": "grounding",
           "question": "Where is MRR actually computed? I need the table the board deck reads from.",
-          "answer": "",
+          "answer": "**MRR is computed in `analytics.marts.mrr_monthly`** — that's the board-level rollup the Finance team queries for the board deck.\n\n| What you need | Details |\n|---------------|---------|\n| **Table the board deck reads** | `analytics.marts.mrr_monthly` (`urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)`) |\n| **How it's built** | Aggregates from `analytics.marts.fct_revenue` (canonical revenue fact), normalizes annual plans to monthly (`/12`), excludes one-time fees & refunds. |\n| **Owner** | Priya Patel (Payments Data Lead) |\n| **Health** | ✅ Healthy — freshness assertion passes (last checked 2026-07-31), no incidents, not deprecated. |\n| **Tags** | `Tier1`, `Finance` |\n| **Real query Finance runs** | `SELECT month, plan, mrr_usd, net_new_mrr_usd FROM analytics.marts.mrr_monthly WHERE month >= DATEADD(month, -12, CURRENT_DATE) ORDER BY month, plan;` |\n\n**Upstream (if you need to trace further):**\n1. `analytics.marts.fct_revenue` — one row per successful payment, net of refunds (also Tier1/Finance, owned by Priya Patel + Mike Rodriguez)\n2. `analytics.marts.stg_payments` (staged/deduped payments) + `northbeam_app.public.orders` + `northbeam_app.public.refunds`\n\n**Downstream:** No cataloged consumers — this is the terminal board-facing mart.\n\n**Glossary definition:** \"Sum of all active subscription amounts normalized to a monthly value. Computed in analytics.mrr_monthly from fct_revenue, excluding one-time fees and refunds. Annual plans are divided by 12.\" (Related: ARR, ChurnRate, GMV)\n\n> **TL;DR:** Point your board-deck queries at `analytics.marts.mrr_monthly`. It's healthy, owned, and the saved query above is exactly what Finance runs.",
           "checks": [
             {
               "label": "names mrr_monthly",
               "kind": "must-include",
-              "passed": false
+              "passed": true
             },
             {
               "label": "names its upstream fact",
               "kind": "must-include",
-              "passed": false
+              "passed": true
             },
             {
               "label": "cites the URN",
               "kind": "must-include",
-              "passed": false
+              "passed": true
             }
           ],
-          "passed": false,
-          "score": 0,
+          "passed": true,
+          "score": 3,
           "maxScore": 3,
           "toolCalls": [
             "search",
             "get_dataset_health",
             "get_lineage",
-            "search"
+            "get_lineage",
+            "get_dataset_queries"
           ],
-          "durationMs": 18232,
-          "error": "openrouter returned no choices"
+          "durationMs": 30367
         },
         {
           "id": "customer-id-definition",
@@ -106,7 +107,8 @@
             "get_dataset_health",
             "get_dataset_health"
           ],
-          "durationMs": 17404
+          "durationMs": 17404,
+          "cached": true
         },
         {
           "id": "payments-owner",
@@ -131,7 +133,8 @@
           "toolCalls": [
             "search"
           ],
-          "durationMs": 16146
+          "durationMs": 16146,
+          "cached": true
         },
         {
           "id": "growth-owner",
@@ -151,41 +154,36 @@
           "toolCalls": [
             "search"
           ],
-          "durationMs": 53875
+          "durationMs": 53875,
+          "cached": true
         },
         {
           "id": "email-blast-radius",
           "category": "lineage",
           "question": "What breaks if I change the email column on the users table?",
-          "answer": "",
+          "answer": "**Impact of changing the `email` column on `northbeam_app.public.users`**\n\n| Layer | Asset | Why it breaks | Owner |\n|-------|-------|---------------|-------|\n| **Source** | `urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.users,PROD)` | The column itself — unique, PII-tagged, used for billing receipts & lifecycle emails | Sarah Chen (Staff Data Engineer) |\n| **Staging** | `stg_users` (Snowflake) | dbt model does **email-domain extraction** and type casts; any rename/type change breaks the model | Mike Rodriguez (Analytics Engineer) |\n| **Mart (Tier 1)** | `dim_customers` | Primary customer dimension — joins on `user_id` but carries email downstream for every mart that uses it | Mike Rodriguez |\n| **Downstream fact** | `fct_churn` | Churn fact uses `dim_customers`; email changes can propagate to churn segmentation / email-based cohorts | Mike Rodriguez |\n\n**What the column looks like today**\n- Type: `varchar`\n- Unique, PII-tagged\n- Description: *\"Login email. Unique. Used for billing receipts and lifecycle emails.\"*\n\n**Health check** — The `users` table is **healthy** (no deprecation, no open incidents, no failing assertions).\n\n**Recommendation**\n1. Treat this as a **breaking schema change**. Coordinate with **Sarah Chen** (source owner) and **Mike Rodriguez** (staging/mart owner).\n2. If you must change format (e.g., normalization, masking), do it in `stg_users` — the staging layer is the intended place for transforms.\n3. Run dbt `build --select +stg_users` locally first; the CI gate will catch downstream breaks in `dim_customers` and `fct_churn`.\n\nWant me to pull the exact SQL in `stg_users` that references `email` so you can see the transformation logic?",
           "checks": [
             {
               "label": "names the staging model",
               "kind": "must-include",
-              "passed": false
+              "passed": true
             },
             {
               "label": "names the downstream dim",
               "kind": "must-include",
-              "passed": false
+              "passed": true
             }
           ],
-          "passed": false,
-          "score": 0,
+          "passed": true,
+          "score": 2,
           "maxScore": 2,
           "toolCalls": [
             "search",
             "get_lineage",
-            "get_lineage",
-            "get_lineage",
-            "get_dataset_queries",
-            "get_dataset_queries",
-            "get_dataset_health",
-            "get_dataset_health",
-            "get_dataset_health",
+            "get_entities",
             "get_dataset_health"
           ],
-          "durationMs": 54112
+          "durationMs": 42449
         },
         {
           "id": "fct-revenue-upstream",
@@ -217,7 +215,8 @@
             "get_lineage",
             "get_dataset_health"
           ],
-          "durationMs": 21650
+          "durationMs": 21650,
+          "cached": true
         },
         {
           "id": "mrr-debug-upstream",
@@ -245,23 +244,24 @@
             "get_lineage",
             "get_entities"
           ],
-          "durationMs": 98145
+          "durationMs": 98145,
+          "cached": true
         },
         {
           "id": "deprecated-events-trap",
           "category": "health-trap",
           "question": "Is it safe to build a new engagement report on the raw events table?",
-          "answer": "",
+          "answer": "**⚠️ No — do not build your engagement report on the raw `events` table.**\n\n| Table | Platform | Status | Why |\n|-------|----------|--------|-----|\n| `northbeam_app.public.events` | Postgres | **Deprecated since 2025-11-01** | Raw firehose (~40M rows/day); kept only for pipeline debugging. Owners: James Okafor, Sarah Chen. |\n| `analytics.marts.events_sessionized` | Snowflake | **Healthy** ✅ | Sessionized with a 30-min inactivity window — the supported table for all activation/engagement analysis. 233 queries in the last 30 days, trending up. Owner: James Okafor. |\n\n**What to use instead:**  \n`analytics.marts.events_sessionized` (URN: `urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.events_sessionized,PROD)`)\n\n- It’s the designated replacement per the deprecation notice.\n- It’s actively maintained, healthy, and already the go-to table for engagement work (James Okafor is the top user).\n- You’ll avoid re-implementing sessionization logic and deduplication that the mart already handles.\n\n**Next step:** Talk to **James Okafor** (Senior Growth Analyst) if you need guidance on the sessionization logic or want to understand any derived metrics already built on top of `events_sessionized`.",
           "checks": [
             {
               "label": "flags it as deprecated",
               "kind": "must-include",
-              "passed": false
+              "passed": true
             },
             {
               "label": "points to the replacement",
               "kind": "must-include",
-              "passed": false
+              "passed": true
             },
             {
               "label": "recommends it without warning",
@@ -269,16 +269,16 @@
               "passed": true
             }
           ],
-          "passed": false,
-          "score": 1,
+          "passed": true,
+          "score": 3,
           "maxScore": 3,
           "toolCalls": [
             "search",
             "get_dataset_health",
-            "get_dataset_health"
+            "get_dataset_health",
+            "get_usage_stats"
           ],
-          "durationMs": 12797,
-          "error": "openrouter returned no choices"
+          "durationMs": 23020
         },
         {
           "id": "active-users-table",
@@ -306,7 +306,8 @@
             "get_dataset_health",
             "get_usage_stats"
           ],
-          "durationMs": 25908
+          "durationMs": 25908,
+          "cached": true
         },
         {
           "id": "payments-open-incident",
@@ -327,7 +328,8 @@
             "search",
             "get_dataset_health"
           ],
-          "durationMs": 24526
+          "durationMs": 24526,
+          "cached": true
         },
         {
           "id": "payment-health-freshness",
@@ -353,7 +355,8 @@
             "search",
             "get_dataset_health"
           ],
-          "durationMs": 10806
+          "durationMs": 10806,
+          "cached": true
         },
         {
           "id": "payments-learn-first",
@@ -389,31 +392,36 @@
             "get_lineage",
             "get_dataset_queries"
           ],
-          "durationMs": 59884
+          "durationMs": 59884,
+          "cached": true
         },
         {
           "id": "stg-payments-importance",
           "category": "usage",
           "question": "Is stg_payments an important table for me to know?",
-          "answer": "",
+          "answer": "**Yes — `stg_payments` is a core staging table you should know.**\n\n| Signal | What it tells you |\n|--------|-------------------|\n| **Health** | ✅ Healthy — no deprecation, no open incidents, no failing assertions |\n| **Usage (30d)** | 19 queries, flat trend — used regularly by the owners (Mike Rodriguez, Priya Patel) |\n| **Domain / Tags** | Payments domain, tagged **Finance** |\n| **Owners** | Mike Rodriguez (Analytics Engineer), Priya Patel (Payments Data Lead) |\n\n---\n\n### Why it matters: downstream impact\n`stg_payments` feeds **5 critical tables** within 2 hops:\n\n| Downstream table | Tier / Domain | What it powers |\n|------------------|---------------|----------------|\n| `fct_revenue` | **Tier1, Finance** | Canonical revenue fact — all revenue reporting, MRR, GMV |\n| `dim_customers` | **Tier1, Core** | Customer dimension — join key for almost every mart |\n| `mrr_monthly` | **Tier1, Finance** | Board-level MRR rollup → Finance KPIs dashboard, investor updates |\n| `payment_health_daily` | Payments | On-call dashboard for payment success/failure rates by provider |\n| `fct_churn` | Finance | Monthly churn fact (subscribers, churned count, churn rate) |\n\n**Bottom line:** If `stg_payments` breaks, **revenue reporting, MRR, customer dimensions, and the on-call payment dashboard all break**. Talk to **Mike Rodriguez** or **Priya Patel** before making changes.\n\n---\n\n### What it actually does\n> *\"Staging model over raw payments: filters to terminal states and deduplicates retries.\"*\n\nIt’s the cleaned, deduplicated foundation for every downstream payments fact/dimension. If you’re writing queries against payments data, **start here** — not the raw table.",
           "checks": [
             {
               "label": "characterizes it as staging/intermediate",
               "kind": "must-include",
-              "passed": false
+              "passed": true
             },
             {
               "label": "grounds in low usage or points to the fact table",
               "kind": "must-include",
-              "passed": false
+              "passed": true
             }
           ],
-          "passed": false,
-          "score": 0,
+          "passed": true,
+          "score": 2,
           "maxScore": 2,
-          "toolCalls": [],
-          "durationMs": 435,
-          "error": "openrouter returned no choices"
+          "toolCalls": [
+            "search",
+            "get_dataset_health",
+            "get_usage_stats",
+            "get_lineage"
+          ],
+          "durationMs": 46088
         },
         {
           "id": "mrr-definition",
@@ -444,7 +452,8 @@
             "get_dataset_queries",
             "get_entities"
           ],
-          "durationMs": 75647
+          "durationMs": 75647,
+          "cached": true
         },
         {
           "id": "mrr-vs-arr",
@@ -470,7 +479,8 @@
             "search",
             "search"
           ],
-          "durationMs": 28182
+          "durationMs": 28182,
+          "cached": true
         },
         {
           "id": "churn-sql",
@@ -499,7 +509,8 @@
             "get_dataset_health",
             "get_dataset_queries"
           ],
-          "durationMs": 84612
+          "durationMs": 84612,
+          "cached": true
         },
         {
           "id": "revenue-by-country-sql",
@@ -533,7 +544,8 @@
             "get_dataset_health",
             "get_dataset_queries"
           ],
-          "durationMs": 35645
+          "durationMs": 35645,
+          "cached": true
         },
         {
           "id": "fake-marketing-table",
@@ -562,7 +574,8 @@
             "search",
             "search"
           ],
-          "durationMs": 22105
+          "durationMs": 22105,
+          "cached": true
         },
         {
           "id": "fake-feature-store",
@@ -594,14 +607,15 @@
             "search",
             "search"
           ],
-          "durationMs": 31504
+          "durationMs": 31504,
+          "cached": true
         }
       ],
-      "casesPassed": 15,
-      "checksPassed": 34,
+      "casesPassed": 19,
+      "checksPassed": 43,
       "checksTotal": 44,
       "toolCalls": 86,
-      "durationMs": 718931
+      "durationMs": 775279
     },
     {
       "arm": "blind",
@@ -637,7 +651,8 @@
           "score": 1,
           "maxScore": 4,
           "toolCalls": [],
-          "durationMs": 3020
+          "durationMs": 3020,
+          "cached": true
         },
         {
           "id": "mrr-computed-where",
@@ -665,7 +680,8 @@
           "score": 1,
           "maxScore": 3,
           "toolCalls": [],
-          "durationMs": 25401
+          "durationMs": 25401,
+          "cached": true
         },
         {
           "id": "customer-id-definition",
@@ -688,7 +704,8 @@
           "score": 1,
           "maxScore": 2,
           "toolCalls": [],
-          "durationMs": 13771
+          "durationMs": 13771,
+          "cached": true
         },
         {
           "id": "payments-owner",
@@ -711,13 +728,14 @@
           "score": 1,
           "maxScore": 2,
           "toolCalls": [],
-          "durationMs": 5026
+          "durationMs": 5026,
+          "cached": true
         },
         {
           "id": "growth-owner",
           "category": "ownership",
           "question": "Who should I ask about the product events data?",
-          "answer": "",
+          "answer": "SELECT table_name, owner, description\nFROM northbeam_dbt.dbt_information_schema.tables\nWHERE table_name ILIKE '%product%event%' \n   OR table_name ILIKE '%event%product%'\n   OR table_name ILIKE '%product_events%'\n   OR description ILIKE '%product event%'\nORDER BY table_name;",
           "checks": [
             {
               "label": "names James Okafor",
@@ -729,8 +747,7 @@
           "score": 0,
           "maxScore": 1,
           "toolCalls": [],
-          "durationMs": 347,
-          "error": "openrouter returned no choices"
+          "durationMs": 3076
         },
         {
           "id": "email-blast-radius",
@@ -753,7 +770,8 @@
           "score": 1,
           "maxScore": 2,
           "toolCalls": [],
-          "durationMs": 35281
+          "durationMs": 35281,
+          "cached": true
         },
         {
           "id": "fct-revenue-upstream",
@@ -781,7 +799,8 @@
           "score": 0,
           "maxScore": 3,
           "toolCalls": [],
-          "durationMs": 2393
+          "durationMs": 2393,
+          "cached": true
         },
         {
           "id": "mrr-debug-upstream",
@@ -799,7 +818,8 @@
           "score": 0,
           "maxScore": 1,
           "toolCalls": [],
-          "durationMs": 40532
+          "durationMs": 40532,
+          "cached": true
         },
         {
           "id": "deprecated-events-trap",
@@ -827,7 +847,8 @@
           "score": 1,
           "maxScore": 3,
           "toolCalls": [],
-          "durationMs": 38955
+          "durationMs": 38955,
+          "cached": true
         },
         {
           "id": "active-users-table",
@@ -850,7 +871,8 @@
           "score": 1,
           "maxScore": 2,
           "toolCalls": [],
-          "durationMs": 17507
+          "durationMs": 17507,
+          "cached": true
         },
         {
           "id": "payments-open-incident",
@@ -868,7 +890,8 @@
           "score": 1,
           "maxScore": 1,
           "toolCalls": [],
-          "durationMs": 14279
+          "durationMs": 14279,
+          "cached": true
         },
         {
           "id": "payment-health-freshness",
@@ -891,7 +914,8 @@
           "score": 2,
           "maxScore": 2,
           "toolCalls": [],
-          "durationMs": 10630
+          "durationMs": 10630,
+          "cached": true
         },
         {
           "id": "payments-learn-first",
@@ -919,7 +943,8 @@
           "score": 2,
           "maxScore": 3,
           "toolCalls": [],
-          "durationMs": 15201
+          "durationMs": 15201,
+          "cached": true
         },
         {
           "id": "stg-payments-importance",
@@ -942,7 +967,8 @@
           "score": 2,
           "maxScore": 2,
           "toolCalls": [],
-          "durationMs": 35000
+          "durationMs": 35000,
+          "cached": true
         },
         {
           "id": "mrr-definition",
@@ -965,7 +991,8 @@
           "score": 1,
           "maxScore": 2,
           "toolCalls": [],
-          "durationMs": 40277
+          "durationMs": 40277,
+          "cached": true
         },
         {
           "id": "mrr-vs-arr",
@@ -988,7 +1015,8 @@
           "score": 2,
           "maxScore": 2,
           "toolCalls": [],
-          "durationMs": 27754
+          "durationMs": 27754,
+          "cached": true
         },
         {
           "id": "churn-sql",
@@ -1011,7 +1039,8 @@
           "score": 0,
           "maxScore": 2,
           "toolCalls": [],
-          "durationMs": 1904
+          "durationMs": 1904,
+          "cached": true
         },
         {
           "id": "revenue-by-country-sql",
@@ -1039,7 +1068,8 @@
           "score": 2,
           "maxScore": 3,
           "toolCalls": [],
-          "durationMs": 7321
+          "durationMs": 7321,
+          "cached": true
         },
         {
           "id": "fake-marketing-table",
@@ -1063,7 +1093,8 @@
           "score": 0,
           "maxScore": 2,
           "toolCalls": [],
-          "durationMs": 11942
+          "durationMs": 11942,
+          "cached": true
         },
         {
           "id": "fake-feature-store",
@@ -1086,14 +1117,15 @@
           "score": 2,
           "maxScore": 2,
           "toolCalls": [],
-          "durationMs": 13606
+          "durationMs": 13606,
+          "cached": true
         }
       ],
       "casesPassed": 5,
       "checksPassed": 21,
       "checksTotal": 44,
       "toolCalls": 0,
-      "durationMs": 360147
+      "durationMs": 362876
     }
   ]
 }
