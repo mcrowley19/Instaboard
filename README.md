@@ -361,28 +361,33 @@ tests/          vitest suite
 
 ## Contributing back upstream
 
-Building this turned up work worth sending back. It is prepared in
-[`submission/oss/`](submission/oss/), with instructions in
-[`PR_INSTRUCTIONS.md`](submission/oss/PR_INSTRUCTIONS.md).
+Building this turned up work worth sending back. All of it is filed, and the write-ups stay
+in [`submission/oss/`](submission/oss/) so the reproductions are readable here too.
 
-**A skill for `datahub-project/datahub-skills`.** The onboarding and handoff workflow,
-generalised into a registry skill called `datahub-onboarding`, with a
-`/catalog-onboarding` command, two evaluation cases and the router registration. It is
-written against what `mcp-server-datahub` 0.6.0 exposes, which is why it reads `health` and
-`deprecation` off `get_entities` rather than reaching for tools that aren't there.
+**[datahub-skills#79](https://github.com/datahub-project/datahub-skills/pull/79), a
+`datahub-onboarding` skill.** The onboarding and handoff workflow generalised into a
+registry skill, with a `/catalog-onboarding` command, two evaluation cases and the router
+registration. It is written against what `mcp-server-datahub` 0.6.0 exposes, which is why
+it reads `health` and `deprecation` off `get_entities` rather than reaching for tools that
+aren't there.
 
-**Four friction reports with reproductions.** Three go to `acryldata/mcp-server-datahub`,
-one to `datahub-project/datahub`.
+**Four friction reports, each with a reproduction.**
 
 | Report | What |
 | --- | --- |
-| [no usage-statistics tool](submission/oss/issues/01-no-usage-statistics-tool.md) | Nothing in the 20-tool surface returns usage and `get_entities` doesn't inline it, so an agent has no way to rank six lookalike tables by query volume |
-| [incidents are unreadable](submission/oss/issues/02-incidents-unreadable.md) | `get_entities` on an incident URN errors, and health reports `causes: ["ACTIVE_INCIDENTS"]` where the assertions branch of the same field returns URNs |
-| [`anyOf` union schemas](submission/oss/issues/03-anyof-union-schemas-rejected-by-providers.md) | Two tool schemas use multi-type unions that make OpenAI-compatible providers 422 the whole tool list |
-| [datapack drops Cloud-only aspects](submission/oss/issues/04-showcase-datapack-drops-cloud-only-aspects.md) | `showcase-ecommerce` loses 248 MCPs on OSS, every usage and assertion aspect among them, and still reports success |
+| [mcp-server-datahub#171](https://github.com/acryldata/mcp-server-datahub/issues/171) | Nothing in the 20-tool surface returns usage and `get_entities` doesn't inline it, so an agent has no way to rank six lookalike tables by query volume |
+| [mcp-server-datahub#172](https://github.com/acryldata/mcp-server-datahub/issues/172) | `get_entities` on an incident URN errors, and health reports `causes: ["ACTIVE_INCIDENTS"]` where the assertions branch of the same field returns URNs |
+| [mcp-server-datahub#173](https://github.com/acryldata/mcp-server-datahub/issues/173) | Two tool schemas use multi-type `anyOf` unions that make OpenAI-compatible providers 422 the whole tool list |
+| [datahub#18815](https://github.com/datahub-project/datahub/issues/18815) | `showcase-ecommerce` loses 248 MCPs on OSS, every usage and assertion aspect among them, and still reports success |
 
-Each one was checked against the existing open issues first. Two of them changed this
-codebase. [Report 02](submission/oss/issues/02-incidents-unreadable.md) is why
+Each was checked against the existing open issues first. A fifth thing we hit, the
+`datapack --help` crash, was already filed as
+[datahub#18497](https://github.com/datahub-project/datahub/issues/18497), so that got a
+[comment confirming it still reproduces on 1.6.0.17](https://github.com/datahub-project/datahub/issues/18497#issuecomment-5159253562)
+rather than a duplicate.
+
+Two of them changed this codebase.
+[#172](https://github.com/acryldata/mcp-server-datahub/issues/172) is why
 `lib/datahub-graphql.ts` exists, and why `discountSelfRaisedIncidents` in `lib/decay.ts`
 has to be there so the sweep stops reading its own incidents as drift.
 

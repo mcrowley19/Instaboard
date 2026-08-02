@@ -1,12 +1,18 @@
 # Upstream contributions
 
-Two upstream contributions came out of building instaboard, both prepared in this
-directory.
+Two upstream contributions came out of building instaboard. All of them are filed.
 
-| What | Where it goes | Files |
+| What | Where | Status |
 | --- | --- | --- |
-| A new `datahub-onboarding` skill | `datahub-project/datahub-skills` (PR) | `skills/`, `commands/`, `registry-edits/` |
-| Four friction reports with reproductions | `acryldata/mcp-server-datahub` ×3, `datahub-project/datahub` ×1 | `issues/` |
+| `datahub-onboarding` skill | [datahub-skills#79](https://github.com/datahub-project/datahub-skills/pull/79) | open |
+| No MCP tool returns usage statistics | [mcp-server-datahub#171](https://github.com/acryldata/mcp-server-datahub/issues/171) | open |
+| Incidents are unreadable over MCP | [mcp-server-datahub#172](https://github.com/acryldata/mcp-server-datahub/issues/172) | open |
+| `anyOf` union schemas get 422'd by providers | [mcp-server-datahub#173](https://github.com/acryldata/mcp-server-datahub/issues/173) | open |
+| Datapack drops Cloud-only aspects on OSS | [datahub#18815](https://github.com/datahub-project/datahub/issues/18815) | open |
+| `datapack --help` crash still on 1.6.0.17 | [comment on datahub#18497](https://github.com/datahub-project/datahub/issues/18497#issuecomment-5159253562) | existing issue |
+
+The sections below record how each was put together, and stay here so the work is
+reproducible rather than just linked.
 
 ---
 

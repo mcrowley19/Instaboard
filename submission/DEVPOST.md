@@ -145,18 +145,28 @@ catalog: 14 datasets, lineage, glossary, assertions, incidents, saved queries).
 
 ## Contributing back
 
-Building this turned up work worth sending upstream. All of it is in the repo.
+Building this turned up work worth sending upstream. All of it is filed.
 
-- **A `datahub-onboarding` skill for `datahub-project/datahub-skills`.** The
-  onboarding and handoff workflow generalised into a registry skill, with a
-  `/catalog-onboarding` command, two evaluation cases and the router registration.
-  Written against what `mcp-server-datahub` 0.6.0 exposes.
-- **Four friction reports, each with a reproduction.** No MCP tool returns usage
-  statistics. Incidents are unreadable over MCP. Two tool schemas use multi-type
-  `anyOf` unions that make OpenAI-compatible providers 422 the whole tool list.
-  `datapack load showcase-ecommerce` quietly drops 248 MCPs on OSS, every usage and
-  assertion aspect among them, while reporting success. We checked each against the
-  existing open issues first. Two of them changed this codebase.
+- **[datahub-skills#79](https://github.com/datahub-project/datahub-skills/pull/79)**,
+  a `datahub-onboarding` skill. The onboarding and handoff workflow generalised
+  into a registry skill, with a `/catalog-onboarding` command, two evaluation
+  cases and the router registration. Written against what `mcp-server-datahub`
+  0.6.0 exposes, which meant rewriting a draft that called two tools the server
+  does not have.
+- **Four friction reports, each with a reproduction.**
+  [#171](https://github.com/acryldata/mcp-server-datahub/issues/171): no MCP tool
+  returns usage statistics.
+  [#172](https://github.com/acryldata/mcp-server-datahub/issues/172): incidents
+  are unreadable over MCP.
+  [#173](https://github.com/acryldata/mcp-server-datahub/issues/173): two tool
+  schemas use multi-type `anyOf` unions that make OpenAI-compatible providers 422
+  the whole tool list.
+  [datahub#18815](https://github.com/datahub-project/datahub/issues/18815):
+  `datapack load showcase-ecommerce` quietly drops 248 MCPs on OSS, every usage
+  and assertion aspect among them, while reporting success.
+- A fifth thing we hit was already filed, so it got a
+  [comment confirming it still reproduces on 1.6.0.17](https://github.com/datahub-project/datahub/issues/18497#issuecomment-5159253562)
+  rather than a duplicate. Two of the four changed this codebase.
 
 ## Accomplishments we're proud of
 
