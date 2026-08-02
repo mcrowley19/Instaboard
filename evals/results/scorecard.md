@@ -1,9 +1,9 @@
 # instaboard onboarding benchmark
 
-_Generated 2026-08-02 09:40 UTC · model `nvidia/nemotron-3-ultra-550b-a55b:free` · catalog: demo catalog (fixture)_
+_Generated 2026-08-02 16:48 UTC · model `nvidia/nemotron-3-ultra-550b-a55b:free` · catalog: demo catalog (fixture)_
 
-20 questions a new hire asks in week 1, scored deterministically against the
-Northbeam catalog. Both arms run through the identical agent loop; the only
+20 questions a new hire asks in week 1, scored deterministically against
+Northbeam, seeded by this repo with `npm run seed`. Both arms run through the identical agent loop; the only
 difference is whether the DataHub MCP tools are in the tool list.
 
 ## Headline
@@ -204,11 +204,11 @@ difference is whether the DataHub MCP tools are in the tool list.
   is the same loop with `tools: []`.
 - **The control is not a strawman.** It gets a neutral, capable-assistant prompt
   asking for specific tables, owners, and SQL — the counterfactual is an
-  off-the-shelf chatbot, not a crippled one. Both prompts are in `run.ts`.
+  off-the-shelf chatbot, not a crippled one. Both prompts are in `suites.ts`.
 - **Runs on a free API tier.** A full run is ~80 LLM calls, more than most free
   daily quotas allow at once, so each completed case is cached and a re-run
   resumes where it stopped. A score may therefore be assembled across sessions —
   always on the one model named above, never mixed.
-- **Reproduce:** `DEMO_MODE=true npm run eval` — no DataHub, no Docker.
+- **Reproduce:** `DEMO_MODE=true npm run eval`, which needs neither DataHub nor Docker.
   Add `--live` to run the same benchmark against a seeded DataHub instance,
   or `--concurrency=1` if your provider is strict about requests per minute.

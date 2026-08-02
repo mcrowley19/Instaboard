@@ -66,11 +66,11 @@ export async function runAgent(
     turns.push({ kind: "tool_results", results });
   }
 
-  // The loop can run out of iterations still holding tool results and no answer
-  // — the model kept exploring the catalog until the budget ran out. Returning
-  // empty then is the worst possible outcome: the work was done and thrown away.
-  // Ask once more with the tools removed, which forces a final answer from what
-  // it already gathered.
+  // The loop can run out of iterations still holding tool results and no answer,
+  // because the model kept exploring the catalog until the budget ran out.
+  // Returning empty then is the worst outcome available: the work was done and
+  // binned. Ask once more with the tools removed, which forces a final answer
+  // out of what it already gathered.
   if (!finalText.trim() && turns.some((t) => t.kind === "tool_results")) {
     const closing = await runLLMTurn(
       config,

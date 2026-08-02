@@ -2,7 +2,8 @@
   "meta": {
     "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
     "mode": "demo catalog (fixture)",
-    "at": "2026-08-02 09:40 UTC"
+    "at": "2026-08-02 16:48 UTC",
+    "suite": "northbeam"
   },
   "arms": [
     {
@@ -78,7 +79,8 @@
             "get_lineage",
             "get_dataset_queries"
           ],
-          "durationMs": 30367
+          "durationMs": 30367,
+          "cached": true
         },
         {
           "id": "customer-id-definition",
@@ -183,7 +185,8 @@
             "get_entities",
             "get_dataset_health"
           ],
-          "durationMs": 42449
+          "durationMs": 42449,
+          "cached": true
         },
         {
           "id": "fct-revenue-upstream",
@@ -278,7 +281,8 @@
             "get_dataset_health",
             "get_usage_stats"
           ],
-          "durationMs": 23020
+          "durationMs": 23020,
+          "cached": true
         },
         {
           "id": "active-users-table",
@@ -421,7 +425,8 @@
             "get_usage_stats",
             "get_lineage"
           ],
-          "durationMs": 46088
+          "durationMs": 46088,
+          "cached": true
         },
         {
           "id": "mrr-definition",
@@ -747,7 +752,8 @@
           "score": 0,
           "maxScore": 1,
           "toolCalls": [],
-          "durationMs": 3076
+          "durationMs": 3076,
+          "cached": true
         },
         {
           "id": "email-blast-radius",

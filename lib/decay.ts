@@ -84,8 +84,8 @@ function countByStatus(node: unknown, key: string, status: string): number {
  * GMS nests `{owner: {urn, properties: {displayName}}, ownershipType: {...}}`.
  * We read `ownership.owners[].owner` specifically rather than deep-scanning,
  * because a deep scan also sweeps up ownership *type* labels ("Data Steward")
- * and the owners of attached glossary terms — neither of which owns this
- * dataset, and both of which would produce false "owner changed" findings.
+ * and the owners of attached glossary terms. Neither of those owns this dataset,
+ * and both would produce false "owner changed" findings.
  *
  * `displayName` is the identity that matters: a runbook step says "ping Priya
  * Sharma", never "ping urn:li:corpuser:b2fd91.patrick1@example.com". Without it,
@@ -95,10 +95,10 @@ function ownerIdentities(parsed: unknown): string[] {
   const out: string[] = [];
 
   // `get_entities` returns a bare array (live GMS) or `{entities: [...]}` (demo
-  // fixture). Read ownership off the entity root only — a deep scan would also
-  // pick up the owners of the glossary terms attached to it, who don't own the
-  // dataset, and the ownership *type* labels ("Data Steward"), which aren't
-  // people at all. Both produce false "owner changed" findings.
+  // fixture). Read ownership off the entity root only. A deep scan also picks up
+  // the owners of glossary terms attached to it, who don't own the dataset, plus
+  // ownership type labels like "Data Steward", which aren't people. Both produce
+  // false "owner changed" findings.
   const root = parsed as Record<string, unknown> | unknown[];
   const wrapped = !Array.isArray(root) && Array.isArray((root as Record<string, unknown>)?.entities);
   const entities = wrapped
@@ -161,16 +161,15 @@ function applyHealthSummary(parsed: unknown, snapshot: EntitySnapshot): void {
  *
  * When a sweep finds a broken runbook it raises an Incident on the dataset. The
  * next sweep then sees an open incident that wasn't there at record time and
- * reports it as fresh drift — instaboard flagging instaboard, every night,
- * forever. So discount the incidents this tool raised: they are titled
+ * reports it as fresh drift. instaboard flagging instaboard, every night, for
+ * ever. So discount the incidents this tool raised. They are titled
  * "Stale runbook: <runbook>".
  *
  * This has to go over GraphQL. The entity's inlined health summary reports
  * `causes: ["ACTIVE_INCIDENTS"]` rather than the incident URNs, and reading an
  * incident by URN through `get_entities` returns "exists but no data could be
- * retrieved" — incidents are simply not readable over MCP today. In demo mode
- * there is no GMS behind the fixture, the call fails fast, and the count is
- * left alone.
+ * retrieved", because incidents are not readable over MCP today. Demo mode has no
+ * GMS behind the fixture, so the call fails fast and the count is left alone.
  */
 async function discountSelfRaisedIncidents(snapshot: EntitySnapshot): Promise<void> {
   if (snapshot.openIncidents === 0) return;
@@ -236,7 +235,7 @@ export async function snapshotEntity(urn: string): Promise<EntitySnapshot> {
 
   // A dedicated health tool, where one exists, is authoritative over whatever
   // happens to be inlined on the entity. The live `mcp-server-datahub` has no
-  // such tool — it inlines `health` above — so this is the demo fixture's path.
+  // such tool, since it inlines `health` above, so this is the fixture's path.
   const health = await callDataHubTool("get_dataset_health", { urn });
   if (!health.isError) {
     const h = parseToolJson(health.content);

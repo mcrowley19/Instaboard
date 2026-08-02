@@ -1,18 +1,18 @@
-# instaboard onboarding benchmark — official DataHub datapack
+# instaboard onboarding benchmark on the official DataHub datapack
 
-_Generated 2026-08-02 15:41 UTC · model `nvidia/nemotron-3-ultra-550b-a55b:free` · catalog: live DataHub + showcase-ecommerce datapack_
+_Generated 2026-08-02 16:48 UTC · model `nvidia/nemotron-3-ultra-550b-a55b:free` · catalog: live DataHub + showcase-ecommerce datapack_
 
 20 questions a new hire asks in week 1, scored deterministically against
-`showcase-ecommerce` — DataHub's own published demo datapack (1,065 entities, authored by the DataHub team). Both arms run through the identical agent loop; the only
+`showcase-ecommerce`, the demo datapack DataHub publishes (1,065 entities, authored by the DataHub team). Both arms run through the identical agent loop; the only
 difference is whether the DataHub MCP tools are in the tool list.
 
 > **Why this suite exists.** The Northbeam scorecard runs against a catalog this
-> repo seeds — so a high grounded score there is, fairly, partly by construction.
+> repo seeds, so a high grounded score there is, fairly, partly built in.
 > This suite re-points the same questions at DataHub's own published
 > `showcase-ecommerce` datapack: 1,065 entities across seven platforms that
 > nobody here designed, loaded with one CLI command anyone can run. Every
-> checked fact — owners, glossary definitions, retention periods, lineage edges —
-> came out of that pack.
+> checked fact came out of that pack: owners, glossary definitions, retention
+> periods, lineage edges.
 
 > It is also a **harder** catalog. It is loaded alongside Northbeam, so the agent
 > searches a warehouse with real collisions: two `orders` tables, six datasets
@@ -102,7 +102,7 @@ difference is whether the DataHub MCP tools are in the tool list.
 
 ### `sc-escalation-contact` — ORDER_DETAILS hasn't refreshed and it's blocking my report. Who is the escalation contact for it according to the catalog?
 
-*Why it matters:* The escalation contact is a structured property, not the ownership list — an agent that only reads owners gets this wrong.
+*Why it matters:* The escalation contact lives in a structured property rather than the ownership list, so an agent that only reads owners gets this wrong.
 
 - **With DataHub: PASS** (2/2)
 - **Control: FAIL** (1/2)

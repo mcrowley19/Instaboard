@@ -9,7 +9,7 @@
  *   npm run eval -- --live --suite=showcase
  *                                      # the same benchmark, re-pointed at
  *                                      # DataHub's own showcase-ecommerce
- *                                      # datapack — a catalog we didn't author
+ *                                      # datapack, a catalog we didn't author
  *
  * Runs the 20-case onboarding benchmark twice through the *same* agent loop:
  * once with the DataHub MCP tool set, once with the tool list emptied. The only
@@ -225,7 +225,7 @@ function scorecard(arms: ArmSummary[], meta: { model: string; mode: string; at: 
 
   const lines: string[] = [
     suite.name === "showcase"
-      ? "# instaboard onboarding benchmark — official DataHub datapack"
+      ? "# instaboard onboarding benchmark on the official DataHub datapack"
       : "# instaboard onboarding benchmark",
     "",
     `_Generated ${meta.at} · model \`${meta.model}\` · catalog: ${meta.mode}_`,
@@ -239,12 +239,12 @@ function scorecard(arms: ArmSummary[], meta: { model: string; mode: string; at: 
   if (suite.name === "showcase") {
     lines.push(
       "> **Why this suite exists.** The Northbeam scorecard runs against a catalog this",
-      "> repo seeds — so a high grounded score there is, fairly, partly by construction.",
+      "> repo seeds, so a high grounded score there is, fairly, partly built in.",
       "> This suite re-points the same questions at DataHub's own published",
       "> `showcase-ecommerce` datapack: 1,065 entities across seven platforms that",
       "> nobody here designed, loaded with one CLI command anyone can run. Every",
-      "> checked fact — owners, glossary definitions, retention periods, lineage edges —",
-      "> came out of that pack.",
+      "> checked fact came out of that pack: owners, glossary definitions, retention",
+      "> periods, lineage edges.",
       "",
       "> It is also a **harder** catalog. It is loaded alongside Northbeam, so the agent",
       "> searches a warehouse with real collisions: two `orders` tables, six datasets",
@@ -366,10 +366,10 @@ async function main() {
     0
   );
 
-  console.log(`\n  instaboard onboarding benchmark — ${suite.name} suite`);
+  console.log(`\n  instaboard onboarding benchmark, ${suite.name} suite`);
   console.log(`  ${suite.cases.length} cases · model ${model} · ${live ? "live DataHub" : "demo catalog"}`);
   console.log(`  ${groundedTools.length} DataHub MCP tools available to the grounded arm`);
-  if (alreadyDone) console.log(`  resuming — ${alreadyDone}/${suite.cases.length * arms.length} case-runs already cached`);
+  if (alreadyDone) console.log(`  resuming, ${alreadyDone}/${suite.cases.length * arms.length} case-runs already cached`);
   console.log();
 
   const summaries: ArmSummary[] = [];

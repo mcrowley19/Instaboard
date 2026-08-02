@@ -13,7 +13,7 @@ import { scoreCase, summarizeCase, type CaseResult } from "./score";
  * therefore means: the published scores are reproducible from committed
  * artifacts, not just claimed.
  *
- * Both suites are verified — the Northbeam catalog this repo seeds, and the
+ * Both suites get verified: the Northbeam catalog this repo seeds, and the
  * official `showcase-ecommerce` datapack.
  */
 
@@ -64,7 +64,7 @@ function verifySuite(suite: Suite): void {
   const grounded = headline.grounded;
   const blind = headline.blind;
   console.log(
-    `- ${suite.name}: re-scored from committed answers — with DataHub: ${grounded?.passed}/${grounded?.total}, ` +
+    `- ${suite.name}: re-scored from committed answers. With DataHub: ${grounded?.passed}/${grounded?.total}, ` +
       `control: ${blind?.passed}/${blind?.total} (model ${stored.meta.model})`
   );
 
@@ -88,7 +88,7 @@ if (verified === 0) {
   process.exit(1);
 }
 if (mismatches > 0) {
-  console.error(`${mismatches} mismatch(es) — a scorecard is not reproducible from its committed answers.`);
+  console.error(`${mismatches} mismatch(es). A scorecard is not reproducible from its committed answers.`);
   process.exit(1);
 }
 console.log(`verified ${verified} suite(s): every number is reproducible from the committed raw answers.`);

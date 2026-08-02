@@ -1,6 +1,6 @@
 # Trap transcripts: northbeam suite
 
-_Model `nvidia/nemotron-3-ultra-550b-a55b:free` · catalog: demo catalog (fixture) · run 2026-08-02 09:40 UTC_
+_Model `nvidia/nemotron-3-ultra-550b-a55b:free` · catalog: demo catalog (fixture) · run 2026-08-02 16:48 UTC_
 
 Two categories in the benchmark are the ones a sceptical reader should not take on
 trust from a checkmark:

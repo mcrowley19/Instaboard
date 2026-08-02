@@ -2,7 +2,7 @@
   "meta": {
     "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
     "mode": "live DataHub + showcase-ecommerce datapack",
-    "at": "2026-08-02 15:41 UTC",
+    "at": "2026-08-02 16:48 UTC",
     "suite": "showcase"
   },
   "arms": [
@@ -328,7 +328,8 @@
             "get_dataset_queries",
             "get_entities"
           ],
-          "durationMs": 138205
+          "durationMs": 138205,
+          "cached": true
         },
         {
           "id": "sc-dashboard-blast-radius",
