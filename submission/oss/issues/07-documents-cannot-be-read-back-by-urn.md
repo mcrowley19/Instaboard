@@ -3,6 +3,17 @@
 **Repo:** `acryldata/mcp-server-datahub`
 **Version:** mcp-server-datahub 0.6.0 (20 tools), GMS v1.5.0.6 (OSS quickstart)
 
+> **Update — root cause found, fix written.** This is not a missing capability.
+> GMS serves the document in full; the MCP server never asks for it. The whole
+> `... on Document` selection in `entity_details.gql` is tagged `#[NEWER_GMS]`,
+> and those fields are enabled only when the server looks like DataHub **Cloud**
+> — so on any self-hosted server they are stripped, however new it is. The same
+> query against the same GMS returns the document the moment they are left in.
+>
+> Patch, with a regression test and the before/after against a 1.5.0.6
+> quickstart: [`../prs/mcp-server-datahub-newer-gms-on-oss.patch`](../prs/mcp-server-datahub-newer-gms-on-oss.patch).
+> Details in [the fix write-up](../prs/README.md).
+
 ---
 
 ## Summary

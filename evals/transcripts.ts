@@ -23,8 +23,24 @@ import type { CaseResult } from "./score";
 const CATEGORIES = ["hallucination", "health-trap"] as const;
 
 interface StoredResults {
-  meta: { model: string; mode: string; at: string };
-  arms: { arm: "grounded" | "blind"; cases: CaseResult[] }[];
+  meta: { model: string; models?: string[]; runs?: number; mode: string; at: string };
+  cells?: { model: string; arm: string; run: number; cases: CaseResult[] }[];
+  arms?: { arm: "grounded" | "blind"; cases: CaseResult[] }[];
+}
+
+/**
+ * A transcript shows one answer, so with replicates it has to name which pass it
+ * is showing rather than silently picking the flattering one. First pass of the
+ * first model, always — the order the harness ran them in, decided before any
+ * score was seen.
+ */
+function firstPass(stored: StoredResults, arm: string): { cases: CaseResult[]; from: string } | undefined {
+  if (stored.cells?.length) {
+    const cell = stored.cells.filter((c) => c.arm === arm).sort((a, b) => a.run - b.run)[0];
+    return cell && { cases: cell.cases, from: `${cell.model}, run ${cell.run + 1}` };
+  }
+  const legacy = stored.arms?.find((a) => a.arm === arm);
+  return legacy && { cases: legacy.cases, from: stored.meta.model };
 }
 
 const resultsDir = path.join(process.cwd(), "evals", "results");
@@ -40,8 +56,8 @@ function toolSummary(calls: string[]): string {
 function renderCase(suite: Suite, stored: StoredResults, id: string): string | null {
   const def = suite.cases.find((c) => c.id === id);
   if (!def) return null;
-  const grounded = stored.arms.find((a) => a.arm === "grounded")?.cases.find((c) => c.id === id);
-  const blind = stored.arms.find((a) => a.arm === "blind")?.cases.find((c) => c.id === id);
+  const grounded = firstPass(stored, "grounded")?.cases.find((c) => c.id === id);
+  const blind = firstPass(stored, "blind")?.cases.find((c) => c.id === id);
   if (!grounded && !blind) return null;
 
   const lines: string[] = [
@@ -99,8 +115,16 @@ function renderSuite(suite: Suite): string | null {
   return [
     `# Trap transcripts: ${suite.name} suite`,
     "",
-    `_Model \`${stored.meta.model}\` · catalog: ${stored.meta.mode} · run ${stored.meta.at}_`,
+    `_Model \`${firstPass(stored, "grounded")?.from ?? stored.meta.model}\` · catalog: ${stored.meta.mode} · run ${stored.meta.at}_`,
     "",
+    ...((stored.meta.runs ?? 1) > 1
+      ? [
+          `Answers below are the **first** pass of the first model, chosen by run order rather`,
+          `than by score. The scorecard reports all ${(stored.meta.models?.length ?? 1) * (stored.meta.runs ?? 1)}`,
+          `passes; a single transcript is an illustration of one of them, not the result.`,
+          "",
+        ]
+      : []),
     "Two categories in the benchmark are the ones a sceptical reader should not take on",
     "trust from a checkmark:",
     "",

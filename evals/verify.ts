@@ -17,9 +17,17 @@ import { scoreCase, summarizeCase, type CaseResult } from "./score";
  * official `showcase-ecommerce` datapack.
  */
 
+type Arm = "grounded" | "schema" | "blind";
+
+/**
+ * `cells` is one (model, arm, run) pass; a multi-run scorecard has many per arm.
+ * `arms` is the older single-pass shape, still read so results committed before
+ * the harness grew replicates stay verifiable rather than quietly skipped.
+ */
 interface StoredResults {
-  meta: { model: string; mode: string; at: string };
-  arms: { arm: "grounded" | "schema" | "blind"; cases: CaseResult[] }[];
+  meta: { model: string; models?: string[]; runs?: number; mode: string; at: string };
+  cells?: { model: string; arm: Arm; run: number; cases: CaseResult[] }[];
+  arms?: { arm: Arm; cases: CaseResult[] }[];
 }
 
 const resultsDir = path.join(process.cwd(), "evals", "results");
@@ -36,47 +44,61 @@ function verifySuite(suite: Suite): void {
   verified++;
 
   const stored: StoredResults = JSON.parse(readFileSync(answersPath, "utf8"));
-  const headline: Record<string, { passed: number; total: number }> = {};
+  const passes = stored.cells ?? (stored.arms ?? []).map((a) => ({ ...a, model: stored.meta.model, run: 0 }));
 
-  for (const arm of stored.arms) {
+  // Every pass is re-scored independently, then collected per arm. With
+  // replicates the published figure is a mean over passes, so verifying one
+  // representative pass would leave most of the claim unchecked.
+  const perArm: Record<string, number[]> = {};
+
+  for (const pass of passes) {
     let passed = 0;
-    for (const storedCase of arm.cases) {
+    for (const storedCase of pass.cases) {
       const def = suite.cases.find((c) => c.id === storedCase.id);
       if (!def) {
-        console.error(`✗ ${suite.name}/${arm.arm}/${storedCase.id}: no such case in the ${suite.name} suite`);
+        console.error(`✗ ${suite.name}/${pass.arm}/${storedCase.id}: no such case in the ${suite.name} suite`);
         mismatches++;
         continue;
       }
       const rescored = summarizeCase(scoreCase(def, storedCase.answer));
       if (rescored.passed !== storedCase.passed || rescored.score !== storedCase.score) {
         console.error(
-          `✗ ${suite.name}/${arm.arm}/${storedCase.id}: stored ${storedCase.score}/${storedCase.maxScore} ` +
-            `(passed=${storedCase.passed}) but re-scoring the committed answer gives ` +
-            `${rescored.score}/${rescored.maxScore} (passed=${rescored.passed})`
+          `✗ ${suite.name}/${pass.model}/${pass.arm}/run${pass.run}/${storedCase.id}: stored ` +
+            `${storedCase.score}/${storedCase.maxScore} (passed=${storedCase.passed}) but re-scoring the ` +
+            `committed answer gives ${rescored.score}/${rescored.maxScore} (passed=${rescored.passed})`
         );
         mismatches++;
       }
       if (rescored.passed) passed++;
     }
-    headline[arm.arm] = { passed, total: arm.cases.length };
+    (perArm[pass.arm] ??= []).push(passed);
   }
 
-  const grounded = headline.grounded;
-  const schema = headline.schema;
-  const blind = headline.blind;
+  const mean = (xs: number[] = []) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : undefined);
+  const show = (xs: number[] = []) => {
+    const m = mean(xs);
+    if (m === undefined) return "—";
+    return xs.length > 1 ? `${m.toFixed(1)}/${suite.cases.length} over ${xs.length} passes` : `${m}/${suite.cases.length}`;
+  };
+
   console.log(
-    `- ${suite.name}: re-scored from committed answers. With DataHub: ${grounded?.passed}/${grounded?.total}, ` +
-      `${schema ? `warehouse schema only: ${schema.passed}/${schema.total}, ` : ""}` +
-      `control: ${blind?.passed}/${blind?.total} (model ${stored.meta.model})`
+    `- ${suite.name}: re-scored ${passes.length} pass(es) from committed answers. ` +
+      `With DataHub: ${show(perArm.grounded)}, ` +
+      `${perArm.schema ? `warehouse schema only: ${show(perArm.schema)}, ` : ""}` +
+      `control: ${show(perArm.blind)} (${(stored.meta.models ?? [stored.meta.model]).join(", ")})`
   );
 
   // The scorecard's headline must match what the committed answers produce.
   if (existsSync(scorecardPath)) {
     const scorecard = readFileSync(scorecardPath, "utf8");
-    const claim = scorecard.match(/\*\*(\d+)\/(\d+)\*\*/);
-    if (claim && grounded && Number(claim[1]) !== grounded.passed) {
+    const claim = scorecard.match(/\*\*([\d.]+)(?: ± [\d.]+)?\/(\d+)\*\*/);
+    const groundedMean = mean(perArm.grounded);
+    // A mean is printed to one decimal, so compare at that resolution rather
+    // than exactly — anything looser would let a real drift through.
+    if (claim && groundedMean !== undefined && Math.abs(Number(claim[1]) - groundedMean) > 0.05) {
       console.error(
-        `✗ ${suite.resultsPrefix}scorecard.md claims ${claim[1]}/${claim[2]} but answers re-score to ${grounded.passed}/${grounded.total}`
+        `✗ ${suite.resultsPrefix}scorecard.md claims ${claim[1]}/${claim[2]} but answers re-score to ` +
+          `${groundedMean.toFixed(1)}/${suite.cases.length}`
       );
       mismatches++;
     }

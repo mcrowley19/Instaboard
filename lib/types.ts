@@ -320,11 +320,38 @@ export interface Handoff {
   source?: "recorded" | "drafted";
   /** For drafts: what evidence the catalog held, shown to whoever reviews it. */
   draftBasis?: string[];
-  datahub?: { saved: boolean; detail?: string };
+  /**
+   * The catalog copy: whether the write landed, the URN it landed under, and
+   * what came back when we asked DataHub to hand the document over again.
+   * `roundTrip.matches` is the only thing here that distinguishes "we sent it"
+   * from "the catalog holds it".
+   */
+  datahub?: { saved: boolean; detail?: string; documentUrn?: string; roundTrip?: RoundTripReceipt };
   /** Catalog state at record time, keyed by URN — the decay baseline. */
   snapshots?: Record<string, EntitySnapshot>;
   /** Result of the most recent validation run against live DataHub. */
   decay?: DecayReport;
+}
+
+/**
+ * What a document write is worth once it has been checked. Produced by
+ * `lib/document-readback.ts`: written digest, read digest, and whether the two
+ * agree. `readBack: false` means DataHub would not hand the body back — which is
+ * a different and more honest thing to record than a mismatch.
+ */
+export interface RoundTripReceipt {
+  urn: string;
+  /** Did DataHub return the document at all? */
+  readBack: boolean;
+  /** Does what came back match what went in, byte for byte? */
+  matches: boolean;
+  writtenChars: number;
+  readChars: number;
+  writtenDigest: string;
+  readDigest?: string;
+  at: string;
+  /** Why the round trip could not be completed, when it could not. */
+  error?: string;
 }
 
 export interface CreateHandoffBody {

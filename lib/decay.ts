@@ -1,5 +1,6 @@
 import { callDataHubTool, isDemoMode } from "./mcp";
 import { datahubGraphQL } from "./datahub-graphql";
+import { verifyDocumentRoundTrip, type RoundTripReceipt } from "./document-readback";
 import {
   chainLine,
   coverageOf,
@@ -541,21 +542,34 @@ export interface WriteBackReceipt {
   relatedAssets: string[];
   at: string;
   error?: string;
+  /**
+   * What came back when we asked DataHub for the document we had just written.
+   * Absent when there was no URN to ask about.
+   */
+  roundTrip?: RoundTripReceipt;
 }
 
 /**
  * Write a decay report into the catalog as a Note linked to the drifted
  * entities, and capture what DataHub says it created. The returned receipt
  * carries the document URN so the write-back is checkable, not just claimed.
+ *
+ * And then check it. Every other write in this repo is confirmed by reading it
+ * back; documents were the exception only because no MCP tool would return one.
+ * `lib/document-readback.ts` gets the body out over GraphQL, so the receipt now
+ * says whether the catalog holds what we sent it rather than only that we sent
+ * it. A failed read is reported as a failed read — it does not fail the write,
+ * which did happen, and it is not quietly dropped either.
  */
 export async function writeBackDecay(handoff: Handoff, report: DecayReport): Promise<WriteBackReceipt> {
   const relatedAssets = [...new Set(report.findings.map((f) => f.urn))].slice(0, 10);
   const at = new Date().toISOString();
+  const content = decayToMarkdown(handoff, report);
 
   const result = await callDataHubTool("save_document", {
     document_type: "Note",
     title: `Stale runbook: ${handoff.title}`,
-    content: decayToMarkdown(handoff, report),
+    content,
     topics: ["onboarding", "handoff", "validation"],
     related_assets: relatedAssets,
   });
@@ -566,7 +580,15 @@ export async function writeBackDecay(handoff: Handoff, report: DecayReport): Pro
 
   const parsed = parseToolJson(result.content);
   const urns = flatStrings(collect(parsed, "urn")).filter((u) => u.startsWith("urn:li:document"));
-  return { written: true, ...(urns[0] ? { documentUrn: urns[0] } : {}), relatedAssets, at };
+  const documentUrn = urns[0];
+
+  return {
+    written: true,
+    ...(documentUrn ? { documentUrn } : {}),
+    relatedAssets,
+    at,
+    ...(documentUrn ? { roundTrip: await verifyDocumentRoundTrip(documentUrn, content) } : {}),
+  };
 }
 
 /** Render a decay report as markdown for the DataHub write-back. */

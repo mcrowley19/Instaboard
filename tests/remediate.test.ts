@@ -82,6 +82,52 @@ describe("renameCandidate", () => {
     // `id` is in `order_id` and `customer_id` alike; boosting both is a guess.
     expect(renameCandidate("id", ["id"], ["order_id", "customer_id"])).toBeNull();
   });
+
+  describe("when the names have nothing in common", () => {
+    it("identifies the replacement from the hole it was dropped into", () => {
+      // `product_status` → `settled_value` shares no token with its original, so
+      // string similarity cannot and should not connect them. The schema can:
+      // one column left, one arrived, and it arrived in the same slot.
+      expect(
+        renameCandidate(
+          "product_status",
+          ["product_id", "product_status", "created_at"],
+          ["product_id", "settled_value", "created_at"]
+        )
+      ).toMatchObject({ field: "settled_value", basis: "position" });
+    });
+
+    it("declines when the new column was appended rather than substituted", () => {
+      // A drop plus an unrelated addition is two changes, not a rename. The
+      // added column lands at the end, not in the hole.
+      expect(
+        renameCandidate("product_status", ["product_id", "product_status"], ["product_id", "settled_value"])
+      ).toMatchObject({ field: "settled_value", basis: "position" });
+      expect(
+        renameCandidate(
+          "product_status",
+          ["product_id", "product_status", "created_at"],
+          ["product_id", "created_at", "settled_value"]
+        )
+      ).toBeNull();
+    });
+
+    it("declines when two columns left, because which replaced which is a guess", () => {
+      expect(
+        renameCandidate("product_status", ["a", "product_status", "b"], ["a", "settled_value", "c"])
+      ).toBeNull();
+    });
+
+    it("declines on an outright drop, where there is no replacement to name", () => {
+      expect(renameCandidate("product_status", ["product_id", "product_status"], ["product_id"])).toBeNull();
+    });
+
+    it("prefers the name when the name says something", () => {
+      // The positional rule is a fallback, not an override: a legible rename is
+      // still reported as one so the rationale cites the stronger evidence.
+      expect(renameCandidate("plan", ["plan", "mrr"], ["plan_v2", "mrr"])).toMatchObject({ basis: "name" });
+    });
+  });
 });
 
 describe("replacementFromNote", () => {

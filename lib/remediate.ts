@@ -93,18 +93,75 @@ function similarity(a: string, b: string): number {
 const RENAME_THRESHOLD = 0.55;
 
 /**
+ * What the match was made on. `name` is the strong case — the two names read as
+ * the same column. `position` is the weaker one, and is only ever reached when
+ * the names say nothing.
+ */
+export type RenameBasis = "name" | "position";
+
+export interface RenameMatch {
+  field: string;
+  score: number;
+  basis: RenameBasis;
+  /** Plain-language evidence, for the rationale on the proposed edit. */
+  evidence: string;
+}
+
+/**
+ * The structural case for a rename, when the names give nothing.
+ *
+ * `product_status` → `settled_value` shares not one token with its original, and
+ * no amount of string cleverness will connect them — a similarity matcher that
+ * did would be matching noise. But a schema where **exactly one** column left,
+ * **exactly one** arrived, and the new one sits at the index the old one
+ * occupied is not ambiguous about what happened. `ALTER TABLE RENAME COLUMN`
+ * preserves ordinal position; `ADD COLUMN` appends. So a column appearing
+ * *in place of* another is evidence about the operation that was performed, and
+ * it is independent of what anybody chose to call the result.
+ *
+ * It is deliberately the narrowest form of the rule. Two departures or two
+ * arrivals in the same window and it declines, because then "which replaced
+ * which" is a guess. A drop with no arrival declines. An append declines,
+ * because an appended column is at the end rather than at the hole. Every one of
+ * those failures is a decline, which sends the finding to a human — the correct
+ * direction to be wrong in.
+ *
+ * Anything it does propose is `medium` confidence and says so: the evidence is
+ * that a rename happened, not that the new name means what the old one meant.
+ */
+function positionalCandidate(dropped: string, before: string[], after: string[]): RenameMatch | null {
+  const disappeared = before.filter((f) => !after.includes(f));
+  const appeared = after.filter((f) => !before.includes(f));
+  if (disappeared.length !== 1 || appeared.length !== 1) return null;
+  if (disappeared[0] !== dropped) return null;
+
+  const wasAt = before.indexOf(dropped);
+  const isAt = after.indexOf(appeared[0]);
+  if (wasAt < 0 || wasAt !== isAt) return null;
+
+  return {
+    field: appeared[0],
+    score: similarity(dropped, appeared[0]),
+    basis: "position",
+    evidence:
+      `it is the only column that appeared, \`${dropped}\` is the only one that left, and it sits at ` +
+      `position ${isAt + 1} — exactly where \`${dropped}\` was. A rename keeps a column's place in the ` +
+      `schema; a newly added column goes on the end`,
+  };
+}
+
+/**
  * Which column replaced this one, if any?
+ *
+ * Two independent lines of evidence, tried strongest first. Names, because a
+ * rename usually looks like one. Failing that, the shape of the change itself.
  *
  * Candidates are columns on the entity now that were not there when the runbook
  * was recorded — a rename shows up as one disappearance and one appearance. The
  * runner-up matters: when two new columns match about equally well, guessing is
  * worse than saying so, and the finding goes to the unresolved list instead.
  */
-export function renameCandidate(
-  dropped: string,
-  before: string[],
-  after: string[]
-): { field: string; score: number } | null {
+export function renameCandidate(dropped: string, before: string[], after: string[]): RenameMatch | null {
   const appeared = after.filter((f) => !before.includes(f));
   const pool = appeared.length ? appeared : after;
   const ranked = pool
@@ -112,10 +169,20 @@ export function renameCandidate(
     .sort((a, b) => b.score - a.score);
 
   const best = ranked[0];
-  if (!best || best.score < RENAME_THRESHOLD) return null;
   const runnerUp = ranked[1];
-  if (runnerUp && best.score - runnerUp.score < 0.1) return null;
-  return best;
+  const nameIsDecisive =
+    best && best.score >= RENAME_THRESHOLD && !(runnerUp && best.score - runnerUp.score < 0.1);
+
+  if (nameIsDecisive) {
+    return {
+      ...best,
+      basis: "name",
+      evidence: `it is on the entity now, was not when this runbook was recorded, and is the closest match to \`${dropped}\` (${best.score.toFixed(2)})`,
+    };
+  }
+
+  // The names decided nothing. Ask the schema what happened instead.
+  return positionalCandidate(dropped, before, after);
 }
 
 /** The dataset a deprecation note points at, when it names one. */
@@ -292,7 +359,8 @@ export function proposeFix(
             detail: finding.detail,
             needsHuman:
               `No column on ${now.name ?? finding.urn} is a close enough match to \`${dropped}\` to propose as a ` +
-              `rename. It may have been dropped outright, or split across several columns.`,
+              `rename, and the shape of the change does not identify one either. It may have been dropped ` +
+              `outright, or split across several columns.`,
           });
           break;
         }
@@ -304,9 +372,15 @@ export function proposeFix(
           from: dropped,
           to: candidate.field,
           rationale:
-            `\`${candidate.field}\` is on ${now.name ?? finding.urn} now and was not when this runbook was ` +
-            `recorded, and it is the closest match to \`${dropped}\` (${candidate.score.toFixed(2)}).`,
-          confidence: candidate.score > 0.8 ? "high" : "medium",
+            `\`${candidate.field}\` on ${now.name ?? finding.urn}: ${candidate.evidence}.` +
+            // A positional match knows a rename happened without knowing that the
+            // new name means what the old one meant. Saying so is the difference
+            // between a proposal and an assertion.
+            (candidate.basis === "position"
+              ? ` The names have nothing in common, so this identifies *which* column replaced it, not that the ` +
+                `two mean the same thing — read the step before accepting.`
+              : ""),
+          confidence: candidate.basis === "name" && candidate.score > 0.8 ? "high" : "medium",
           ...(finding.claimId ? { claimId: finding.claimId } : {}),
           occurrences: applied.hits,
         });

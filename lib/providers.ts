@@ -9,12 +9,22 @@ export const DEFAULT_MODELS: Record<string, string> = {
 
 const MAX_ATTEMPTS = Number(process.env.LLM_MAX_ATTEMPTS || 5);
 
+/**
+ * A 200 response whose `choices` array is empty. Free tiers return this under
+ * load part-way through a multi-call tool loop, and it is the single failure
+ * that invalidated the first held-out run: 10 of 18 grounded cases died on it
+ * while the zero-tool control arm, making one request per case, sailed past.
+ * Treating it as terminal turned a provider hiccup into a measurement.
+ */
+export class EmptyCompletion extends Error {}
+
 /** Rate limits and provider hiccups are transient — retry them, don't surface them. */
 function isRetryable(err: unknown): boolean {
+  if (err instanceof EmptyCompletion) return true;
   const status = (err as { status?: number })?.status;
   if (status === 429 || (typeof status === "number" && status >= 500)) return true;
   const message = err instanceof Error ? err.message : String(err);
-  return /\b(429|5\d\d)\b|rate.?limit|overloaded|timeout|ECONNRESET|fetch failed/i.test(message);
+  return /\b(429|5\d\d)\b|rate.?limit|overloaded|timeout|ECONNRESET|fetch failed|no choices/i.test(message);
 }
 
 /**
@@ -183,7 +193,10 @@ async function openAICompatTurn(
   tools: ToolDef[]
 ): Promise<LLMTurn> {
   const endpoint = OPENAI_COMPAT_ENDPOINTS[config.provider];
+  // A request that never returns stalls the whole pool behind it. Free-tier
+  // providers do occasionally hang; time out and let the retry loop have it.
   const response = await fetch(endpoint, {
+    signal: AbortSignal.timeout(Number(process.env.LLM_TIMEOUT_MS || 180_000)),
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -208,10 +221,26 @@ async function openAICompatTurn(
   }
 
   const data = (await response.json()) as {
-    choices: { message: { content: string | null; tool_calls?: { id: string; function: { name: string; arguments: string } }[] } }[];
+    error?: { message?: string; code?: number };
+    choices?: { message: { content: string | null; tool_calls?: { id: string; function: { name: string; arguments: string } }[] } }[];
   };
+
+  // OpenRouter reports upstream failures inside a 200 body as often as it does
+  // with a status code, so the status alone is not the health check.
+  if (data.error) {
+    const detail = `${config.provider} upstream error ${data.error.code ?? ""}: ${data.error.message ?? ""}`.trim();
+    if (isQuotaExhausted(new Error(`${data.error.code ?? 403} ${data.error.message ?? ""}`))) throw new Error(detail);
+    throw new EmptyCompletion(detail);
+  }
+
   const message = data.choices?.[0]?.message;
-  if (!message) throw new Error(`${config.provider} returned no choices`);
+  if (!message) throw new EmptyCompletion(`${config.provider} returned no choices`);
+
+  // A turn with neither text nor a tool call ends the agent loop holding
+  // nothing. That is the same dropped response wearing a different shape.
+  if (!message.content?.trim() && !message.tool_calls?.length) {
+    throw new EmptyCompletion(`${config.provider} returned an empty message`);
+  }
 
   return {
     text: message.content ?? "",

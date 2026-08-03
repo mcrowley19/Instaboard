@@ -1,5 +1,6 @@
 import { llmConfigFromRequest, runAgent } from "@/lib/agent";
 import { snapshotHandoff } from "@/lib/decay";
+import { documentUrnFrom, verifyDocumentRoundTrip } from "@/lib/document-readback";
 import { handoffToMarkdown, listHandoffs, newHandoffId, saveHandoff } from "@/lib/handoff-store";
 import { callDataHubTool } from "@/lib/mcp";
 import { handoffSystemPrompt } from "@/lib/prompts";
@@ -101,16 +102,25 @@ export async function POST(req: Request) {
         };
 
         // Write-back: the handoff lives in the DataHub catalog for the next hire.
+        const markdown = handoffToMarkdown(handoff);
         const doc = await callDataHubTool("save_document", {
           document_type: "Note",
           title: `Handoff: ${handoff.title}`,
-          content: handoffToMarkdown(handoff),
+          content: markdown,
           topics: ["onboarding", "handoff"],
           related_assets: handoff.steps.map((s) => s.urn).filter(Boolean).slice(0, 10),
         });
+
+        // …and is then read back out of it. Until now this write was the one
+        // instaboard could not verify, so the local copy and the catalog copy
+        // could diverge with nothing to notice. The receipt records the URN, the
+        // digest of what was sent, and the digest of what DataHub returns.
+        const documentUrn = documentUrnFrom(doc);
         handoff.datahub = {
           saved: !doc.isError,
           detail: doc.content.slice(0, 300),
+          ...(documentUrn ? { documentUrn } : {}),
+          ...(documentUrn ? { roundTrip: await verifyDocumentRoundTrip(documentUrn, markdown) } : {}),
         };
 
         saveHandoff(handoff);
