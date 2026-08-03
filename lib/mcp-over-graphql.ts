@@ -89,6 +89,11 @@ const fail = (message: string): ToolResult => ({ content: message, isError: true
 const READ_TTL_MS = 2_000;
 const entityReads = new Map<string, { at: number; result: ToolResult }>();
 
+/** Test seam: drop the shared read so a case starts from a cold catalog. */
+export function resetEntityReadCache(): void {
+  entityReads.clear();
+}
+
 function cachedRead(key: string): ToolResult | undefined {
   const hit = entityReads.get(key);
   if (!hit) return undefined;
