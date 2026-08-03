@@ -516,19 +516,30 @@ export async function readAssertionStatus(
   const res = await datahubGraphQL<{
     assertion: {
       urn: string;
-      runEvents: { runEvents: { timestampMillis: number; result: { type: string } | null }[] } | null;
+      info: { type?: string } | null;
+      runEvents: { total: number; runEvents: { timestampMillis: number; result: { type: string } | null }[] } | null;
     } | null;
   }>(
     `query readAssertion($urn: String!) {
        assertion(urn: $urn) {
          urn
-         runEvents(limit: 1) { runEvents { timestampMillis result { type } } }
+         info { type }
+         runEvents(limit: 1) { total runEvents { timestampMillis result { type } } }
        }
      }`,
     { urn }
   );
   const assertion = res.data?.assertion;
   if (!assertion) return null;
+
+  // GraphQL answers an assertion URN that was never created with a stub: the URN
+  // echoed back, `info` null, no run events. Reporting that as an assertion with
+  // no result would tell a caller "it exists and has not run" about something
+  // that does not exist — and the retraction path needs those apart, because
+  // "no assertion" and "an assertion that has not been evaluated" call for
+  // different actions.
+  if (!assertion.info && !assertion.runEvents?.total) return null;
+
   const latest = assertion.runEvents?.runEvents?.[0];
   return {
     urn: assertion.urn,
