@@ -280,9 +280,11 @@ export function planDrifts(
         if (hard) {
           hardRenamesLeft--;
           hardCase =
-            `\`${subject}\` → \`${renameTo}\` shares no tokens with the original. The rename detector scores ` +
-            `token overlap and edit distance, so it cannot connect the two and will decline to propose a ` +
-            `correction. Detection should still catch the column as missing.`;
+            `\`${subject}\` → \`${renameTo}\` shares no tokens with the original, so the name carries no signal ` +
+            `at all: token overlap and edit distance both score it near zero, and any matcher that connected the ` +
+            `two on their names would be matching noise. It is solvable only structurally — one column left, one ` +
+            `arrived, in the same slot — which is a strictly weaker kind of evidence and is proposed at lower ` +
+            `confidence. Detection should catch the column as missing either way.`;
         }
       }
 

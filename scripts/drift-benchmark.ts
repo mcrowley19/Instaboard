@@ -32,17 +32,21 @@
  *      column from a table a runbook reads, where the runbook never mentions
  *      that column. The engine holds a snapshot of that entity and must still
  *      stay quiet.
- *   4. **A planted case the tool is known to fail.** One rename goes to a name
- *      sharing no tokens with the original. Detection should still catch the
- *      column as missing; the correction cannot be derived, and the benchmark
- *      reports that as a miss with its structural reason rather than quietly
- *      omitting the case. A benchmark that cannot fail is not evidence.
+ *   4. **A planted case no name-based matcher can solve.** One rename goes to a
+ *      name sharing no tokens with the original. Detection should still catch
+ *      the column as missing. The correction is reachable only structurally —
+ *      one column left, one arrived, in the same slot — and if that evidence is
+ *      absent the benchmark reports the miss with its reason rather than
+ *      quietly omitting the case. A benchmark that cannot fail is not evidence,
+ *      so this case is kept exactly as it was when the tool did fail it.
  *
  * Two axes are scored separately, because they fail separately:
  *
  *   **Detection** — did the engine notice the catalog moved?
  *   **Correction** — could it work out what to put instead? This is the weaker
- *   half, it is string similarity, and the score says so.
+ *   half. It is two signals — what the names say, and failing that what the
+ *   shape of the change says — and both can be wrong in ways detection cannot,
+ *   so the score is reported separately and never averaged in.
  *
  * Everything is restored afterwards, and the restore is verified.
  *
@@ -413,9 +417,10 @@ async function main() {
       "(changes to things no runbook reads) and controls (additive changes to things runbooks do read: a column " +
       "added, a description rewritten, a second owner appointed). Both classes must produce nothing. Ground truth " +
       "for column drift comes from tokenising each step's SQL, not from the engine's own reference matcher. One " +
-      "rename is planted to a name sharing no tokens with the original, which the correction rule cannot solve by " +
-      "construction. Findings that pre-date the injection are excluded from the false-positive count. The engine is " +
-      "told nothing about any of it.",
+      "rename is planted to a name sharing no tokens with the original, so no name-based matcher can solve it and " +
+      "one that appeared to would be matching noise; it is solvable only from the shape of the change — one column " +
+      "left, one arrived, in the same slot — and is proposed at lower confidence for that reason. Findings that " +
+      "pre-date the injection are excluded from the false-positive count. The engine is told nothing about any of it.",
     baselineFindings: baseline.length,
     planted: injected.map((p) => ({
       id: p.id,
