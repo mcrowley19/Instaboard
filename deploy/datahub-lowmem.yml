@@ -1,0 +1,67 @@
+# Heap limits for running DataHub on a small box.
+#
+# The quickstart is sized for a laptop with room to spare. On a free-tier VM the
+# default heaps will either swap or get the JVMs OOM-killed, usually OpenSearch
+# first and confusingly — the container exits during boot with nothing useful in
+# its log. These caps bring the stack to roughly 4.5–5 GB resident.
+#
+# Apply it as an override on top of the quickstart's own compose file:
+#
+#   docker compose \
+#     -f ~/.datahub/quickstart/docker-compose.yml \
+#     -f deploy/datahub-lowmem.yml \
+#     up -d
+#
+# UNTESTED at time of writing — the deployment this repo has actually run is a
+# laptop and a GitHub Actions runner, both with 16 GB. Treat the numbers as a
+# starting point, watch `docker stats` on the first boot, and raise anything
+# that gets killed. Service names follow the quickstart's; if DataHub renames
+# one, this file silently does nothing for it, so check `docker compose config`.
+
+services:
+  opensearch:
+    environment:
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    deploy:
+      resources:
+        limits:
+          memory: 1200m
+
+  broker:
+    environment:
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+    deploy:
+      resources:
+        limits:
+          memory: 900m
+
+  datahub-gms:
+    environment:
+      JAVA_OPTS: "-Xms512m -Xmx1024m"
+    deploy:
+      resources:
+        limits:
+          memory: 1500m
+
+  datahub-frontend-react:
+    environment:
+      JAVA_OPTS: "-Xms256m -Xmx512m"
+    deploy:
+      resources:
+        limits:
+          memory: 800m
+
+  mysql:
+    deploy:
+      resources:
+        limits:
+          memory: 600m
+
+  # The actions container runs ingestion recipes and subscription handlers.
+  # The demo reads; it does not need them. Scale it to zero if memory is tight:
+  #   docker compose ... up -d --scale datahub-actions=0
+  datahub-actions:
+    deploy:
+      resources:
+        limits:
+          memory: 500m

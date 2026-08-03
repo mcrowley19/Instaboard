@@ -1,0 +1,61 @@
+# The hosted demo: the app, next to a DataHub, with only the app on the internet.
+#
+# DataHub brings its own compose stack (`datahub docker quickstart`), so this
+# file does not try to own it. It joins the network that stack already created
+# and talks to GMS over it. Nothing here publishes a DataHub port, which is the
+# point: `datahub-gms` is reachable from the app container and from nowhere else,
+# so a public demo cannot become a public write endpoint on somebody's catalog.
+#
+#   docker compose -f deploy/docker-compose.yml up -d --build
+#
+# See deploy/README.md for the whole sequence, including the free host it was
+# written for.
+
+name: instaboard
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    environment:
+      # Not localhost: the app is in its own container. This is the service name
+      # on DataHub's compose network.
+      DATAHUB_GMS_URL: http://datahub-gms:8080
+      # Deliberately empty for an OSS quickstart, which runs without auth. Set it
+      # if the catalog behind this demo has metadata service auth switched on.
+      DATAHUB_GMS_TOKEN: "${DATAHUB_GMS_TOKEN:-}"
+      # The link the UI builds for "open this in DataHub". Only used for hrefs.
+      DATAHUB_UI_URL: "${DATAHUB_UI_URL:-http://localhost:9002}"
+      # Must stay false, or the demo answers from the fixture and the whole
+      # exercise of hosting a catalog next to it is wasted.
+      DEMO_MODE: "false"
+      # How long one catalog read is shared between visitors. Raise it if the
+      # box is small; the demo is still reporting the catalog as it is now.
+      DEMO_LIVE_TTL_MS: "${DEMO_LIVE_TTL_MS:-15000}"
+    networks: [datahub_network]
+    ports:
+      # Bound to loopback: Caddy terminates TLS and proxies to it. Change to
+      # "3000:3000" only if you are putting your own load balancer in front.
+      - "127.0.0.1:3000:3000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  # Created by `datahub docker quickstart`. `external: true` means this file
+  # will fail loudly if DataHub is not up, rather than starting an app with
+  # nothing to read.
+  datahub_network:
+    external: true

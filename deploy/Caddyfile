@@ -1,0 +1,28 @@
+# TLS and the only door into the box.
+#
+# Replace demo.example.com with your hostname. Caddy gets a certificate from
+# Let's Encrypt on first boot, which needs port 80 and 443 open and DNS already
+# pointing here.
+#
+# For a quick look with no domain, comment the block below and uncomment the
+# `:80` one — you get plain HTTP on the box's IP, which is fine for a demo that
+# holds no credentials and writes nothing.
+
+demo.example.com {
+	encode gzip
+
+	# The app spawns an MCP subprocess on a cold read; the first request after a
+	# restart can take a few seconds. Default proxy timeouts are shorter than
+	# that, and a judge sees a 502 rather than a slow page.
+	reverse_proxy 127.0.0.1:3000 {
+		transport http {
+			response_header_timeout 60s
+			read_timeout 60s
+		}
+	}
+}
+
+# :80 {
+# 	encode gzip
+# 	reverse_proxy 127.0.0.1:3000
+# }
