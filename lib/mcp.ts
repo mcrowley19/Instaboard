@@ -170,7 +170,17 @@ export async function callDataHubTool(
     return callDemoTool(name, args);
   }
   try {
-    const result = await client.callTool({ name, arguments: args });
+    // A tool call with no deadline can wait forever, and does: the scale
+    // benchmark hung here for half an hour against a 10,000-dataset catalog with
+    // GMS answering other requests in milliseconds and both processes idle at 0%
+    // CPU. Nothing upstream of this imposes a timeout, so an unattended sweep —
+    // the cron entry point, the thing meant to run nightly without a human —
+    // would have hung until somebody noticed rather than reported a failure.
+    const result = await client.callTool(
+      { name, arguments: args },
+      undefined,
+      { timeout: Number(process.env.MCP_TIMEOUT_MS || 120_000) }
+    );
     const blocks = Array.isArray(result.content) ? result.content : [];
     let text = blocks
       .map((b: { type: string; text?: string }) => (b.type === "text" ? b.text ?? "" : `[${b.type}]`))

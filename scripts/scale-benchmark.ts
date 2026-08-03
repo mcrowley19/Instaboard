@@ -33,6 +33,11 @@
  * spread is published, and the conclusion rests on the read count rather than on
  * a timing curve that noise could have drawn either way.
  *
+ * A row is refused outright if any sweep in it failed to read the catalog. A
+ * failed read is *faster* than a successful one, so a row built on timeouts
+ * would read as evidence that a bigger catalog costs less — the most flattering
+ * possible way for this measurement to be wrong.
+ *
  * ## Tokens
  *
  * Zero, and the run proves it rather than asserting it: the sweep is executed
@@ -122,6 +127,15 @@ interface Measurement {
    */
   catalogReads: number;
   readsByTool: Record<string, number>;
+  /**
+   * Catalog reads that came back as errors during the measured sweeps.
+   *
+   * Must be zero for a row to mean anything. A timed-out read returns an error
+   * rather than hanging, which is the right behaviour and a terrible thing to
+   * measure silently: the sweep would finish *faster* for having failed, and the
+   * row would read as evidence that a bigger catalog costs less.
+   */
+  failedReads: number;
   llmCalls: number;
   promptTokens: number;
   completionTokens: number;
@@ -215,12 +229,33 @@ async function teardown(count: number, concurrency = 10): Promise<number> {
   return deleted;
 }
 
-async function datasetCount(): Promise<number> {
-  const res = await datahubGraphQL<{ searchAcrossEntities: { total: number } }>(
-    `{ searchAcrossEntities(input: { query: "*", count: 0, types: [DATASET] }) { total } }`
+/**
+ * How many datasets search can see, and how many of those are the catalog's own.
+ *
+ * The split matters because deletes leave the search index before they leave it
+ * *promptly*: a previous run's ten thousand synthetics can still be counted
+ * minutes after they are gone, which silently inflated the baseline row by
+ * several hundred. The benchmark's own namespace is excluded from the real
+ * count, so a re-run starts from the catalog rather than from the last run's
+ * residue.
+ */
+async function datasetCounts(): Promise<{ total: number; real: number }> {
+  const res = await datahubGraphQL<{
+    all: { total: number };
+    synthetic: { total: number };
+  }>(
+    `query counts($synthetic: String!) {
+       all: searchAcrossEntities(input: { query: "*", count: 0, types: [DATASET] }) { total }
+       synthetic: searchAcrossEntities(input: { query: $synthetic, count: 0, types: [DATASET] }) { total }
+     }`,
+    { synthetic: `${NAMESPACE}*` }
   );
-  return res.data?.searchAcrossEntities?.total ?? -1;
+  const total = res.data?.all?.total ?? -1;
+  const synthetic = res.data?.synthetic?.total ?? 0;
+  return { total, real: Math.max(0, total - synthetic) };
 }
+
+const datasetCount = async () => (await datasetCounts()).total;
 
 /**
  * Give the search index a bounded chance to catch up, then carry on regardless.
@@ -250,6 +285,7 @@ async function measure(catalogDatasets: number, repeats: number): Promise<Measur
   let checked = 0;
   let catalogReads = 0;
   let readsByTool: Record<string, number> = {};
+  let failedReads = 0;
 
   for (let i = 0; i < repeats; i++) {
     resetToolCallCounts();
@@ -257,6 +293,9 @@ async function measure(catalogDatasets: number, repeats: number): Promise<Measur
     const result = await sweepRunbooks({ propose: true });
     samples.push(Date.now() - started);
     checked = result.checked;
+    // A sweep that could not read the catalog is not a measurement of reading
+    // the catalog. Counted per repeat and surfaced on the row.
+    failedReads += result.rows.filter((r) => r.entitiesChecked === 0).length;
     // Deterministic across repeats; taking the last is taking any of them.
     catalogReads = Object.values(toolCallCounts).reduce((a, b) => a + b, 0);
     readsByTool = { ...toolCallCounts };
@@ -277,6 +316,7 @@ async function measure(catalogDatasets: number, repeats: number): Promise<Measur
     msPerRunbook: Math.round(mean / Math.max(1, checked)),
     catalogReads,
     readsByTool,
+    failedReads,
     // Not an estimate. The sweep ran with no credentials in the environment, so
     // any LLM call would have thrown rather than quietly costing something.
     llmCalls: 0,
@@ -380,7 +420,21 @@ function scorecard(result: ScaleResult): string {
 /* ── Entry ────────────────────────────────────────────────────────────── */
 
 function runVerify(): never {
-  const committed = JSON.parse(readFileSync(OUT, "utf8")) as ScaleResult;
+  let raw: string;
+  try {
+    raw = readFileSync(OUT, "utf8");
+  } catch {
+    // This runs in CI, where an unhandled ENOENT stack trace is a worse way to
+    // learn that nobody has committed a run than a sentence saying so.
+    console.error(
+      `No committed run at ${path.relative(process.cwd(), OUT)}.\n\n` +
+        `  This benchmark writes ten thousand datasets into a real catalog, so CI cannot\n` +
+        `  produce one. Run \`npm run bench:scale\` against a DataHub you can afford to\n` +
+        `  fill with junk, and commit what it writes.\n`
+    );
+    process.exit(2);
+  }
+  const committed = JSON.parse(raw) as ScaleResult;
   const regenerated = scorecard(committed);
   let onDisk = "";
   try {
@@ -432,7 +486,9 @@ async function main() {
 
   // Baseline first: the catalog as it stands, before anything is added.
   console.log("  measuring the catalog as it is…");
-  const startingDatasets = await datasetCount();
+  // The catalog's own datasets, with any residue from an interrupted previous
+  // run excluded — see `datasetCounts`.
+  const startingDatasets = (await datasetCounts()).real;
   measurements.push(await measure(startingDatasets, repeats));
   console.log(
     `\n    ${measurements[0].catalogDatasets.toLocaleString()} datasets · ` +
@@ -453,6 +509,13 @@ async function main() {
 
       const m = await measure(baselineDatasets + ingested, repeats);
       measurements.push(m);
+      if (m.failedReads > 0) {
+        throw new Error(
+          `${m.failedReads} runbook sweep(s) at ${m.catalogDatasets} datasets could not read the catalog. ` +
+            `Refusing to publish a timing row built on failed reads — a sweep that fails is faster than one ` +
+            `that works, and the table would say the wrong thing.`
+        );
+      }
       console.log(
         `\n    ${m.catalogDatasets.toLocaleString()} datasets · ${(m.sweepMsMean / 1000).toFixed(1)}s mean ` +
           `(${(m.sweepMsMin / 1000).toFixed(1)}\u2013${(m.sweepMsMax / 1000).toFixed(1)}s) · ` +
