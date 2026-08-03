@@ -54,8 +54,12 @@ const GET_ENTITIES = `
   }
 `;
 
-const ADD_TAGS = `
-  mutation addTags($input: AddTagsInput!) { addTags(input: $input) }
+/**
+ * `batchAddTags`, not `addTags`, because every caller in this repo tags several
+ * datasets at once — a stale runbook usually breaks on more than one.
+ */
+const BATCH_ADD_TAGS = `
+  mutation batchAddTags($input: BatchAddTagsInput!) { batchAddTags(input: $input) }
 `;
 
 const CREATE_DOCUMENT = `
@@ -115,13 +119,20 @@ export async function callToolOverGraphQL(
       const tagUrns = (Array.isArray(args.tag_urns) ? args.tag_urns : [args.tag_urn]).filter(
         (t): t is string => typeof t === "string"
       );
-      const resourceUrn = typeof args.resource_urn === "string" ? args.resource_urn : undefined;
-      if (!resourceUrn || tagUrns.length === 0) return fail("add_tags: need resource_urn and tag_urns");
-      const result = await datahubGraphQL<{ addTags: boolean }>(ADD_TAGS, {
-        input: { tagUrns, resourceUrn },
+      // Callers in this repo pass `entity_urns`; `resource_urn` is accepted too
+      // because the MCP tool's own schema has used both spellings.
+      const entityUrns = (
+        Array.isArray(args.entity_urns) ? args.entity_urns : [args.entity_urns ?? args.resource_urn]
+      ).filter((u): u is string => typeof u === "string");
+
+      if (entityUrns.length === 0 || tagUrns.length === 0) {
+        return fail("add_tags: need entity_urns (or resource_urn) and tag_urns");
+      }
+      const result = await datahubGraphQL<{ batchAddTags: boolean }>(BATCH_ADD_TAGS, {
+        input: { tagUrns, resources: entityUrns.map((resourceUrn) => ({ resourceUrn })) },
       });
       if (result.errors?.length) return fail(`add_tags: ${result.errors[0].message}`);
-      return ok({ success: result.data?.addTags === true, resourceUrn, tagUrns });
+      return ok({ success: result.data?.batchAddTags === true, entityUrns, tagUrns });
     }
 
     case "save_document": {
