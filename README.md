@@ -301,8 +301,20 @@ return.
 
 | Suite | Catalog | With DataHub | **Warehouse schema only** | No tools | Scorecard |
 | --- | --- | --- | --- | --- | --- |
-| `northbeam` | seeded by this repo | **19/20** | 9/20 | 5/20 | [scorecard.md](evals/results/scorecard.md) |
+| `northbeam` | seeded by this repo, **read live** | **18.0 ± 1.7/20** | 8.7 ± 0.6/20 | 3.0 ± 1.0/20 | [scorecard.md](evals/results/scorecard.md) |
 | `showcase` | **DataHub's own `showcase-ecommerce` datapack**, 1,065 entities we didn't author | **20/20** | 4/20 | 3/20 | [showcase-scorecard.md](evals/results/showcase-scorecard.md) |
+
+The `northbeam` row is **three independent passes against a live DataHub**, not
+one draw from a fixture — mean, standard deviation, and the full range published
+per arm. The number that decides anything is not the difference in means, it is
+that the ranges do not touch: the grounded arm's *worst* pass scored 16/20, the
+schema arm's *best* scored 9/20, and the control's *best* scored 4/20. Thirteen of
+the sixty (case × arm) combinations were not unanimous across the three passes,
+and the scorecard names every one of them rather than reporting only the mean.
+
+The `showcase` row is still a single pass. Repeating it needs the free-model
+daily cap to reset; `npm run eval -- --live --runs=3 --suite=showcase` resumes
+from the cache and finishes it.
 
 On DataHub's own catalog, warehouse introspection scores **one case above
 answering from memory**. It is not that it tried less hard: it made 118 tool calls
@@ -314,10 +326,16 @@ That is the finding the third arm exists to isolate: **the gap is the metadata,
 not the tooling.**
 
 ```bash
-npm run eval -- --live                     # Northbeam, against your DataHub
+npm run eval -- --live --runs=3            # Northbeam, live, three passes per case
 npm run eval -- --live --suite=showcase    # DataHub's own catalog
+npm run eval -- --live --runs=3 --models=a,b,c   # …and across several models
 DEMO_MODE=true npm run eval                # no DataHub, no Docker
 ```
+
+`--runs` and `--models` are what turn a score into a measurement. Answers are
+cached per (model, catalog, arm, case, run), so a run that stops against a
+provider's daily cap resumes rather than restarts, and no pass is ever reused as
+another.
 
 Every raw answer sits in the matching `latest.json`, and CI re-scores all three
 arms from those answers on every push. Hallucination and health-trap cases also

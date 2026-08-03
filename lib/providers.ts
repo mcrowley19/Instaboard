@@ -29,10 +29,22 @@ function isRetryable(err: unknown): boolean {
 
 /**
  * A hard spend limit or exhausted daily quota is NOT transient — retrying just
- * burns minutes to arrive at the same 403. Fail fast and say why.
+ * burns minutes to arrive at the same refusal. Fail fast and say why.
+ *
+ * The 429 case matters as much as the 402/403 one and is easy to get wrong,
+ * because a per-day cap and a per-minute cap arrive as the same status code. A
+ * per-minute cap is worth backing off for; a per-day cap is not, and treating it
+ * as transient means every remaining case burns its full retry ladder and then
+ * records an error. That produces a scorecard full of zeros that look like a
+ * model failing when they are a quota resetting at midnight — exactly the way
+ * the first held-out run was ruined. OpenRouter names the daily one in the
+ * refusal, so match on that rather than on the status.
  */
 export function isQuotaExhausted(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err);
+  if (/free-models-per-day|_free_tier_daily|per-day|daily limit|quota exceeded for the day/i.test(message)) {
+    return true;
+  }
   return /\b40[23]\b/.test(message) && /limit exceeded|quota|insufficient|billing|credit/i.test(message);
 }
 
