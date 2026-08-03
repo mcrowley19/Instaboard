@@ -28,7 +28,7 @@ export default function HandoffsPage() {
   const [writtenBack, setWrittenBack] = useState(false);
   // "18 of 19 claims still hold" is a more useful verdict than "stale": it says
   // the runbook is followable apart from one named thing.
-  const [claims, setClaims] = useState<{ total: number; holds: number } | null>(null);
+  const [claims, setClaims] = useState<{ total: number; holds: number; unvalidatable?: number } | null>(null);
   const [proposedEdits, setProposedEdits] = useState(0);
 
   const validate = async (id: string) => {
@@ -128,8 +128,10 @@ export default function HandoffsPage() {
                   {claims && claims.total > 0 && (
                     <span style={{ fontWeight: 400, color: "var(--text-dim)" }}>
                       · {claims.holds}/{claims.total} catalog claims still hold
+                      {(claims.unvalidatable ?? 0) > 0 && `, ${claims.unvalidatable} unvalidatable`}
                     </span>
                   )}
+                  {selected.decay.verdict && <span className="tag">{selected.decay.verdict}</span>}
                   {writtenBack && <span className="tag">✓ flagged in DataHub</span>}
                   {proposedEdits > 0 && (
                     <span className="tag">
@@ -145,10 +147,30 @@ export default function HandoffsPage() {
                   </p>
                 )}
 
-                {selected.decay.findings.length === 0 && (
+                {selected.decay.findings.length === 0 && selected.decay.verdict !== "INSUFFICIENT_DATA" && (
                   <p className="check-detail" style={{ marginTop: 6 }}>
                     Every table, column, and owner this runbook relies on still checks out.
                   </p>
+                )}
+
+                {/* The distinction the whole verdict exists for: nothing drifted is
+                    not the same statement as everything was checked. */}
+                {selected.decay.coverage && selected.decay.coverage.claimsUnvalidatable > 0 && (
+                  <div className="check-detail" style={{ marginTop: 6 }}>
+                    <strong>{selected.decay.coverage.summary}.</strong>{" "}
+                    {selected.decay.coverage.claimsUnvalidatable} of {selected.decay.coverage.claimsTotal} claims could
+                    not be checked either way — the catalog holds no evidence for them, so this run has not shown the
+                    runbook is safe to follow.
+                    <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+                      {selected.decay.coverage.steps
+                        .filter((s) => s.gaps.length > 0)
+                        .map((s) => (
+                          <li key={s.stepIndex}>
+                            Step {s.stepIndex + 1} ({s.stepTitle}) — {s.detail}
+                          </li>
+                        ))}
+                    </ul>
+                  </div>
                 )}
               </div>
             )}

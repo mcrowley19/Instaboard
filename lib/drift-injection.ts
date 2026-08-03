@@ -29,20 +29,50 @@ import type { DecayKind, EntitySnapshot, Handoff } from "./types";
 
 export type DriftKind = "column-dropped" | "column-renamed" | "deprecated" | "owner-removed";
 
+/**
+ * Changes that are real, land on datasets runbooks actually read, and leave every
+ * runbook still correct. A column appears, a description is rewritten, a second
+ * owner joins — the catalog moves, the fingerprint moves with it, and a detector
+ * that treats "the aspect changed" as "the runbook broke" fires on all three.
+ *
+ * Decoys test that the engine ignores changes to things nobody reads. Controls
+ * test the harder thing: that it ignores changes to things people *do* read, when
+ * those changes take nothing away.
+ *
+ * One kind is deliberately absent. "An assertion was added and passes" belongs on
+ * this list, and planting it would leave permanent residue: `deleteAssertion`
+ * refuses the custom assertions `upsertCustomAssertion` creates
+ * (datahub#18817), so the benchmark could not put the catalog back. Everything
+ * here is reversible, and that constraint is worth more than the extra control.
+ */
+export type ControlKind = "column-added" | "description-edited" | "owner-added";
+
+export type PlantKind = DriftKind | ControlKind;
+
 export interface PlannedDrift {
   id: string;
-  kind: DriftKind;
+  kind: PlantKind;
   urn: string;
   /** Column name or owner URN, depending on the kind. */
   subject: string;
   /**
-   * The finding the engine should produce, or `null` for a decoy — a real
-   * catalog change that no runbook leans on, which must produce nothing.
+   * The finding the engine should produce, or `null` for a decoy or a control —
+   * a real catalog change no runbook is invalidated by, which must produce nothing.
    */
   expect: DecayKind | null;
   decoy: boolean;
+  /** An *additive* change on a dataset a runbook reads. See `ControlKind`. */
+  control?: boolean;
   /** Which runbook is supposed to notice, when it isn't a decoy. */
   runbookId?: string;
+  /** For renames: the exact new name, so a proposed correction can be scored. */
+  renameTo?: string;
+  /**
+   * Why this plant is expected to be hard, where it is. Recorded when the plant
+   * is made rather than when it fails, so a miss comes with a structural reason
+   * instead of one written after the fact to fit the result.
+   */
+  hardCase?: string;
   /** Everything needed to put the catalog back. */
   undo: Record<string, unknown>;
   detail: string;
@@ -90,6 +120,23 @@ export interface PlanOptions {
    * must still stay quiet about a column no step mentions.
    */
   sharpDecoys?: number;
+  /**
+   * How many renames should go to a name that shares nothing with the original.
+   * The rename detector scores string similarity, so `net_amount_usd` →
+   * `net_revenue_usd` is easy and `net_amount_usd` → `settled_value` is the case
+   * it cannot solve. Planting at least one means the benchmark reports a real
+   * limit rather than a score assembled from cases the rule was built for.
+   */
+  hardRenames?: number;
+}
+
+/** Names sharing no tokens with anything in this catalog — a rename nobody can infer. */
+const UNRELATED_NAMES = ["settled_value", "reported_figure", "ledger_quantity", "txn_metric"];
+
+function renameTarget(subject: string, hard: boolean, index: number, taken: string[]): string {
+  if (!hard) return `${subject}${RENAMED_SUFFIX}`;
+  const candidates = UNRELATED_NAMES.filter((n) => !taken.includes(n));
+  return candidates[index % Math.max(1, candidates.length)] ?? `${subject}${RENAMED_SUFFIX}`;
 }
 
 /**
@@ -106,7 +153,9 @@ export function planDrifts(
   decoyCandidates: EntitySnapshot[],
   options: PlanOptions = {}
 ): PlannedDrift[] {
-  const { maxPerKind = 6, decoys = 6, sharpDecoys = 2 } = options;
+  const { maxPerKind = 6, decoys = 6, sharpDecoys = 2, hardRenames = 1 } = options;
+  let hardRenamesLeft = hardRenames;
+  const renameTargets: string[] = [];
   const plans: PlannedDrift[] = [];
   const counts: Record<DriftKind, number> = {
     "column-dropped": 0,
@@ -219,6 +268,24 @@ export function planDrifts(
       claimed.add(step.urn);
       counts[chosen]++;
       const subject = options_[chosen]!;
+
+      // Renames alternate between a name a reader could infer and one nobody
+      // could. Both are real renames; only one is solvable by string similarity.
+      let renameTo: string | undefined;
+      let hardCase: string | undefined;
+      if (chosen === "column-renamed") {
+        const hard = hardRenamesLeft > 0;
+        renameTo = renameTarget(subject, hard, renameTargets.length, renameTargets);
+        renameTargets.push(renameTo);
+        if (hard) {
+          hardRenamesLeft--;
+          hardCase =
+            `\`${subject}\` → \`${renameTo}\` shares no tokens with the original. The rename detector scores ` +
+            `token overlap and edit distance, so it cannot connect the two and will decline to propose a ` +
+            `correction. Detection should still catch the column as missing.`;
+        }
+      }
+
       plans.push({
         id: `${chosen}:${step.urn}:${subject}`,
         kind: chosen,
@@ -227,6 +294,8 @@ export function planDrifts(
         expect: EXPECTED[chosen],
         decoy: false,
         runbookId: runbook.id,
+        ...(renameTo ? { renameTo } : {}),
+        ...(hardCase ? { hardCase } : {}),
         undo:
           chosen === "owner-removed"
             ? { mcp: "add_owners", ownershipType: "__system__technical_owner" }
@@ -238,7 +307,9 @@ export function planDrifts(
             ? `Deprecate ${snapshot.name ?? step.urn}, which step ${stepIndex + 1} of "${runbook.title}" points at.`
             : chosen === "owner-removed"
               ? `Remove ${subject} from ${snapshot.name ?? step.urn}, whom step ${stepIndex + 1} of "${runbook.title}" names.`
-              : `${chosen === "column-renamed" ? "Rename" : "Drop"} \`${subject}\` on ${snapshot.name ?? step.urn}, which step ${stepIndex + 1} of "${runbook.title}" selects.`,
+              : chosen === "column-renamed"
+              ? `Rename \`${subject}\` → \`${renameTo}\` on ${snapshot.name ?? step.urn}, which step ${stepIndex + 1} of "${runbook.title}" selects.`
+              : `Drop \`${subject}\` on ${snapshot.name ?? step.urn}, which step ${stepIndex + 1} of "${runbook.title}" selects.`,
       });
     });
   }
@@ -277,6 +348,94 @@ export function planDrifts(
   return plans;
 }
 
+/* ── Controls ─────────────────────────────────────────────────────────── */
+
+/** The column a `column-added` control introduces. Named so it can't collide. */
+export const CONTROL_COLUMN = "instaboard_control_added_col";
+
+/**
+ * Plant additive changes on datasets runbooks read.
+ *
+ * Deliberately *not* subject to the one-change-per-dataset rule the drifts obey.
+ * A control and a drift can share a table without ambiguity because a control is
+ * scored on its own subject: the question is whether any new finding names the
+ * column that appeared, the owner that joined, or the description that changed.
+ * Reserving separate datasets for controls would instead starve the drift plan on
+ * a small catalog, and shrink the thing being measured to buy a tidier rule.
+ */
+export function planControls(
+  runbooks: Handoff[],
+  live: Record<string, EntitySnapshot>,
+  count = 3
+): PlannedDrift[] {
+  const plans: PlannedDrift[] = [];
+  const usable = Object.values(live).filter((s) => s.exists && s.fields.length > 1);
+  if (!usable.length) return plans;
+
+  const readBySomeStep = (urn: string) => runbooks.some((r) => r.steps.some((s) => s.urn === urn));
+  const candidates = usable.filter((s) => readBySomeStep(s.urn));
+  const pool = candidates.length ? candidates : usable;
+
+  /* 1. A column appears. The schema fingerprint moves; nothing was taken away. */
+  const forColumn = pool[0];
+  plans.push({
+    id: `control:column-added:${forColumn.urn}`,
+    kind: "column-added",
+    urn: forColumn.urn,
+    subject: CONTROL_COLUMN,
+    expect: null,
+    decoy: true,
+    control: true,
+    undo: { aspect: "schemaMetadata" },
+    detail:
+      `Add a column \`${CONTROL_COLUMN}\` to ${forColumn.name ?? forColumn.urn}, a dataset a runbook reads. ` +
+      `The schema aspect changes and every existing claim stays true. Must produce nothing.`,
+  });
+
+  /* 2. The description is rewritten. Documentation churn is constant in a real
+        catalog, and a detector that reports it is one nobody keeps switched on. */
+  const forDescription = pool[1 % pool.length];
+  plans.push({
+    id: `control:description-edited:${forDescription.urn}`,
+    kind: "description-edited",
+    urn: forDescription.urn,
+    subject: "description",
+    expect: null,
+    decoy: true,
+    control: true,
+    undo: { aspect: "editableDatasetProperties" },
+    detail:
+      `Rewrite the description of ${forDescription.name ?? forDescription.urn}, a dataset a runbook reads. ` +
+      `Must produce nothing.`,
+  });
+
+  /* 3. A second owner joins. The ownership aspect moves, and the person the
+        runbook names is still there — so the owner claim must still hold. This is
+        the sharpest of the three: it is one field away from real owner drift. */
+  const owners = [...new Set(Object.values(live).flatMap((s) => s.ownerUrns ?? []))].filter((u) =>
+    u.startsWith("urn:li:corpuser:")
+  );
+  const forOwner = pool.find((s) => owners.some((o) => !(s.ownerUrns ?? []).includes(o)));
+  const newOwner = forOwner && owners.find((o) => !(forOwner.ownerUrns ?? []).includes(o));
+  if (forOwner && newOwner) {
+    plans.push({
+      id: `control:owner-added:${forOwner.urn}`,
+      kind: "owner-added",
+      urn: forOwner.urn,
+      subject: newOwner,
+      expect: null,
+      decoy: true,
+      control: true,
+      undo: { mcp: "remove_owners" },
+      detail:
+        `Add ${newOwner} as a second owner of ${forOwner.name ?? forOwner.urn}, without removing the owner a ` +
+        `runbook step names. The ownership aspect changes; the person to contact has not. Must produce nothing.`,
+    });
+  }
+
+  return plans.slice(0, count);
+}
+
 /* ── Injecting and reverting ──────────────────────────────────────────── */
 
 const UPDATE_DEPRECATION = `
@@ -311,13 +470,49 @@ export async function injectDrift(drift: PlannedDrift): Promise<boolean> {
       if (!schema) return false;
       const fields = (schema.fields ?? []) as SchemaField[];
       if (!fields.some((f) => f.fieldPath === drift.subject)) return false;
+      const to = drift.renameTo ?? `${drift.subject}${RENAMED_SUFFIX}`;
       await writeAspect(drift.urn, "schemaMetadata", {
         ...schema,
-        fields: fields.map((f) =>
-          f.fieldPath === drift.subject ? { ...f, fieldPath: `${drift.subject}${RENAMED_SUFFIX}` } : f
-        ),
+        fields: fields.map((f) => (f.fieldPath === drift.subject ? { ...f, fieldPath: to } : f)),
       });
       return true;
+    }
+
+    /* ── Controls: real changes that must produce nothing ─────────────── */
+
+    case "column-added": {
+      const schema = await readAspect(drift.urn, "schemaMetadata");
+      if (!schema) return false;
+      const fields = (schema.fields ?? []) as SchemaField[];
+      if (!fields.length || fields.some((f) => f.fieldPath === drift.subject)) return false;
+      // Clone an existing field so the added column is structurally valid rather
+      // than a hand-built object GMS might reject for an unrelated reason.
+      await writeAspect(drift.urn, "schemaMetadata", {
+        ...schema,
+        fields: [...fields, { ...fields[0], fieldPath: drift.subject, description: "Added by the drift benchmark." }],
+      });
+      return true;
+    }
+
+    case "description-edited": {
+      const props = (await readAspect(drift.urn, "editableDatasetProperties")) ?? {};
+      drift.undo.previous = props.description ?? null;
+      await writeAspect(drift.urn, "editableDatasetProperties", {
+        ...props,
+        description:
+          `${props.description ? `${props.description}\n\n` : ""}Edited by instaboard's drift benchmark as a ` +
+          `control: documentation changed, nothing a runbook depends on did.`,
+      });
+      return true;
+    }
+
+    case "owner-added": {
+      const result = await callDataHubTool("add_owners", {
+        owner_urns: [drift.subject],
+        entity_urns: [drift.urn],
+        ownership_type: "__system__technical_owner",
+      });
+      return !result.isError;
     }
 
     case "deprecated": {
@@ -358,13 +553,43 @@ export async function revertDrift(drift: PlannedDrift): Promise<boolean> {
       const schema = await readAspect(drift.urn, "schemaMetadata");
       if (!schema) return false;
       const fields = (schema.fields ?? []) as SchemaField[];
-      const renamed = `${drift.subject}${RENAMED_SUFFIX}`;
+      const renamed = drift.renameTo ?? `${drift.subject}${RENAMED_SUFFIX}`;
       if (!fields.some((f) => f.fieldPath === renamed)) return true;
       await writeAspect(drift.urn, "schemaMetadata", {
         ...schema,
         fields: fields.map((f) => (f.fieldPath === renamed ? { ...f, fieldPath: drift.subject } : f)),
       });
       return true;
+    }
+
+    case "column-added": {
+      const schema = await readAspect(drift.urn, "schemaMetadata");
+      if (!schema) return false;
+      const fields = (schema.fields ?? []) as SchemaField[];
+      if (!fields.some((f) => f.fieldPath === drift.subject)) return true;
+      await writeAspect(drift.urn, "schemaMetadata", {
+        ...schema,
+        fields: fields.filter((f) => f.fieldPath !== drift.subject),
+      });
+      return true;
+    }
+
+    case "description-edited": {
+      const props = (await readAspect(drift.urn, "editableDatasetProperties")) ?? {};
+      const previous = drift.undo.previous;
+      await writeAspect(drift.urn, "editableDatasetProperties", {
+        ...props,
+        description: typeof previous === "string" ? previous : "",
+      });
+      return true;
+    }
+
+    case "owner-added": {
+      const result = await callDataHubTool("remove_owners", {
+        owner_urns: [drift.subject],
+        entity_urns: [drift.urn],
+      });
+      return !result.isError;
     }
 
     case "deprecated": {

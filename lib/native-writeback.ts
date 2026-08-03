@@ -20,12 +20,21 @@
 
 import { callDataHubTool, isDemoMode } from "./mcp";
 import { datahubGraphQL, gmsReachable } from "./datahub-graphql";
-import { provenanceBlock } from "./structured-state";
+import { otherRunbooksStaleOn, provenanceBlock } from "./structured-state";
 import type { DecayFinding, DecayReport, EntitySnapshot, Handoff } from "./types";
 
 /** Tag ids become the URN suffix, so keep it URN-safe; the display name carries the spaces. */
 export const STALE_RUNBOOK_TAG_ID = "StaleRunbook";
 export const STALE_RUNBOOK_TAG_URN = `urn:li:tag:${STALE_RUNBOOK_TAG_ID}`;
+
+/**
+ * A second tag, for the case the first one cannot express: the runbook did not
+ * drift, but this dataset could not answer the questions it asks. Kept separate
+ * on purpose — merging it into `Stale Runbook` would tell whoever finds it to go
+ * and fix the runbook, when the thing to fix is the catalog entry.
+ */
+export const UNVALIDATED_TAG_ID = "UnvalidatedRunbookStep";
+export const UNVALIDATED_TAG_URN = `urn:li:tag:${UNVALIDATED_TAG_ID}`;
 
 /* ── Incident type mapping ────────────────────────────────────────────── */
 
@@ -47,27 +56,48 @@ const CREATE_TAG = `
   mutation createTag($input: CreateTagInput!) { createTag(input: $input) }
 `;
 
-/**
- * Ensure the `Stale Runbook` tag exists before applying it. DataHub will happily
- * attach a tag URN that has no tag entity behind it, which renders in the UI as
- * a bare URN with no description, which is no use to whoever finds it.
+/*
+ * Removal goes over GraphQL even though the MCP server exposes `remove_tags`,
+ * because both retraction paths need per-dataset outcomes: which tags actually
+ * came off, and which were kept because another runbook is still stale. The batch
+ * tool returns one result for the whole call, so a partial failure would be
+ * indistinguishable from a clean sweep in the receipt. Application still uses
+ * `add_tags` — there, one result for the batch is the honest shape.
  */
-async function ensureStaleRunbookTag(): Promise<void> {
+const REMOVE_TAG = `
+  mutation removeTag($input: TagAssociationInput!) { removeTag(input: $input) }
+`;
+
+const TAG_DEFINITIONS = {
+  [STALE_RUNBOOK_TAG_URN]: {
+    id: STALE_RUNBOOK_TAG_ID,
+    name: "Stale Runbook",
+    description:
+      "A saved runbook or onboarding document that references this dataset no longer matches the catalog. " +
+      "Check the linked validation note before following it.",
+  },
+  [UNVALIDATED_TAG_URN]: {
+    id: UNVALIDATED_TAG_ID,
+    name: "Unvalidated Runbook Step",
+    description:
+      "A saved runbook has a step pointing at this dataset, and the catalog holds too little about it for that " +
+      "step to be checked — no schema, no owners, or no assertions. The runbook has not been shown to be wrong; " +
+      "it has not been shown to be right either. Adding the missing metadata makes it checkable.",
+  },
+} as const;
+
+/**
+ * Ensure a tag exists before applying it. DataHub will happily attach a tag URN
+ * that has no tag entity behind it, which renders in the UI as a bare URN with no
+ * description, which is no use to whoever finds it.
+ */
+async function ensureTag(tagUrn: keyof typeof TAG_DEFINITIONS): Promise<void> {
   const existing = await datahubGraphQL<{ tag: { urn: string } | null }>(
     `query($urn: String!) { tag(urn: $urn) { urn } }`,
-    { urn: STALE_RUNBOOK_TAG_URN }
+    { urn: tagUrn }
   );
   if (existing.data?.tag?.urn) return;
-
-  await datahubGraphQL(CREATE_TAG, {
-    input: {
-      id: STALE_RUNBOOK_TAG_ID,
-      name: "Stale Runbook",
-      description:
-        "A saved runbook or onboarding document that references this dataset no longer matches the catalog. " +
-        "Check the linked validation note before following it.",
-    },
-  });
+  await datahubGraphQL(CREATE_TAG, { input: TAG_DEFINITIONS[tagUrn] });
 }
 
 /* ── Incidents ────────────────────────────────────────────────────────── */
@@ -134,6 +164,141 @@ export async function resolveIncidentsFor(
     }
   }
   return resolved;
+}
+
+/* ── Retraction ───────────────────────────────────────────────────────── */
+
+export interface RetractionReceipt {
+  attempted: boolean;
+  /** Datasets the `Stale Runbook` tag was taken off this run. */
+  untagged: string[];
+  /** Datasets that kept the tag because a different runbook is still stale on them. */
+  kept: { datasetUrn: string; heldBy: string[] }[];
+  errors: string[];
+  at: string;
+}
+
+/**
+ * Take the warning back down when the runbook is repaired.
+ *
+ * A tool that only ever adds state is a tool whose state stops meaning anything.
+ * After a month of nightly sweeps the catalog carries `Stale Runbook` on tables
+ * whose runbooks were fixed in week one, and the tag becomes decoration. So a
+ * clean validation removes what the stale one applied, and the removal is a
+ * receipt in its own right.
+ *
+ * Guarded, because the tag is shared. Two runbooks can reference the same table,
+ * and clearing the tag when one is repaired would silently retract a warning the
+ * other one is still raising. The guard reads the catalog's own status property
+ * rather than local storage, so it holds across machines.
+ */
+export async function retractStaleTags(handoff: Handoff, datasetUrns: string[]): Promise<RetractionReceipt> {
+  const receipt: RetractionReceipt = {
+    attempted: false,
+    untagged: [],
+    kept: [],
+    errors: [],
+    at: new Date().toISOString(),
+  };
+
+  if (isDemoMode()) return receipt;
+  if (!(await gmsReachable())) return receipt;
+  receipt.attempted = true;
+
+  for (const datasetUrn of datasetUrns) {
+    try {
+      const heldBy = await otherRunbooksStaleOn(datasetUrn, handoff.id);
+      if (heldBy.length) {
+        receipt.kept.push({ datasetUrn, heldBy });
+        continue;
+      }
+      const removed = await datahubGraphQL<{ removeTag: boolean }>(REMOVE_TAG, {
+        input: { tagUrn: STALE_RUNBOOK_TAG_URN, resourceUrn: datasetUrn },
+      });
+      if (removed.errors?.length) {
+        receipt.errors.push(`removeTag(${datasetUrn}): ${removed.errors.map((e) => e.message).join("; ")}`);
+      } else {
+        receipt.untagged.push(datasetUrn);
+      }
+    } catch (err) {
+      receipt.errors.push(`removeTag(${datasetUrn}): ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  return receipt;
+}
+
+/* ── Coverage ─────────────────────────────────────────────────────────── */
+
+export interface CoverageTagReceipt {
+  attempted: boolean;
+  /** Datasets that gained the `Unvalidated Runbook Step` tag. */
+  tagged: string[];
+  /** Datasets that lost it, because the missing metadata has since been added. */
+  untagged: string[];
+  errors: string[];
+  at: string;
+}
+
+/**
+ * Tag the datasets that could not answer, and untag the ones that now can.
+ *
+ * This runs on every sweep, drift or no drift, because the case it exists for is
+ * precisely the clean-looking run: a step pointing at a dataset with no schema,
+ * no owners or no monitors produces no findings and no tag, and reads as fine.
+ * Applied and retracted symmetrically, so somebody adding an assertion to a table
+ * sees the tag disappear on the next sweep — which is the feedback that makes
+ * filling the gap worth doing.
+ */
+export async function writeBackCoverage(handoff: Handoff, report: DecayReport): Promise<CoverageTagReceipt> {
+  const receipt: CoverageTagReceipt = {
+    attempted: false,
+    tagged: [],
+    untagged: [],
+    errors: [],
+    at: new Date().toISOString(),
+  };
+
+  const coverage = report.coverage;
+  if (!coverage) return receipt;
+  if (isDemoMode()) return receipt;
+  if (!(await gmsReachable())) return receipt;
+  receipt.attempted = true;
+
+  const withGaps = new Set(coverage.gapUrns);
+  const covered = coverage.steps
+    .filter((s) => s.urn && s.gaps.length === 0)
+    .map((s) => s.urn as string)
+    .filter((urn) => !withGaps.has(urn));
+
+  if (withGaps.size) {
+    try {
+      await ensureTag(UNVALIDATED_TAG_URN);
+      const result = await callDataHubTool("add_tags", {
+        tag_urns: [UNVALIDATED_TAG_URN],
+        entity_urns: [...withGaps],
+      });
+      if (result.isError) receipt.errors.push(`add_tags(coverage): ${result.content.slice(0, 200)}`);
+      else receipt.tagged = [...withGaps];
+    } catch (err) {
+      receipt.errors.push(`add_tags(coverage): ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  for (const datasetUrn of covered) {
+    const removed = await datahubGraphQL<{ removeTag: boolean }>(REMOVE_TAG, {
+      input: { tagUrn: UNVALIDATED_TAG_URN, resourceUrn: datasetUrn },
+    });
+    // A dataset that never carried the tag is the common case; DataHub returns
+    // success for that, and an error here is worth surfacing rather than hiding.
+    if (removed.errors?.length) {
+      receipt.errors.push(`removeTag(coverage, ${datasetUrn}): ${removed.errors.map((e) => e.message).join("; ")}`);
+    } else {
+      receipt.untagged.push(datasetUrn);
+    }
+  }
+
+  return receipt;
 }
 
 /**
@@ -244,7 +409,7 @@ export async function writeBackNative(
 
   /* Tag every drifted dataset. Tagging is cheap and makes staleness searchable. */
   try {
-    await ensureStaleRunbookTag();
+    await ensureTag(STALE_RUNBOOK_TAG_URN);
     const tagResult = await callDataHubTool("add_tags", {
       tag_urns: [STALE_RUNBOOK_TAG_URN],
       entity_urns: driftedUrns,

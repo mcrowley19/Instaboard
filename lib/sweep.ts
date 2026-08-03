@@ -19,12 +19,29 @@
  *   3. **native primitives** — a `Stale Runbook` tag on every drifted dataset and
  *      a real Incident, assigned to whoever owns the dataset today, on any dataset
  *      where a step would now fail;
- *   4. a **proposed correction**, derived from the catalog and left for a human to
+ *   4. **coverage** — the figure for how much of the runbook could be checked at
+ *      all, as a structured property, plus an `Unvalidated Runbook Step` tag on
+ *      any dataset the catalog held too little about to answer for;
+ *   5. a **proposed correction**, derived from the catalog and left for a human to
  *      approve.
+ *
+ * And all of it comes back off. When a runbook validates clean the incidents are
+ * resolved, the assertion goes back to passing and the stale tag is retracted —
+ * guarded, because the tag is shared with any other runbook that reads the same
+ * dataset. A sweep that only ever adds state ends up as a catalog full of warnings
+ * about problems fixed months ago, which is the same as no warnings at all.
  */
 
 import { detectDecayWithState, writeBackDecay, type WriteBackReceipt } from "./decay";
-import { resolveIncidentsFor, writeBackNative, type NativeWriteBackReceipt } from "./native-writeback";
+import {
+  resolveIncidentsFor,
+  retractStaleTags,
+  writeBackCoverage,
+  writeBackNative,
+  type CoverageTagReceipt,
+  type NativeWriteBackReceipt,
+  type RetractionReceipt,
+} from "./native-writeback";
 import { writeStructuredState, type StructuredStateReceipt } from "./structured-state";
 import { proposeFix, type RunbookProposal } from "./remediate";
 import { listHandoffs, saveHandoff } from "./handoff-store";
@@ -34,11 +51,15 @@ export interface SweepRow {
   id: string;
   title: string;
   severity: DecayReport["severity"];
+  /** PASS / FINDING / INSUFFICIENT_DATA — see `RunbookVerdict`. */
+  verdict: DecayReport["verdict"];
+  /** What this run was able to check, and what the catalog could not answer. */
+  coverage: DecayReport["coverage"];
   findings: DecayFinding[];
   stepsChecked: number;
   entitiesChecked: number;
   /** How many of the runbook's individual catalog claims still hold. */
-  claims: { total: number; holds: number; broken: number; unverified: number };
+  claims: { total: number; holds: number; broken: number; unvalidatable: number; unverified: number };
   /** The drift-note Document write-back. */
   receipt: WriteBackReceipt | null;
   /** The native write-back: incidents raised and assigned, datasets tagged. */
@@ -49,6 +70,10 @@ export interface SweepRow {
   proposal: RunbookProposal | null;
   /** Incidents this tool had raised for the runbook and has now closed. */
   resolved: { urn: string; datasetUrn: string }[];
+  /** Stale Runbook tags taken back down because the runbook is repaired. */
+  retracted: RetractionReceipt | null;
+  /** The unvalidatable-step tag, applied and retracted with the catalog's gaps. */
+  coverageTags: CoverageTagReceipt | null;
 }
 
 export interface SweepResult {
@@ -57,6 +82,8 @@ export interface SweepResult {
   checked: number;
   drifted: number;
   broken: number;
+  /** Runbooks that drifted nowhere but could not be fully checked either. */
+  insufficient: number;
 }
 
 export interface SweepOptions {
@@ -91,14 +118,21 @@ export async function validateRunbook(
   // and still holds" is what makes the absence of a warning mean something.
   const structured = await writeStructuredState(handoff, report);
 
-  // A detector that only ever opens incidents becomes noise. When the runbook
-  // validates clean again, close the ones it opened.
+  // Coverage is written on every run too, and for the same reason: the run this
+  // matters most for is the one that found nothing.
+  const coverageTags = await writeBackCoverage(handoff, report);
+
+  // A detector that only ever opens incidents — or only ever applies tags —
+  // becomes noise. When the runbook validates clean again, close what it opened
+  // and take back what it applied.
+  const touchedUrns = [...new Set(handoff.steps.map((s) => s.urn).filter((u): u is string => Boolean(u)))];
   let resolved: { urn: string; datasetUrn: string }[] = [];
+  let retracted: RetractionReceipt | null = null;
   if (report.severity === "ok" && structured.attempted) {
-    resolved = await resolveIncidentsFor(
-      handoff,
-      [...new Set(handoff.steps.map((s) => s.urn).filter((u): u is string => Boolean(u)))]
-    );
+    resolved = await resolveIncidentsFor(handoff, touchedUrns);
+    // After the status property is written, so the guard reads this run's own
+    // "validated" rather than the previous run's "stale".
+    retracted = await retractStaleTags(handoff, touchedUrns);
   }
 
   if (report.severity !== "ok") {
@@ -122,6 +156,8 @@ export async function validateRunbook(
       id: handoff.id,
       title: handoff.title,
       severity: report.severity,
+      verdict: report.verdict,
+      coverage: report.coverage,
       findings: report.findings,
       stepsChecked: report.stepsChecked,
       entitiesChecked: report.entitiesChecked,
@@ -129,6 +165,7 @@ export async function validateRunbook(
         total: verdicts.length,
         holds: verdicts.filter((v) => v.status === "holds").length,
         broken: verdicts.filter((v) => v.status === "broken").length,
+        unvalidatable: verdicts.filter((v) => v.status === "unvalidatable").length,
         unverified: verdicts.filter((v) => v.status === "unverified").length,
       },
       receipt,
@@ -136,6 +173,8 @@ export async function validateRunbook(
       structured,
       proposal,
       resolved,
+      retracted,
+      coverageTags,
     },
   };
 }
@@ -155,5 +194,6 @@ export async function sweepRunbooks(options: SweepOptions | string = {}): Promis
     checked: rows.length,
     drifted: rows.filter((r) => r.severity !== "ok").length,
     broken: rows.filter((r) => r.severity === "broken").length,
+    insufficient: rows.filter((r) => r.verdict === "INSUFFICIENT_DATA").length,
   };
 }

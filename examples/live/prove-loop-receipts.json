@@ -1,6 +1,6 @@
 {
-  "startedAt": "2026-08-02T21:02:06.045Z",
-  "finishedAt": "2026-08-02T21:03:13.696Z",
+  "startedAt": "2026-08-02T23:53:01.958Z",
+  "finishedAt": "2026-08-02T23:54:39.089Z",
   "gms": "http://localhost:8080",
   "catalog": "the sample catalog this repo seeds with scripts/seed_datahub.py",
   "catalogProfile": "northbeam",
@@ -57,7 +57,7 @@
       "phase": "validate",
       "what": "every catalog claim holds",
       "passed": true,
-      "detail": "17/17 claims hold"
+      "detail": "16/17 claims hold"
     },
     {
       "phase": "validate",
@@ -70,6 +70,24 @@
       "what": "validated-against pins are written to the catalog",
       "passed": true,
       "detail": "5 pins, 7 pins, 5 pins"
+    },
+    {
+      "phase": "validate",
+      "what": "the run reports how much of the runbook it could check",
+      "passed": true,
+      "detail": "2/3 steps validated, 1 with catalog gaps (health)"
+    },
+    {
+      "phase": "validate",
+      "what": "a clean run with unvalidatable claims is not reported as a pass",
+      "passed": true,
+      "detail": "verdict INSUFFICIENT_DATA, 1/17 claims unvalidatable"
+    },
+    {
+      "phase": "validate",
+      "what": "the coverage figure is written to the catalog",
+      "passed": true,
+      "detail": "prove-monthly-revenue-close: 1/1 steps validated"
     },
     {
       "phase": "break",
@@ -111,13 +129,13 @@
       "phase": "revalidate",
       "what": "broken claims moved the aspect they were pinned to",
       "passed": true,
-      "detail": "3 of 17 claims broken, 14 still hold"
+      "detail": "3 of 17 claims broken, 13 still hold"
     },
     {
       "phase": "write-back",
       "what": "a drift note is in the catalog",
       "passed": true,
-      "detail": "urn:li:document:shared-a59fc529-25ab-4942-8849-964354752d48"
+      "detail": "urn:li:document:shared-1796d9d7-50c5-4fb0-bb0e-ba64e5713362"
     },
     {
       "phase": "write-back",
@@ -174,6 +192,12 @@
       "detail": "Priya Patel"
     },
     {
+      "phase": "write-back",
+      "what": "the Stale Runbook tag reads back off the dataset in DataHub",
+      "passed": true,
+      "detail": "2/2 carry it"
+    },
+    {
       "phase": "restore",
       "what": "no drift reported",
       "passed": true,
@@ -183,7 +207,7 @@
       "phase": "restore",
       "what": "every catalog claim holds",
       "passed": true,
-      "detail": "17/17 claims hold"
+      "detail": "16/17 claims hold"
     },
     {
       "phase": "restore",
@@ -196,30 +220,164 @@
       "what": "validated-against pins are written to the catalog",
       "passed": true,
       "detail": "5 pins, 7 pins, 5 pins"
+    },
+    {
+      "phase": "restore",
+      "what": "the run reports how much of the runbook it could check",
+      "passed": true,
+      "detail": "2/3 steps validated, 1 with catalog gaps (health)"
+    },
+    {
+      "phase": "restore",
+      "what": "a clean run with unvalidatable claims is not reported as a pass",
+      "passed": true,
+      "detail": "verdict INSUFFICIENT_DATA, 1/17 claims unvalidatable"
+    },
+    {
+      "phase": "restore",
+      "what": "the coverage figure is written to the catalog",
+      "passed": true,
+      "detail": "prove-monthly-revenue-close: 1/1 steps validated"
+    },
+    {
+      "phase": "restore",
+      "what": "the sweep itself closes the incidents it opened",
+      "passed": true,
+      "detail": "2 incident(s) resolved by the sweep"
+    },
+    {
+      "phase": "restore",
+      "what": "the Stale Runbook tag is retracted from every dataset it was applied to",
+      "passed": true,
+      "detail": "2/2 cleared"
+    },
+    {
+      "phase": "restore",
+      "what": "the retraction is recorded as a receipt, not just a side effect",
+      "passed": true,
+      "detail": "3 untagged, 0 kept for other runbooks"
     }
   ],
   "summary": {
-    "total": 29,
-    "passed": 29,
+    "total": 39,
+    "passed": 39,
     "failed": 0
   },
   "validations": {
     "before": {
       "severity": "ok",
+      "verdict": "INSUFFICIENT_DATA",
+      "coverage": {
+        "stepsTotal": 3,
+        "stepsValidated": 2,
+        "stepsPartial": 1,
+        "stepsUnvalidatable": 0,
+        "claimsTotal": 17,
+        "claimsChecked": 16,
+        "claimsUnvalidatable": 1,
+        "summary": "2/3 steps validated, 1 with catalog gaps (health)",
+        "steps": [
+          {
+            "stepIndex": 0,
+            "stepTitle": "Check payment health before trusting anything downstream",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+            "state": "validated",
+            "gaps": [],
+            "claimsTotal": 5,
+            "claimsUnvalidatable": 0,
+            "detail": "Every claim this step makes was checked against payment_health_daily."
+          },
+          {
+            "stepIndex": 1,
+            "stepTitle": "Pull net revenue for the month",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+            "state": "validated",
+            "gaps": [],
+            "claimsTotal": 7,
+            "claimsUnvalidatable": 0,
+            "detail": "Every claim this step makes was checked against fct_revenue."
+          },
+          {
+            "stepIndex": 2,
+            "stepTitle": "Reconcile against the MRR rollup",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+            "state": "partial",
+            "gaps": [
+              "health"
+            ],
+            "claimsTotal": 5,
+            "claimsUnvalidatable": 1,
+            "detail": "mrr_monthly: it has no assertions or incidents, so nothing is monitoring it."
+          }
+        ],
+        "gapUrns": [
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)"
+        ]
+      },
       "claims": {
         "total": 17,
-        "holds": 17,
+        "holds": 16,
         "broken": 0,
+        "unvalidatable": 1,
         "unverified": 0
       },
       "findings": []
     },
     "after": {
       "severity": "broken",
+      "verdict": "FINDING",
+      "coverage": {
+        "stepsTotal": 3,
+        "stepsValidated": 2,
+        "stepsPartial": 1,
+        "stepsUnvalidatable": 0,
+        "claimsTotal": 17,
+        "claimsChecked": 16,
+        "claimsUnvalidatable": 1,
+        "summary": "2/3 steps validated, 1 with catalog gaps (health)",
+        "steps": [
+          {
+            "stepIndex": 0,
+            "stepTitle": "Check payment health before trusting anything downstream",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+            "state": "validated",
+            "gaps": [],
+            "claimsTotal": 5,
+            "claimsUnvalidatable": 0,
+            "detail": "Every claim this step makes was checked against payment_health_daily."
+          },
+          {
+            "stepIndex": 1,
+            "stepTitle": "Pull net revenue for the month",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+            "state": "validated",
+            "gaps": [],
+            "claimsTotal": 7,
+            "claimsUnvalidatable": 0,
+            "detail": "Every claim this step makes was checked against fct_revenue."
+          },
+          {
+            "stepIndex": 2,
+            "stepTitle": "Reconcile against the MRR rollup",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+            "state": "partial",
+            "gaps": [
+              "health"
+            ],
+            "claimsTotal": 5,
+            "claimsUnvalidatable": 1,
+            "detail": "mrr_monthly: it has no assertions or incidents, so nothing is monitoring it."
+          }
+        ],
+        "gapUrns": [
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)"
+        ]
+      },
       "claims": {
         "total": 17,
-        "holds": 14,
+        "holds": 13,
         "broken": 3,
+        "unvalidatable": 1,
         "unverified": 0
       },
       "findings": [
@@ -254,7 +412,7 @@
           "remedy": "Point this step at the replacement dataset named in DataHub."
         }
       ],
-      "documentUrn": "urn:li:document:shared-a59fc529-25ab-4942-8849-964354752d48",
+      "documentUrn": "urn:li:document:shared-1796d9d7-50c5-4fb0-bb0e-ba64e5713362",
       "assertions": [
         {
           "urn": "urn:li:assertion:instaboard-f80ab7b3a1306fa23998",
@@ -277,24 +435,27 @@
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
           "status": "prove-monthly-revenue-close: validated (checked 2026-08-02)",
           "driftValues": 0,
-          "pins": 5
+          "pins": 5,
+          "coverage": "prove-monthly-revenue-close: 1/1 steps validated"
         },
         {
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
           "status": "prove-monthly-revenue-close: stale (checked 2026-08-02)",
           "driftValues": 2,
-          "pins": 7
+          "pins": 7,
+          "coverage": "prove-monthly-revenue-close: 1/1 steps validated"
         },
         {
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
           "status": "prove-monthly-revenue-close: stale (checked 2026-08-02)",
           "driftValues": 1,
-          "pins": 5
+          "pins": 5,
+          "coverage": "prove-monthly-revenue-close: 0/1 steps validated, catalog gaps: health"
         }
       ],
       "incidents": [
         {
-          "urn": "urn:li:incident:e2eaa122-30ec-413b-92bd-700fda58f1f1",
+          "urn": "urn:li:incident:23eed4fb-1a92-4d91-95bd-331d0b8407cd",
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
           "reused": false,
           "assignees": [
@@ -302,7 +463,7 @@
           ]
         },
         {
-          "urn": "urn:li:incident:540f17be-e44f-4eeb-9375-02b6299af040",
+          "urn": "urn:li:incident:e0ca8915-0293-4e34-98e9-95cf08ba7cab",
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
           "reused": false,
           "assignees": [
@@ -367,12 +528,106 @@
     },
     "afterRestore": {
       "severity": "ok",
+      "verdict": "INSUFFICIENT_DATA",
+      "coverage": {
+        "stepsTotal": 3,
+        "stepsValidated": 2,
+        "stepsPartial": 1,
+        "stepsUnvalidatable": 0,
+        "claimsTotal": 17,
+        "claimsChecked": 16,
+        "claimsUnvalidatable": 1,
+        "summary": "2/3 steps validated, 1 with catalog gaps (health)",
+        "steps": [
+          {
+            "stepIndex": 0,
+            "stepTitle": "Check payment health before trusting anything downstream",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+            "state": "validated",
+            "gaps": [],
+            "claimsTotal": 5,
+            "claimsUnvalidatable": 0,
+            "detail": "Every claim this step makes was checked against payment_health_daily."
+          },
+          {
+            "stepIndex": 1,
+            "stepTitle": "Pull net revenue for the month",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+            "state": "validated",
+            "gaps": [],
+            "claimsTotal": 7,
+            "claimsUnvalidatable": 0,
+            "detail": "Every claim this step makes was checked against fct_revenue."
+          },
+          {
+            "stepIndex": 2,
+            "stepTitle": "Reconcile against the MRR rollup",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+            "state": "partial",
+            "gaps": [
+              "health"
+            ],
+            "claimsTotal": 5,
+            "claimsUnvalidatable": 1,
+            "detail": "mrr_monthly: it has no assertions or incidents, so nothing is monitoring it."
+          }
+        ],
+        "gapUrns": [
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)"
+        ]
+      },
       "claims": {
         "total": 17,
-        "holds": 17,
+        "holds": 16,
         "broken": 0,
+        "unvalidatable": 1,
         "unverified": 0
-      }
+      },
+      "retracted": {
+        "attempted": true,
+        "untagged": [
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)"
+        ],
+        "kept": [],
+        "errors": [],
+        "at": "2026-08-02T23:54:33.460Z"
+      },
+      "resolvedIncidents": [
+        {
+          "urn": "urn:li:incident:23eed4fb-1a92-4d91-95bd-331d0b8407cd",
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)"
+        },
+        {
+          "urn": "urn:li:incident:e0ca8915-0293-4e34-98e9-95cf08ba7cab",
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)"
+        }
+      ]
+    }
+  },
+  "tagReadBack": {
+    "tagsWhileBroken": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)": [
+        "urn:li:tag:Tier1",
+        "urn:li:tag:Finance",
+        "urn:li:tag:StaleRunbook"
+      ],
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)": [
+        "urn:li:tag:Tier1",
+        "urn:li:tag:Finance",
+        "urn:li:tag:StaleRunbook"
+      ]
+    },
+    "tagsAfterRestore": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)": [
+        "urn:li:tag:Tier1",
+        "urn:li:tag:Finance"
+      ],
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)": [
+        "urn:li:tag:Tier1",
+        "urn:li:tag:Finance"
+      ]
     }
   }
 }

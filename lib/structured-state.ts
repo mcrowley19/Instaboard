@@ -55,6 +55,17 @@ const PROPERTIES = [
     settings: { showInSearchFilters: true, showInAssetSummary: true },
   },
   {
+    id: "instaboard_revalidation_coverage",
+    displayName: "Runbook revalidation coverage",
+    description:
+      "How much of a saved runbook the last sweep was actually able to check against this catalog, formatted " +
+      "'<runbook-id>: N/M steps validated[, K with catalog gaps (schema, ownership, health)]'. A dataset with no " +
+      "schema, no owners or no assertions cannot answer the questions a runbook asks of it, and a run that " +
+      "reports no drift over those steps has not established that the runbook is safe to follow. Tracked " +
+      "separately from status so 'nothing drifted' and 'nothing could be checked' can never share a headline.",
+    settings: { showAsAssetBadge: false, showInSearchFilters: true, showInAssetSummary: true },
+  },
+  {
     id: "instaboard_runbook_validated_against",
     displayName: "Runbook validated against",
     description:
@@ -256,7 +267,7 @@ export interface StructuredStateReceipt {
   /** Assertions upserted this run: one per (runbook, dataset). */
   assertions: { urn: string; datasetUrn: string; result: "FAILURE" | "SUCCESS" }[];
   /** Datasets whose structured properties now carry this runbook's state. */
-  properties: { datasetUrn: string; status: string; driftValues: number; pins: number }[];
+  properties: { datasetUrn: string; status: string; driftValues: number; pins: number; coverage?: string }[];
   errors: string[];
   at: string;
 }
@@ -341,6 +352,15 @@ export async function writeStructuredState(handoff: Handoff, report: DecayReport
     /* 2. Structured properties: status, the drift itself, and the pins. */
     try {
       const status = `${handoff.id}: ${stale ? "stale" : "validated"} (checked ${day})`;
+      // Per-dataset coverage, not the whole-runbook figure: the person reading
+      // this dataset's page wants to know what could be checked *here*.
+      const stepsHere = (report.coverage?.steps ?? []).filter((s) => s.urn === datasetUrn);
+      const validatedHere = stepsHere.filter((s) => s.state === "validated").length;
+      const gapsHere = [...new Set(stepsHere.flatMap((s) => s.gaps))];
+      const coverage = stepsHere.length
+        ? `${handoff.id}: ${validatedHere}/${stepsHere.length} steps validated` +
+          (gapsHere.length ? `, catalog gaps: ${gapsHere.join(", ")}` : "")
+        : null;
       const drift = findings.map((f) => `${handoff.id} step ${f.stepIndex + 1} ${f.kind}: ${f.detail}`);
       const pins = (claimsByUrn.get(datasetUrn) ?? []).map((c) => {
         const verdict = report.verdicts?.find((v) => v.claimId === c.id);
@@ -371,6 +391,14 @@ export async function writeStructuredState(handoff: Handoff, report: DecayReport
               })),
             },
             {
+              structuredPropertyUrn: propertyUrn("instaboard_revalidation_coverage"),
+              values: mergeValues(
+                current.instaboard_revalidation_coverage,
+                handoff.id,
+                coverage ? [coverage] : []
+              ).map((stringValue) => ({ stringValue })),
+            },
+            {
               structuredPropertyUrn: propertyUrn("instaboard_runbook_validated_against"),
               values: mergeValues(current.instaboard_runbook_validated_against, handoff.id, pins).map((stringValue) => ({
                 stringValue,
@@ -383,7 +411,13 @@ export async function writeStructuredState(handoff: Handoff, report: DecayReport
       if (written.errors?.length) {
         receipt.errors.push(`upsertStructuredProperties(${datasetUrn}): ${written.errors.map((e) => e.message).join("; ")}`);
       } else {
-        receipt.properties.push({ datasetUrn, status, driftValues: drift.length, pins: pins.length });
+        receipt.properties.push({
+          datasetUrn,
+          status,
+          driftValues: drift.length,
+          pins: pins.length,
+          ...(coverage ? { coverage } : {}),
+        });
       }
     } catch (err) {
       receipt.errors.push(`properties(${datasetUrn}): ${err instanceof Error ? err.message : String(err)}`);
@@ -391,6 +425,22 @@ export async function writeStructuredState(handoff: Handoff, report: DecayReport
   }
 
   return receipt;
+}
+
+/**
+ * Which *other* runbooks currently report themselves stale on this dataset.
+ *
+ * Read from the catalog rather than from local storage, because the tag being
+ * guarded is shared: two runbooks can reference the same table, and retracting
+ * the `Stale Runbook` tag because one of them was repaired would quietly clear a
+ * warning the other one is still raising. The status property is written by every
+ * sweep on every machine, so the catalog knows this even when this process does not.
+ */
+export async function otherRunbooksStaleOn(datasetUrn: string, excludingRunbookId: string): Promise<string[]> {
+  const values = (await readValues(datasetUrn)).instaboard_runbook_status;
+  return values
+    .filter((v) => !v.startsWith(`${excludingRunbookId}:`) && /:\s*stale\b/.test(v))
+    .map((v) => v.split(":")[0].trim());
 }
 
 /** Human-readable provenance block for an incident body or a PR description. */

@@ -27,7 +27,19 @@
  */
 
 import { createHash } from "node:crypto";
-import type { AspectName, ClaimPin, ClaimVerdict, EntitySnapshot, EntityVersion, HandoffStep, RunbookClaim } from "./types";
+import type {
+  AspectName,
+  ClaimPin,
+  ClaimVerdict,
+  CoverageDimension,
+  EntitySnapshot,
+  EntityVersion,
+  HandoffStep,
+  RevalidationCoverage,
+  RunbookClaim,
+  RunbookVerdict,
+  StepCoverage,
+} from "./types";
 
 /* ── Fingerprinting ───────────────────────────────────────────────────── */
 
@@ -189,6 +201,33 @@ export function extractClaims(
 
 /* ── Claim verification ───────────────────────────────────────────────── */
 
+/**
+ * Can this catalog answer "is this dataset healthy?" at all?
+ *
+ * DataHub's health signal is assertions plus incidents. On a dataset with
+ * neither defined, `0 failing assertions` is true and means nothing — nobody is
+ * checking, so nothing can fail. Treating that as a claim that holds is how a
+ * runbook gets a clean bill of health from a catalog that was never asked.
+ *
+ * An open incident counts as observability on its own: somebody is watching.
+ */
+export function healthObservable(snapshot: EntitySnapshot): boolean {
+  if (snapshot.openIncidents > 0 || snapshot.failingAssertions > 0) return true;
+  return (snapshot.assertionCount ?? 0) > 0;
+}
+
+/**
+ * Can this catalog answer "does this column still exist?"
+ *
+ * An entity DataHub knows about but holds no schema for — a common state for
+ * datasets ingested without a schema crawler — cannot answer. Before this check,
+ * an empty live field list read as "every column the runbook names has been
+ * dropped", which is the loudest possible false positive.
+ */
+export function schemaObservable(snapshot: EntitySnapshot): boolean {
+  return snapshot.fields.length > 0;
+}
+
 function ownerStillListed(display: string, owners: string[]): boolean {
   // Live DataHub renders owners as usernames ("mike.rodriguez"), snapshots may
   // hold display names ("Mike Rodriguez") — compare normalized.
@@ -224,6 +263,7 @@ export function verifyClaims(claims: RunbookClaim[], live: Record<string, Entity
     const base = { claimId: claim.id, checkedAgainst, aspectUnchanged };
     const held = (detail: string) => ({ ...base, status: "holds" as const, detail });
     const broke = (detail: string) => ({ ...base, status: "broken" as const, detail });
+    const cannotTell = (detail: string) => ({ ...base, status: "unvalidatable" as const, detail });
 
     if (!now.exists) {
       return broke(`\`${claim.urn}\` is no longer in the catalog.`);
@@ -233,6 +273,12 @@ export function verifyClaims(claims: RunbookClaim[], live: Record<string, Entity
       case "entity-exists":
         return held(`Still in the catalog as ${now.name ?? claim.urn}.`);
       case "column-exists":
+        if (!schemaObservable(now)) {
+          return cannotTell(
+            `${now.name ?? claim.urn} is in the catalog but carries no schema, so whether ` +
+              `\`${claim.subject}\` still exists could not be checked.`
+          );
+        }
         return now.fields.includes(claim.subject)
           ? held(`Column \`${claim.subject}\` is still on the schema.`)
           : broke(`Column \`${claim.subject}\` is gone from ${now.name ?? claim.urn}.`);
@@ -241,6 +287,12 @@ export function verifyClaims(claims: RunbookClaim[], live: Record<string, Entity
           ? broke(`${now.name ?? claim.urn} is now deprecated.`)
           : held(`${now.name ?? claim.urn} is still live.`);
       case "healthy":
+        if (!healthObservable(now)) {
+          return cannotTell(
+            `${now.name ?? claim.urn} has no assertions and no incidents defined on it, so "healthy" ` +
+              `cannot be told apart from "unmonitored". Nothing is checking this table.`
+          );
+        }
         return now.openIncidents > 0 || now.failingAssertions > 0
           ? broke(
               `${now.name ?? claim.urn} now has ${now.openIncidents} open incident(s) and ` +
@@ -258,6 +310,111 @@ export function verifyClaims(claims: RunbookClaim[], live: Record<string, Entity
   });
 }
 
+/* ── Coverage ─────────────────────────────────────────────────────────── */
+
+/**
+ * How much of this runbook the run was actually able to check.
+ *
+ * The failure mode this exists to close: a sweep reports "0 drift" and a reader
+ * takes it as "the runbook is fine", when what happened is that three of its
+ * steps point at datasets the catalog holds no schema, no owners and no monitors
+ * for. Nothing drifted because nothing could be looked at. Coverage is tracked as
+ * its own figure so those two outcomes can never share a headline.
+ *
+ * A gap is a property of the *catalog*, not of the runbook — it is the thing to
+ * go and fix, and naming the dimension says how.
+ */
+export function coverageOf(
+  steps: HandoffStep[],
+  live: Record<string, EntitySnapshot>,
+  claims: RunbookClaim[],
+  verdicts: ClaimVerdict[]
+): RevalidationCoverage {
+  const verdictById = new Map(verdicts.map((v) => [v.claimId, v]));
+  const stepRows: StepCoverage[] = [];
+
+  steps.forEach((step, stepIndex) => {
+    if (!step.urn) return;
+    const now = live[step.urn];
+    const mine = claims.filter((c) => c.stepIndex === stepIndex);
+    const unvalidatable = mine.filter((c) => verdictById.get(c.id)?.status === "unvalidatable").length;
+    const where = { stepIndex, stepTitle: step.title, urn: step.urn };
+
+    if (!now || !now.exists) {
+      // Either the entity is gone (a finding, reported separately) or the read
+      // failed. Both leave this step unchecked, so neither may count as covered.
+      stepRows.push({
+        ...where,
+        state: "unvalidatable",
+        gaps: ["schema", "ownership", "health"],
+        claimsTotal: mine.length,
+        claimsUnvalidatable: mine.length,
+        detail: "The entity could not be read from the catalog, so no claim about it was re-checked.",
+      });
+      return;
+    }
+
+    const gaps: CoverageDimension[] = [];
+    if (!schemaObservable(now)) gaps.push("schema");
+    if (now.owners.length === 0) gaps.push("ownership");
+    if (!healthObservable(now)) gaps.push("health");
+
+    const reasons: Record<CoverageDimension, string> = {
+      schema: "the catalog holds no schema for it",
+      ownership: "it has no owners, so a finding could not be routed to anybody",
+      health: "it has no assertions or incidents, so nothing is monitoring it",
+    };
+
+    stepRows.push({
+      ...where,
+      state: gaps.length === 0 ? "validated" : "partial",
+      gaps,
+      claimsTotal: mine.length,
+      claimsUnvalidatable: unvalidatable,
+      detail:
+        gaps.length === 0
+          ? `Every claim this step makes was checked against ${now.name ?? step.urn}.`
+          : `${now.name ?? step.urn}: ${gaps.map((g) => reasons[g]).join("; ")}.`,
+    });
+  });
+
+  const stepsValidated = stepRows.filter((s) => s.state === "validated").length;
+  const stepsPartial = stepRows.filter((s) => s.state === "partial").length;
+  const stepsUnvalidatable = stepRows.filter((s) => s.state === "unvalidatable").length;
+  const claimsUnvalidatable = verdicts.filter((v) => v.status === "unvalidatable").length;
+
+  const gapUrns = [...new Set(stepRows.filter((s) => s.gaps.length > 0 && s.urn).map((s) => s.urn as string))];
+  const uncovered = stepsPartial + stepsUnvalidatable;
+  const summary =
+    `${stepsValidated}/${stepRows.length} steps validated` +
+    (uncovered
+      ? `, ${uncovered} with catalog gaps (${[...new Set(stepRows.flatMap((s) => s.gaps))].join(", ")})`
+      : "");
+
+  return {
+    stepsTotal: stepRows.length,
+    stepsValidated,
+    stepsPartial,
+    stepsUnvalidatable,
+    claimsTotal: verdicts.length,
+    claimsChecked: verdicts.filter((v) => v.status === "holds" || v.status === "broken").length,
+    claimsUnvalidatable,
+    summary,
+    steps: stepRows,
+    gapUrns,
+  };
+}
+
+/**
+ * The headline verdict. Findings win; a run with no findings but incomplete
+ * coverage is explicitly not a pass.
+ */
+export function verdictOf(findingCount: number, coverage: RevalidationCoverage): RunbookVerdict {
+  if (findingCount > 0) return "FINDING";
+  if (coverage.claimsUnvalidatable > 0 || coverage.stepsUnvalidatable > 0) return "INSUFFICIENT_DATA";
+  return "PASS";
+}
+
 /* ── Rendering the chain ──────────────────────────────────────────────── */
 
 /**
@@ -272,6 +429,13 @@ export function chainLine(claim: RunbookClaim, verdict: ClaimVerdict): string {
         verdict.checkedAgainst ? `${verdict.checkedAgainst.aspect}@${verdict.checkedAgainst.aspectVersion}` : "unreadable"
       }`
     : "unpinned (runbook predates snapshotting)";
-  const mark = verdict.status === "holds" ? "✓" : verdict.status === "broken" ? "✗" : "?";
+  // `~` rather than `?`: the catalog answered, it just could not answer this.
+  const MARK: Record<ClaimVerdict["status"], string> = {
+    holds: "✓",
+    broken: "✗",
+    unvalidatable: "~",
+    unverified: "?",
+  };
+  const mark = MARK[verdict.status];
   return `${mark} step ${claim.stepIndex + 1} · ${claim.statement} — ${arrow}`;
 }

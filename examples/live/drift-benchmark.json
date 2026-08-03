@@ -1,5 +1,5 @@
 {
-  "at": "2026-08-02T20:53:17.487Z",
+  "at": "2026-08-02T22:38:58.270Z",
   "catalog": "http://localhost:8080",
   "runbooks": [
     {
@@ -28,7 +28,7 @@
       "steps": 3
     }
   ],
-  "method": "Known drifts planted through DataHub's own write APIs across every stored runbook, mixed with decoys that must produce nothing. Ground truth for column drift comes from tokenising each step's SQL, not from the engine's own reference matcher. Findings that pre-date the injection are excluded from the false-positive count. The engine is told nothing about any of it.",
+  "method": "Known drifts planted through DataHub's own write APIs across every stored runbook, mixed with decoys (changes to things no runbook reads) and controls (additive changes to things runbooks do read: a column added, a description rewritten, a second owner appointed). Both classes must produce nothing. Ground truth for column drift comes from tokenising each step's SQL, not from the engine's own reference matcher. One rename is planted to a name sharing no tokens with the original, which the correction rule cannot solve by construction. Findings that pre-date the injection are excluded from the false-positive count. The engine is told nothing about any of it.",
   "baselineFindings": 1,
   "planted": [
     {
@@ -61,7 +61,8 @@
       "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
       "subject": "product_status",
       "decoy": false,
-      "expect": "column-missing"
+      "expect": "column-missing",
+      "hardCase": "`product_status` → `settled_value` shares no tokens with the original. The rename detector scores token overlap and edit distance, so it cannot connect the two and will decline to propose a correction. Detection should still catch the column as missing."
     },
     {
       "id": "deprecated:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD):urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
@@ -126,17 +127,44 @@
       "subject": "cancelled_at",
       "decoy": true,
       "expect": null
+    },
+    {
+      "id": "control:column-added:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+      "kind": "column-added",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+      "subject": "instaboard_control_added_col",
+      "decoy": true,
+      "control": true,
+      "expect": null
+    },
+    {
+      "id": "control:description-edited:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+      "kind": "description-edited",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+      "subject": "description",
+      "decoy": true,
+      "control": true,
+      "expect": null
+    },
+    {
+      "id": "control:owner-added:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+      "kind": "owner-added",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+      "subject": "urn:li:corpuser:b2fd91.EMP006",
+      "decoy": true,
+      "control": true,
+      "expect": null
     }
   ],
-  "overall": {
-    "truePositives": 6,
+  "detection": {
+    "plantedTotal": 6,
+    "detected": 6,
+    "findingsExplained": 6,
+    "findingsTotal": 6,
     "falsePositives": 0,
-    "falseNegatives": 0,
     "precision": 1,
     "recall": 1,
-    "f1": 1,
-    "findingsExplained": 6,
-    "findingsTotal": 6
+    "f1": 1
   },
   "byKind": {
     "column-dropped": {
@@ -155,7 +183,99 @@
       "recall": 1
     }
   },
+  "negatives": {
+    "decoysPlanted": 6,
+    "decoysQuiet": 6,
+    "controlsPlanted": 3,
+    "controlsQuiet": 3,
+    "detail": [
+      {
+        "id": "decoy:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD):billing_address_line2",
+        "kind": "column-dropped",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "control": false,
+        "quiet": true,
+        "findings": []
+      },
+      {
+        "id": "decoy:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD):customer_id",
+        "kind": "column-dropped",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+        "control": false,
+        "quiet": true,
+        "findings": []
+      },
+      {
+        "id": "decoy:urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.payments,PROD):card_last4",
+        "kind": "column-dropped",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.payments,PROD)",
+        "control": false,
+        "quiet": true,
+        "findings": []
+      },
+      {
+        "id": "decoy:urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.promotions,PROD):promotion_cost",
+        "kind": "column-dropped",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+        "control": false,
+        "quiet": true,
+        "findings": []
+      },
+      {
+        "id": "decoy:urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.orders,PROD):total_amount",
+        "kind": "column-dropped",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.orders,PROD)",
+        "control": false,
+        "quiet": true,
+        "findings": []
+      },
+      {
+        "id": "decoy:urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.subscriptions,PROD):cancelled_at",
+        "kind": "column-dropped",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,northbeam_app.public.subscriptions,PROD)",
+        "control": false,
+        "quiet": true,
+        "findings": []
+      },
+      {
+        "id": "control:column-added:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "kind": "column-added",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "control": true,
+        "quiet": true,
+        "findings": []
+      },
+      {
+        "id": "control:description-edited:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+        "kind": "description-edited",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+        "control": true,
+        "quiet": true,
+        "findings": []
+      },
+      {
+        "id": "control:owner-added:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "kind": "owner-added",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "control": true,
+        "quiet": true,
+        "findings": []
+      }
+    ]
+  },
+  "corrections": {
+    "eligible": 2,
+    "proposed": 1,
+    "misses": [
+      {
+        "id": "column-renamed:urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD):product_status",
+        "from": "product_status",
+        "to": "settled_value",
+        "reason": "No column on products is a close enough match to `product_status` to propose as a rename. It may have been dropped outright, or split across several columns."
+      }
+    ]
+  },
   "falsePositives": [],
   "falseNegatives": [],
-  "restored": "12/12"
+  "restored": "15/15"
 }

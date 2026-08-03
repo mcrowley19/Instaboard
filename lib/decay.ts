@@ -1,12 +1,15 @@
-import { callDataHubTool } from "./mcp";
+import { callDataHubTool, isDemoMode } from "./mcp";
 import { datahubGraphQL } from "./datahub-graphql";
 import {
   chainLine,
+  coverageOf,
   displayName,
   extractClaims,
   humanOwners,
   ownersNamedIn,
+  schemaObservable,
   stepReferences,
+  verdictOf,
   verifyClaims,
   versionOf,
 } from "./provenance";
@@ -199,7 +202,16 @@ function isSelfWritten(urn: string): boolean {
  * GMS behind the fixture, so the call fails fast and the counts are left alone.
  */
 export async function discountSelfWrittenState(snapshot: EntitySnapshot): Promise<void> {
-  if (snapshot.openIncidents === 0 && snapshot.failingAssertions === 0) return;
+  // The same read answers a second question: how many assertions exist on this
+  // dataset at all. Without it, "0 failing assertions" on an unmonitored table
+  // reads identically to a table that is genuinely passing its checks, and the
+  // sweep hands back a clean bill of health nobody actually verified. So this
+  // runs even when the counters are zero — that is precisely the case it decides.
+  //
+  // Demo mode answers from a fixture and has no GMS behind it. Querying a real
+  // GMS that happens to be running on the same machine would mix a live catalog
+  // into fixture-derived state, so the fixture's own assertion list is used there.
+  if (isDemoMode()) return;
 
   const res = await datahubGraphQL<{
     dataset: {
@@ -226,6 +238,9 @@ export async function discountSelfWrittenState(snapshot: EntitySnapshot): Promis
   if (assertions) {
     const ours = assertions.filter((a) => isSelfWritten(a.urn) && (a.runEvents?.failed ?? 0) > 0).length;
     if (ours > 0) snapshot.failingAssertions = Math.max(0, snapshot.failingAssertions - ours);
+    // Our own assertion doesn't count as somebody monitoring the table: it asserts
+    // that a runbook still matches the catalog, not that the data is any good.
+    snapshot.assertionCount = assertions.filter((a) => !isSelfWritten(a.urn)).length;
   }
 }
 
@@ -295,6 +310,12 @@ export async function snapshotEntity(urn: string): Promise<EntitySnapshot> {
       if (dep !== undefined) snapshot.deprecated = dep === true || (typeof dep === "object" && dep !== null);
       snapshot.openIncidents = countByStatus(h, "incidents", "open");
       snapshot.failingAssertions = countByStatus(h, "assertions", "fail");
+      // How many assertions exist at all, not how many are failing: an empty list
+      // means nothing is monitoring this table, which is a different fact from
+      // "everything passes". See `healthObservable` in lib/provenance.ts.
+      snapshot.assertionCount = collect(h, "assertions")
+        .flatMap((a) => (Array.isArray(a) ? a : [a]))
+        .filter(Boolean).length;
     }
   }
 
@@ -338,8 +359,21 @@ export async function detectDecay(handoff: Handoff): Promise<DecayReport> {
 export async function detectDecayWithState(
   handoff: Handoff
 ): Promise<{ report: DecayReport; live: Record<string, EntitySnapshot> }> {
-  const findings: DecayFinding[] = [];
   const live = await snapshotHandoff(handoff.steps);
+  return { report: diffAgainstCatalog(handoff, live), live };
+}
+
+/**
+ * The detection itself: a runbook, and the catalog as it stands, in — a report
+ * out. Pure and synchronous, with every catalog read already done.
+ *
+ * Split out from the read so the same engine can be driven by something other
+ * than a live DataHub — the interactive demo hands it a mutated fixture and gets
+ * back a real report. Nothing about the verdict is special-cased for that path,
+ * which is the only way a demo is worth showing.
+ */
+export function diffAgainstCatalog(handoff: Handoff, live: Record<string, EntitySnapshot>): DecayReport {
+  const findings: DecayFinding[] = [];
   const recorded = handoff.snapshots ?? {};
 
   // The claim layer runs alongside detection rather than replacing it: detection
@@ -375,7 +409,13 @@ export async function detectDecayWithState(
     }
 
     // Columns the step depends on that have disappeared since it was written.
-    if (then?.exists && then.fields.length) {
+    //
+    // Only when the catalog still holds a schema for the entity. A dataset whose
+    // schema failed to ingest returns an empty field list, and diffing against
+    // that reports every column the runbook names as dropped — the loudest
+    // possible false positive, on the least reliable input. It is recorded as a
+    // coverage gap instead, which says "go and fix the ingestion".
+    if (then?.exists && then.fields.length && schemaObservable(now)) {
       const removed = then.fields.filter((f) => !now.fields.includes(f));
       for (const field of removed) {
         if (!stepReferences(step, field)) continue;
@@ -464,10 +504,16 @@ export async function detectDecayWithState(
     "ok"
   );
 
+  // Coverage runs over the same claims and verdicts, so "what we checked" and
+  // "what we concluded" can never come apart.
+  const coverage = coverageOf(handoff.steps, live, claims, verdicts);
+
   const report: DecayReport = {
     handoffId: handoff.id,
     checkedAt: new Date().toISOString(),
     severity,
+    verdict: verdictOf(findings.length, coverage),
+    coverage,
     stepsChecked: handoff.steps.filter((s) => s.urn).length,
     entitiesChecked: Object.keys(live).length,
     hadSnapshot: Object.keys(recorded).length > 0,
@@ -477,7 +523,7 @@ export async function detectDecayWithState(
     versions: Object.fromEntries(Object.entries(live).map(([urn, snap]) => [urn, snap.version ?? versionOf(snap)])),
   };
 
-  return { report, live };
+  return report;
 }
 
 /** Look a claim up by id — findings carry the id, consumers want the claim. */
@@ -527,7 +573,11 @@ export async function writeBackDecay(handoff: Handoff, report: DecayReport): Pro
 export function decayToMarkdown(handoff: Handoff, report: DecayReport): string {
   const headline =
     report.severity === "ok"
-      ? "✅ Still accurate — every catalog fact this runbook depends on checks out."
+      ? report.verdict === "INSUFFICIENT_DATA"
+        ? `🔍 Nothing has drifted among the claims that could be checked — but ${
+            report.coverage?.claimsUnvalidatable ?? 0
+          } of ${report.coverage?.claimsTotal ?? 0} could not be checked at all. This is not a clean bill of health.`
+        : "✅ Still accurate — every catalog fact this runbook depends on checks out."
       : report.severity === "warning"
         ? `⚠️ ${report.findings.length} thing${report.findings.length === 1 ? "" : "s"} to know before following this runbook.`
         : `🛑 This runbook is out of date — ${report.findings.filter((f) => f.severity === "broken").length} step${
@@ -539,15 +589,38 @@ export function decayToMarkdown(handoff: Handoff, report: DecayReport): string {
     "",
     headline,
     "",
-    `Checked ${report.checkedAt.slice(0, 10)} against live DataHub — ${report.stepsChecked} step${
+    // "against the catalog", not "against live DataHub": the same renderer is
+    // driven by the interactive demo's fixture, and a note that names a source
+    // it did not read is the one kind of dishonesty this project cannot afford.
+    `Checked ${report.checkedAt.slice(0, 10)} against the catalog — ${report.stepsChecked} step${
       report.stepsChecked === 1 ? "" : "s"
     } across ${report.entitiesChecked} entit${report.entitiesChecked === 1 ? "y" : "ies"}.`,
     `Runbook recorded ${handoff.createdAt.slice(0, 10)} by ${handoff.author}.`,
     "",
   ];
 
+  if (report.verdict) lines.push(`**Verdict: ${report.verdict}.**`, "");
+
+  // Coverage before findings, deliberately. A reader who stops after the first
+  // section should leave knowing how much of this was actually looked at.
+  const coverage = report.coverage;
+  if (coverage && coverage.stepsTotal > 0) {
+    lines.push("## Coverage", "", coverage.summary + ".", "");
+    if (coverage.claimsUnvalidatable > 0) {
+      lines.push(
+        `${coverage.claimsUnvalidatable} of ${coverage.claimsTotal} claims could not be checked either way. ` +
+          "Each one is a gap in the catalog, not in the runbook:",
+        ""
+      );
+      for (const step of coverage.steps.filter((s) => s.gaps.length > 0)) {
+        lines.push(`- Step ${step.stepIndex + 1} (${step.stepTitle}) — ${step.detail}`);
+      }
+      lines.push("");
+    }
+  }
+
   if (report.findings.length === 0) {
-    lines.push("No drift detected.", "");
+    lines.push("No drift detected among the claims that could be checked.", "");
   } else {
     for (const f of report.findings) {
       const icon = f.severity === "broken" ? "🛑" : "⚠️";
@@ -573,13 +646,15 @@ export function decayToMarkdown(handoff: Handoff, report: DecayReport): string {
   const verdicts = report.verdicts ?? [];
   if (verdicts.length) {
     const holds = verdicts.filter((v) => v.status === "holds").length;
+    const cannotTell = verdicts.filter((v) => v.status === "unvalidatable").length;
     const unchanged = verdicts.filter((v) => v.aspectUnchanged).length;
     lines.push(
       "## Provenance",
       "",
       `${verdicts.length} catalog claim${verdicts.length === 1 ? "" : "s"} in this runbook, each pinned to the ` +
         `version of the catalog aspect it was validated against. ${holds} still hold${holds === 1 ? "s" : ""}; ` +
-        `${unchanged} sit on aspects that have not changed at all since the runbook was recorded.`,
+        `${unchanged} sit on aspects that have not changed at all since the runbook was recorded` +
+        `${cannotTell ? `; ${cannotTell} could not be checked (marked \`~\`)` : ""}.`,
       "",
       "```",
       ...(report.claims ?? []).map((c) => {

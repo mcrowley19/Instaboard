@@ -104,8 +104,8 @@ catalog, captures a runbook, validates it clean, then renames a column the
 runbook's SQL selects, deprecates a table it routes you to and moves the owner it
 names — through DataHub's own write APIs — and asserts that revalidation catches
 all three, writes the drift back, and proposes the correction, before restoring
-the catalog and checking it goes green again. 29 assertions, non-zero exit if any
-fails, 29/29 on the last run, receipts committed and re-verified by CI.
+the catalog and checking it goes green again. 39 assertions, non-zero exit if any
+fails, 39/39 on the last run, receipts committed and re-verified by CI.
 
 The decay engine got the same treatment on a catalog we didn't build, since a demo
 where the author planted the failure proves very little. On that datapack we dropped a column a runbook's SQL

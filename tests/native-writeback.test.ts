@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resolveIncidentsFor, writeBackNative } from "../lib/native-writeback";
+import {
+  resolveIncidentsFor,
+  retractStaleTags,
+  writeBackCoverage,
+  writeBackNative,
+  STALE_RUNBOOK_TAG_URN,
+  UNVALIDATED_TAG_URN,
+} from "../lib/native-writeback";
 import type { DecayReport, EntitySnapshot, Handoff } from "../lib/types";
 
 /**
@@ -11,9 +18,14 @@ import type { DecayReport, EntitySnapshot, Handoff } from "../lib/types";
 
 // Not demo mode — the write-back deliberately refuses to touch a catalog it did
 // not read — but the tag call must not reach a real MCP server either.
+const mcpCalls = vi.hoisted(() => [] as { name: string; args: Record<string, unknown> }[]);
+
 vi.mock("../lib/mcp", () => ({
   isDemoMode: () => false,
-  callDataHubTool: async () => ({ content: "ok", isError: false }),
+  callDataHubTool: async (name: string, args: Record<string, unknown>) => {
+    mcpCalls.push({ name, args });
+    return { content: "ok", isError: false };
+  },
 }));
 
 const URN = "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)";
@@ -25,6 +37,8 @@ interface Call {
 
 let calls: Call[] = [];
 let openIncidents: { urn: string; title: string }[] = [];
+/** What `instaboard_runbook_status` already holds on the dataset. */
+let statusValues: string[] = [];
 
 function named(fragment: string): Call[] {
   return calls.filter((c) => c.query.includes(fragment));
@@ -33,6 +47,8 @@ function named(fragment: string): Call[] {
 beforeEach(() => {
   calls = [];
   openIncidents = [];
+  statusValues = [];
+  mcpCalls.length = 0;
 
   vi.stubGlobal("fetch", async (_url: string, init: { body: string }) => {
     const body = JSON.parse(init.body) as Call;
@@ -45,6 +61,21 @@ beforeEach(() => {
     if (body.query.includes("incidents(state: ACTIVE")) {
       return reply({ dataset: { incidents: { incidents: openIncidents } } });
     }
+    if (body.query.includes("structuredProperties")) {
+      return reply({
+        dataset: {
+          structuredProperties: {
+            properties: [
+              {
+                structuredProperty: { urn: "urn:li:structuredProperty:instaboard_runbook_status" },
+                values: statusValues.map((stringValue) => ({ stringValue })),
+              },
+            ],
+          },
+        },
+      });
+    }
+    if (body.query.includes("removeTag")) return reply({ removeTag: true });
     if (body.query.includes("raiseIncident")) return reply({ raiseIncident: "urn:li:incident:new" });
     if (body.query.includes("updateIncidentStatus")) return reply({ updateIncidentStatus: true });
     if (body.query.includes("updateIncident")) return reply({ updateIncident: true });
@@ -191,6 +222,7 @@ describe("resolveIncidentsFor", () => {
   });
 
   it("leaves incidents raised by anyone else alone", async () => {
+
     // A detector that closes other people's incidents is worse than one that
     // never closes anything.
     openIncidents = [
@@ -201,5 +233,102 @@ describe("resolveIncidentsFor", () => {
 
     expect(resolved).toEqual([]);
     expect(named("updateIncidentStatus")).toHaveLength(0);
+  });
+});
+
+/**
+ * The other half of the write-back, and the half most tools skip: taking the
+ * warning back down. State that is only ever added stops meaning anything.
+ */
+describe("retractStaleTags", () => {
+  it("removes the Stale Runbook tag once the runbook is repaired", async () => {
+    const receipt = await retractStaleTags(handoff, [URN]);
+
+    expect(receipt.untagged).toEqual([URN]);
+    const input = named("removeTag")[0].variables.input as { tagUrn: string; resourceUrn: string };
+    expect(input).toEqual({ tagUrn: STALE_RUNBOOK_TAG_URN, resourceUrn: URN });
+  });
+
+  it("keeps the tag when a different runbook is still stale on the same dataset", async () => {
+    // The tag is per-dataset, not per-runbook. Clearing it here would silently
+    // retract a warning somebody else's runbook is still raising.
+    statusValues = ["weekly-refresh: stale (checked 2026-07-30)", "monthly-close: validated (checked 2026-08-01)"];
+    const receipt = await retractStaleTags(handoff, [URN]);
+
+    expect(receipt.untagged).toEqual([]);
+    expect(receipt.kept).toEqual([{ datasetUrn: URN, heldBy: ["weekly-refresh"] }]);
+    expect(named("removeTag")).toHaveLength(0);
+  });
+
+  it("ignores its own previous stale entry when deciding", async () => {
+    statusValues = ["monthly-close: stale (checked 2026-07-30)"];
+    const receipt = await retractStaleTags(handoff, [URN]);
+    expect(receipt.untagged).toEqual([URN]);
+  });
+});
+
+describe("writeBackCoverage", () => {
+  const coverage = (over: Partial<NonNullable<DecayReport["coverage"]>> = {}) => ({
+    ...report,
+    severity: "ok" as const,
+    findings: [],
+    coverage: {
+      stepsTotal: 1,
+      stepsValidated: 0,
+      stepsPartial: 1,
+      stepsUnvalidatable: 0,
+      claimsTotal: 3,
+      claimsChecked: 2,
+      claimsUnvalidatable: 1,
+      summary: "0/1 steps validated, 1 with catalog gaps (health)",
+      gapUrns: [URN],
+      steps: [
+        {
+          stepIndex: 0,
+          stepTitle: "Pull revenue",
+          urn: URN,
+          state: "partial" as const,
+          gaps: ["health" as const],
+          claimsTotal: 3,
+          claimsUnvalidatable: 1,
+          detail: "fct_revenue: it has no assertions or incidents, so nothing is monitoring it.",
+        },
+      ],
+      ...over,
+    },
+  });
+
+  it("tags a dataset the catalog cannot answer for, on a run that found no drift", async () => {
+    const receipt = await writeBackCoverage(handoff, coverage());
+    expect(receipt.tagged).toEqual([URN]);
+    expect(mcpCalls.find((c) => c.name === "add_tags")?.args.tag_urns).toEqual([UNVALIDATED_TAG_URN]);
+  });
+
+  it("takes the tag back off once the missing metadata is there", async () => {
+    const receipt = await writeBackCoverage(
+      handoff,
+      coverage({
+        stepsValidated: 1,
+        stepsPartial: 0,
+        claimsUnvalidatable: 0,
+        gapUrns: [],
+        summary: "1/1 steps validated",
+        steps: [
+          {
+            stepIndex: 0,
+            stepTitle: "Pull revenue",
+            urn: URN,
+            state: "validated",
+            gaps: [],
+            claimsTotal: 3,
+            claimsUnvalidatable: 0,
+            detail: "Every claim this step makes was checked against fct_revenue.",
+          },
+        ],
+      })
+    );
+    expect(receipt.tagged).toEqual([]);
+    expect(receipt.untagged).toEqual([URN]);
+    expect((named("removeTag")[0].variables.input as { tagUrn: string }).tagUrn).toBe(UNVALIDATED_TAG_URN);
   });
 });

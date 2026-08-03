@@ -46,19 +46,29 @@ async function main() {
   } else {
     const icon = { ok: "✅", warning: "⚠️", broken: "🛑" } as const;
     for (const r of sweep.rows) {
+      // A clean run that could not check everything gets its own mark, so it
+      // never scans as the same outcome as a clean run that checked it all.
+      const mark = r.severity === "ok" && r.verdict === "INSUFFICIENT_DATA" ? "🔍" : icon[r.severity];
       const wb = r.receipt?.written
         ? ` → note written to DataHub${r.receipt.documentUrn ? ` (${r.receipt.documentUrn})` : ""}`
         : "";
       console.log(
-        `${icon[r.severity]} ${r.title}: ${r.findings.length} finding${r.findings.length === 1 ? "" : "s"} across ${
-          r.stepsChecked
-        } step${r.stepsChecked === 1 ? "" : "s"}${wb}`
+        `${mark} ${r.title} [${r.verdict ?? "—"}]: ${r.findings.length} finding${
+          r.findings.length === 1 ? "" : "s"
+        } across ${r.stepsChecked} step${r.stepsChecked === 1 ? "" : "s"}${wb}`
       );
       console.log(
         `    ${r.claims.holds}/${r.claims.total} catalog claims still hold` +
           `${r.claims.broken ? `, ${r.claims.broken} broken` : ""}` +
+          `${r.claims.unvalidatable ? `, ${r.claims.unvalidatable} unvalidatable` : ""}` +
           `${r.claims.unverified ? `, ${r.claims.unverified} unverified` : ""}`
       );
+      if (r.coverage) {
+        console.log(`    📐 coverage: ${r.coverage.summary}`);
+        for (const s of r.coverage.steps.filter((s) => s.gaps.length)) {
+          console.log(`       ~ step ${s.stepIndex + 1} · ${s.detail}`);
+        }
+      }
       for (const f of r.findings) {
         console.log(`    ${f.severity === "broken" ? "🛑" : "⚠️"} step ${f.stepIndex + 1} · ${f.kind}: ${f.detail}`);
       }
@@ -69,6 +79,7 @@ async function main() {
         }
         for (const p of r.structured.properties) {
           console.log(`    🔖 ${p.status} · ${p.driftValues} drift value(s), ${p.pins} provenance pin(s)`);
+          if (p.coverage) console.log(`         coverage: ${p.coverage}`);
         }
         for (const e of r.structured.errors) console.log(`    ⚠️  ${e}`);
       }
@@ -90,11 +101,20 @@ async function main() {
         }
         for (const e of r.native.errors) console.log(`    ⚠️  ${e}`);
       }
+      if (r.coverageTags?.tagged.length) {
+        console.log(`    🏷  tagged 'Unvalidated Runbook Step' on ${r.coverageTags.tagged.length} dataset(s)`);
+      }
+      if (r.retracted?.untagged.length) {
+        console.log(`    🧹 'Stale Runbook' retracted from ${r.retracted.untagged.length} dataset(s) — runbook repaired`);
+      }
+      for (const kept of r.retracted?.kept ?? []) {
+        console.log(`    🏷  kept 'Stale Runbook' on ${kept.datasetUrn} — still stale for ${kept.heldBy.join(", ")}`);
+      }
     }
     console.log(
       `\n${sweep.checked} runbook${sweep.checked === 1 ? "" : "s"} checked · ${sweep.drifted} with drift · ${
         sweep.broken
-      } broken`
+      } broken · ${sweep.insufficient} clean but not fully checkable`
     );
   }
 

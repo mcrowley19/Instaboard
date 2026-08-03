@@ -318,6 +318,41 @@ step 2 claims column `net_amount_usd` exists
 Report the count too: "18 of 19 claims still hold" tells a reader the document is
 followable apart from one named thing. "Stale" does not.
 
+### Say what you could not check, and never call it clean
+
+The failure mode of a validator is silence. Several of the checks above have an answer
+that looks like a pass and is not one:
+
+- **Health on an unmonitored dataset.** `health` is computed from assertions and
+  incidents. On a dataset with neither, "no failing assertions" is true and means
+  nothing — nobody is checking, so nothing can fail. It is not evidence that the data is
+  fit to follow.
+- **Columns on a dataset with no schema.** An entity the catalog knows about but holds no
+  `schemaMetadata` for returns an empty field list. Diffing against that says *every
+  column the document names has been dropped*, which is the loudest possible false
+  positive on the least reliable input.
+- **Owners on an unowned dataset.** There is nobody to route a finding to, and no way to
+  tell "the person moved on" from "ownership was never ingested".
+
+So report **three** outcomes, not two:
+
+| | |
+| --- | --- |
+| `PASS` | every claim was checked, and every claim holds |
+| `FINDING` | something concrete drifted — name the step and the fact |
+| `INSUFFICIENT_DATA` | nothing drifted among the claims you could check, and some you could not check at all |
+
+Track coverage as its own figure — `2/3 steps validated, 1 with catalog gaps (health)` —
+and name the missing dimension per step, because the gap is in the *catalog*, not in the
+document, and naming the dimension says how to close it. Write the figure back as a
+structured property alongside the status; a coverage number nobody can see turns back
+into the thing it exists to prevent.
+
+Expect this to be the common case on a real catalog. On DataHub's own
+`showcase-ecommerce` datapack, which ships with no assertions and several unowned tables,
+the honest answer for a three-step runbook is `0/4 steps validated` — and saying so is
+more use to the reader than a green tick.
+
 ---
 
 ## Step 9: Write the staleness back as state, not just prose
@@ -345,13 +380,23 @@ description. Then, where the deployment's API allows it and the user agrees:
   dataset _today_. In the owner-drift case that is exactly the person the runbook has never
   heard of, and DataHub's own subscriptions take it from there.
 
-Two rules, both learned the hard way:
+Where a step could not be checked at all (Step 8), tag that separately — a dataset with no
+schema, no owners or no monitors is not a stale runbook, it is a catalog entry to fill in,
+and telling the reader to go and fix the document would send them to the wrong place.
+
+Three rules, all learned the hard way:
 
 - **Write the clean result too.** A dataset that only gets written to when something breaks
   cannot distinguish "fine" from "nobody checked".
 - **Discount your own writes on the next pass.** An incident you raised and an assertion you
   failed both show up in `health` on the next validation. Recognise them (a title
   convention, a URN prefix) and subtract them, or the tool flags itself forever.
+- **Take it all back off when the document is repaired.** Resolve the incident, report the
+  assertion as passing, and *remove* the tag. State that is only ever added stops meaning
+  anything: after a few months the catalog carries warnings about problems fixed in week
+  one, and people learn to scroll past them. Guard the removal — the tag is per-dataset,
+  not per-document, so check whether another document is still stale on that dataset
+  before clearing it, and read the tag back afterwards rather than trusting the write.
 
 ---
 

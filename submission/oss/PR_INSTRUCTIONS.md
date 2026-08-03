@@ -1,11 +1,14 @@
 # Upstream contributions
 
-Two upstream contributions came out of building instaboard. All of them are filed.
+Everything below came out of building instaboard. All of it is filed except the last two
+rows, which are written and ready to go up.
 
 | What | Where | Status |
 | --- | --- | --- |
 | `datahub-onboarding` skill | [datahub-skills#79](https://github.com/datahub-project/datahub-skills/pull/79) | open |
 | ↳ follow-up commit: validation write-back and correction steps | [same PR](https://github.com/datahub-project/datahub-skills/pull/79#issuecomment-5159658074) | pushed |
+| ↳ second follow-up: three-state verdict, coverage, and retraction on repair | see 1b below | ready to push |
+| Documents cannot be read back by URN over MCP | `issues/07-documents-cannot-be-read-back-by-urn.md` | ready to file |
 | No MCP tool returns usage statistics | [mcp-server-datahub#171](https://github.com/acryldata/mcp-server-datahub/issues/171) | open |
 | Incidents are unreadable over MCP | [mcp-server-datahub#172](https://github.com/acryldata/mcp-server-datahub/issues/172) | open |
 | `anyOf` union schemas get 422'd by providers | [mcp-server-datahub#173](https://github.com/acryldata/mcp-server-datahub/issues/173) | open |
@@ -213,6 +216,38 @@ the two stay byte-identical.
 
 ---
 
+## 1b. The second follow-up: coverage and retraction
+
+Two ideas that were not in the skill when it went up, and are not in any of the runbook or
+memory skills already filed. Both come out of running the loop against DataHub's own
+`showcase-ecommerce` datapack, where they stopped being theoretical.
+
+- **Step 8 gains a third verdict state.** `health` is computed from assertions and
+  incidents, so on a dataset with neither, "no failing assertions" is true and means
+  nothing. The skill used to report that as a passing check. It now reports `PASS` /
+  `FINDING` / `INSUFFICIENT_DATA`, tracks coverage as its own figure naming the missing
+  dimension per step, and writes it back as a structured property. On the showcase datapack
+  the honest figure for a three-step runbook is `0/4 steps validated`, which is more use to
+  a reader than a green tick. Two false positives fall out of the same change: an entity
+  with no `schemaMetadata` no longer reads as every column having been dropped, and an
+  unowned dataset no longer reads as owner drift.
+- **Step 9 gains retraction.** Resolve the incident, report the assertion passing, remove
+  the tag when the document is repaired — guarded, because the tag is per-dataset and
+  another document may still be stale on it, and read back afterwards rather than trusting
+  the write. State that is only ever added stops meaning anything.
+- **A fourth evaluation**, `evaluations/unmonitored-dataset-coverage.json`, covering the
+  case the third state exists for, with the negative cases: don't call it validated, don't
+  read an empty schema as dropped columns, don't tag `StaleRunbook` when nothing drifted.
+
+Both are proved in the source project before being written up here: `npm run prove` asserts
+that a clean run with unvalidatable claims is not reported as a pass, and that the tag is
+applied and then retracted, with DataHub read back on both sides (39/39 checks, on two
+catalogs).
+
+Apply exactly as in 1a — the files in `skills/datahub-onboarding/` are the current copy.
+
+---
+
 ## 2. The friction reports
 
 Four write-ups with reproduction steps are in `issues/`. Each is a complete issue body;
@@ -225,10 +260,18 @@ file with `gh issue create -R <repo> --title "<first heading>" --body-file <file
 | `03-anyof-union-schemas-rejected-by-providers.md` | `acryldata/mcp-server-datahub` | Multi-type `anyOf` unions in two tool schemas make OpenAI-compatible providers reject the whole tool list with a 422 |
 | `04-showcase-datapack-drops-cloud-only-aspects.md` | `datahub-project/datahub` | `datapack load showcase-ecommerce` quietly drops 248 MCPs on OSS, every usage and assertion aspect among them, while still reporting success |
 | `05-deleteassertion-rejects-custom-assertions.md` | `datahub-project/datahub` | `deleteAssertion` errors with "Unsupported Assertion Type CUSTOM" on assertions `upsertCustomAssertion` created two calls earlier; only the CLI can remove them — filed as [#18817](https://github.com/datahub-project/datahub/issues/18817) |
+| `06-entity-url-contract.md` | `datahub-project/datahub` | No supported way for a browser integration to know which entity a DataHub page is showing — filed as [#18818](https://github.com/datahub-project/datahub/issues/18818) with a reference implementation and 16 vectors |
+| `07-documents-cannot-be-read-back-by-urn.md` | `acryldata/mcp-server-datahub` | A document written with `save_document` cannot be read back: `get_entities` on a document URN returns only the URN, `search_documents` returns metadata without content, and `grep_documents` repeats the same excerpt once per match position |
 
 Checked against the open issue lists on both repos before writing; none of these is a
 duplicate. The incident write-tool requests (#136, #143, #145, #153) are all about
 *writing* incidents. `02` covers not being able to *read* one back, and says so.
+
+`07` is the same shape as `02` — `get_entities` returning nothing useful for a
+non-dataset entity type — and says so rather than filing it as an unrelated bug. It comes
+out of the part of this project that leans hardest on the MCP surface: every runbook is
+written with `save_document`, and we wanted to re-read one to validate it. The probe in
+the issue is a real run against a live quickstart, not a reconstruction.
 
 One more thing we hit is **already filed**: `datahub datapack --help` crashes with
 `FileNotFoundError: .../resources/DATAPACK_AGENT_CONTEXT.md`, reported as

@@ -4,9 +4,12 @@ import { detectDecay, snapshotEntity } from "../lib/decay";
 import {
   ASPECTS,
   chainLine,
+  coverageOf,
   extractClaims,
+  healthObservable,
   humanOwners,
   pin,
+  verdictOf,
   verifyClaims,
   versionOf,
 } from "../lib/provenance";
@@ -29,6 +32,10 @@ function snapshot(urn: string, over: Partial<EntitySnapshot> = {}): EntitySnapsh
     deprecated: false,
     openIncidents: 0,
     failingAssertions: 0,
+    // A monitored table by default: two assertions defined, both passing. Without
+    // this, "no failing assertions" would be unvalidatable rather than clean —
+    // which is the point of `healthObservable`, exercised on its own below.
+    assertionCount: 2,
     capturedAt: "2026-07-01T00:00:00.000Z",
     ...over,
   };
@@ -173,6 +180,99 @@ describe("verifyClaims", () => {
   it("breaks every claim on an entity that has vanished", () => {
     const verdicts = verifyClaims(claims, { [FCT_REVENUE]: snapshot(FCT_REVENUE, { exists: false }) });
     expect(verdicts.every((v) => v.status === "broken")).toBe(true);
+  });
+
+  /*
+   * The three-state half. A catalog that cannot answer must say so: collapsing
+   * "no evidence" into "holds" is how a runbook comes back green on a table
+   * nobody has ever monitored.
+   */
+  it("cannot validate health on a dataset nothing is monitoring", () => {
+    const unmonitored = { [FCT_REVENUE]: snapshot(FCT_REVENUE, { assertionCount: 0 }) };
+    const health = verifyClaims(extractClaims(handoff([step]), unmonitored), unmonitored).find((v) =>
+      v.claimId.startsWith("healthy")
+    );
+    expect(health?.status).toBe("unvalidatable");
+    expect(health?.detail).toContain("unmonitored");
+  });
+
+  it("still validates health when an assertion exists to fail", () => {
+    const monitored = { [FCT_REVENUE]: snapshot(FCT_REVENUE, { assertionCount: 1 }) };
+    const health = verifyClaims(extractClaims(handoff([step]), monitored), monitored).find((v) =>
+      v.claimId.startsWith("healthy")
+    );
+    expect(health?.status).toBe("holds");
+  });
+
+  it("does not report every column as dropped when the catalog holds no schema", () => {
+    const schemaless = verifyClaims(claims, { [FCT_REVENUE]: snapshot(FCT_REVENUE, { fields: [] }) });
+    const column = schemaless.find((v) => v.claimId.startsWith("column-exists"));
+    expect(column?.status).toBe("unvalidatable");
+    expect(column?.detail).toContain("no schema");
+  });
+});
+
+describe("coverage", () => {
+  const step: HandoffStep = {
+    title: "Pull net revenue",
+    instruction: "Sum net_amount_usd for the period.",
+    why: "Canonical.",
+    urn: FCT_REVENUE,
+    tips: "Ping Priya Patel if it looks short.",
+  };
+
+  function cover(over: Partial<EntitySnapshot>) {
+    const live = { [FCT_REVENUE]: snapshot(FCT_REVENUE, over) };
+    const claims = extractClaims(handoff([step]), live);
+    return coverageOf([step], live, claims, verifyClaims(claims, live));
+  }
+
+  it("counts a fully answerable step as validated", () => {
+    const coverage = cover({});
+    expect(coverage.stepsValidated).toBe(1);
+    expect(coverage.claimsUnvalidatable).toBe(0);
+    expect(coverage.summary).toBe("1/1 steps validated");
+    expect(verdictOf(0, coverage)).toBe("PASS");
+  });
+
+  it("names the dimension the catalog is missing rather than reporting the step clean", () => {
+    const coverage = cover({ assertionCount: 0, owners: [] });
+    expect(coverage.stepsValidated).toBe(0);
+    expect(coverage.steps[0].gaps).toEqual(["ownership", "health"]);
+    expect(coverage.steps[0].detail).toContain("no owners");
+    expect(coverage.gapUrns).toEqual([FCT_REVENUE]);
+  });
+
+  it("refuses to call a run with unchecked claims a pass", () => {
+    const coverage = cover({ assertionCount: 0 });
+    expect(coverage.claimsUnvalidatable).toBe(1);
+    expect(verdictOf(0, coverage)).toBe("INSUFFICIENT_DATA");
+  });
+
+  it("reports a finding ahead of a coverage gap when there is both", () => {
+    expect(verdictOf(2, cover({ assertionCount: 0 }))).toBe("FINDING");
+  });
+
+  it("treats an unreadable entity as unvalidatable, not as covered", () => {
+    const live = { [FCT_REVENUE]: snapshot(FCT_REVENUE, { exists: false }) };
+    const claims = extractClaims(handoff([step]), { [FCT_REVENUE]: snapshot(FCT_REVENUE) });
+    const coverage = coverageOf([step], live, claims, verifyClaims(claims, live));
+    expect(coverage.stepsUnvalidatable).toBe(1);
+    expect(coverage.stepsValidated).toBe(0);
+  });
+});
+
+describe("healthObservable", () => {
+  it("is false on a table with nothing asserting anything about it", () => {
+    expect(healthObservable(snapshot(FCT_REVENUE, { assertionCount: 0 }))).toBe(false);
+  });
+
+  it("is false when the count was never determined, rather than assuming clean", () => {
+    expect(healthObservable(snapshot(FCT_REVENUE, { assertionCount: undefined }))).toBe(false);
+  });
+
+  it("is true when somebody is already looking, even with no assertions", () => {
+    expect(healthObservable(snapshot(FCT_REVENUE, { assertionCount: 0, openIncidents: 1 }))).toBe(true);
   });
 });
 

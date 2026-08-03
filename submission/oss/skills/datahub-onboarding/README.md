@@ -43,8 +43,13 @@ catalog-validated documents in DataHub.
   document URN
 - Deterministic staleness detection on every document read-back, per claim rather than per
   document, each pinned to a recomputable fingerprint of the aspect it depends on
+- A third verdict state for what could not be checked, with coverage tracked as its own
+  figure — an unmonitored dataset cannot answer "is this healthy?", and reporting it as
+  clean is the one failure a validator must not have
 - Staleness written back as catalog state: tag, structured properties, a runbook-validity
   assertion, and an incident assigned to the dataset's current owner
+- All of it retracted when the document is repaired — incident resolved, assertion passing,
+  tag removed, guarded against another document still stale on the same dataset
 - Catalog-derived corrections proposed as a reviewable diff, with the evidence for each edit
   and an explicit list of what needs a person instead
 - `datahub` CLI fallback when the MCP server is unavailable, including

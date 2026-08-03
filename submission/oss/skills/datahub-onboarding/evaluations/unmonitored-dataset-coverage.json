@@ -1,0 +1,16 @@
+{
+  "skills": ["datahub-onboarding"],
+  "query": "Validate the 'Weekly Order Revenue' runbook against the catalog. Two of the three tables it uses have no assertions defined and one has no owners. Is the runbook safe to follow?",
+  "expected_behavior": [
+    "Runs the deterministic checks it can run — entity existence, deprecation, columns present in schemaMetadata, owners in the ownership aspect — and reports what they found",
+    "Reports that health could not be evaluated on the datasets with no assertions and no incidents, rather than reporting them as healthy",
+    "States explicitly that 'no failing assertions' on an unmonitored dataset is not evidence the data is fit to follow",
+    "Reports the outcome as INSUFFICIENT_DATA (or equivalent wording) rather than as a pass, because some claims could not be checked either way",
+    "Gives a coverage figure naming how many steps were fully validated and which dimension is missing on the rest (health, ownership, schema)",
+    "Attributes each gap to the catalog rather than to the runbook, and says what would close it — adding an assertion, adding an owner, ingesting a schema",
+    "Distinguishes the unowned dataset's missing owner from an owner who has moved on, instead of reporting it as owner drift",
+    "Does NOT report the runbook as validated or safe to follow on the strength of checks it could not run",
+    "Does NOT report an empty or missing schemaMetadata as every column having been dropped",
+    "Does NOT tag the datasets as StaleRunbook, since nothing has drifted — a coverage gap is a different finding from staleness"
+  ]
+}

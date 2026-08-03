@@ -1,6 +1,6 @@
 {
-  "startedAt": "2026-08-02T21:00:19.202Z",
-  "finishedAt": "2026-08-02T21:02:00.245Z",
+  "startedAt": "2026-08-02T23:56:19.707Z",
+  "finishedAt": "2026-08-02T23:58:09.652Z",
   "gms": "http://localhost:8080",
   "catalog": "showcase-ecommerce, the demo datapack DataHub publishes (1,065 entities)",
   "catalogProfile": "showcase",
@@ -57,7 +57,7 @@
       "phase": "validate",
       "what": "every catalog claim holds",
       "passed": true,
-      "detail": "19/19 claims hold"
+      "detail": "15/19 claims hold"
     },
     {
       "phase": "validate",
@@ -70,6 +70,24 @@
       "what": "validated-against pins are written to the catalog",
       "passed": true,
       "detail": "9 pins, 6 pins, 4 pins"
+    },
+    {
+      "phase": "validate",
+      "what": "the run reports how much of the runbook it could check",
+      "passed": true,
+      "detail": "0/4 steps validated, 4 with catalog gaps (health, ownership)"
+    },
+    {
+      "phase": "validate",
+      "what": "a clean run with unvalidatable claims is not reported as a pass",
+      "passed": true,
+      "detail": "verdict INSUFFICIENT_DATA, 4/19 claims unvalidatable"
+    },
+    {
+      "phase": "validate",
+      "what": "the coverage figure is written to the catalog",
+      "passed": true,
+      "detail": "prove-weekly-order-revenue: 0/2 steps validated, catalog gaps: health"
     },
     {
       "phase": "break",
@@ -111,13 +129,13 @@
       "phase": "revalidate",
       "what": "broken claims moved the aspect they were pinned to",
       "passed": true,
-      "detail": "3 of 19 claims broken, 16 still hold"
+      "detail": "3 of 19 claims broken, 12 still hold"
     },
     {
       "phase": "write-back",
       "what": "a drift note is in the catalog",
       "passed": true,
-      "detail": "urn:li:document:shared-b0c115ce-89e1-4e4c-9d08-682b0fc57a45"
+      "detail": "urn:li:document:shared-aa96e907-e20c-4f77-9f20-9b73db133cf6"
     },
     {
       "phase": "write-back",
@@ -174,6 +192,12 @@
       "detail": "DataHub SE Team, David Kim, Julia Novak, Data Platform Team, Ian Chen"
     },
     {
+      "phase": "write-back",
+      "what": "the Stale Runbook tag reads back off the dataset in DataHub",
+      "passed": true,
+      "detail": "3/3 carry it"
+    },
+    {
       "phase": "restore",
       "what": "no drift reported",
       "passed": true,
@@ -183,7 +207,7 @@
       "phase": "restore",
       "what": "every catalog claim holds",
       "passed": true,
-      "detail": "19/19 claims hold"
+      "detail": "15/19 claims hold"
     },
     {
       "phase": "restore",
@@ -196,30 +220,202 @@
       "what": "validated-against pins are written to the catalog",
       "passed": true,
       "detail": "9 pins, 6 pins, 4 pins"
+    },
+    {
+      "phase": "restore",
+      "what": "the run reports how much of the runbook it could check",
+      "passed": true,
+      "detail": "0/4 steps validated, 4 with catalog gaps (health, ownership)"
+    },
+    {
+      "phase": "restore",
+      "what": "a clean run with unvalidatable claims is not reported as a pass",
+      "passed": true,
+      "detail": "verdict INSUFFICIENT_DATA, 4/19 claims unvalidatable"
+    },
+    {
+      "phase": "restore",
+      "what": "the coverage figure is written to the catalog",
+      "passed": true,
+      "detail": "prove-weekly-order-revenue: 0/2 steps validated, catalog gaps: health"
+    },
+    {
+      "phase": "restore",
+      "what": "the sweep itself closes the incidents it opened",
+      "passed": true,
+      "detail": "2 incident(s) resolved by the sweep"
+    },
+    {
+      "phase": "restore",
+      "what": "the Stale Runbook tag is retracted from every dataset it was applied to",
+      "passed": true,
+      "detail": "3/3 cleared"
+    },
+    {
+      "phase": "restore",
+      "what": "the retraction is recorded as a receipt, not just a side effect",
+      "passed": true,
+      "detail": "3 untagged, 0 kept for other runbooks"
     }
   ],
   "summary": {
-    "total": 29,
-    "passed": 29,
+    "total": 39,
+    "passed": 39,
     "failed": 0
   },
   "validations": {
     "before": {
       "severity": "ok",
+      "verdict": "INSUFFICIENT_DATA",
+      "coverage": {
+        "stepsTotal": 4,
+        "stepsValidated": 0,
+        "stepsPartial": 4,
+        "stepsUnvalidatable": 0,
+        "claimsTotal": 19,
+        "claimsChecked": 15,
+        "claimsUnvalidatable": 4,
+        "summary": "0/4 steps validated, 4 with catalog gaps (health, ownership)",
+        "steps": [
+          {
+            "stepIndex": 0,
+            "stepTitle": "Confirm ORDER_DETAILS is healthy and current",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+            "state": "partial",
+            "gaps": [
+              "health"
+            ],
+            "claimsTotal": 3,
+            "claimsUnvalidatable": 1,
+            "detail": "ORDER_DETAILS: it has no assertions or incidents, so nothing is monitoring it."
+          },
+          {
+            "stepIndex": 1,
+            "stepTitle": "Pull revenue and delivery cost by customer class",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+            "state": "partial",
+            "gaps": [
+              "health"
+            ],
+            "claimsTotal": 6,
+            "claimsUnvalidatable": 1,
+            "detail": "ORDER_DETAILS: it has no assertions or incidents, so nothing is monitoring it."
+          },
+          {
+            "stepIndex": 2,
+            "stepTitle": "Cross-check against the point-in-time history",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+            "state": "partial",
+            "gaps": [
+              "ownership",
+              "health"
+            ],
+            "claimsTotal": 6,
+            "claimsUnvalidatable": 1,
+            "detail": "ORDER_HISTORY: it has no owners, so a finding could not be routed to anybody; it has no assertions or incidents, so nothing is monitoring it."
+          },
+          {
+            "stepIndex": 3,
+            "stepTitle": "Get sign-off on the product margins",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+            "state": "partial",
+            "gaps": [
+              "health"
+            ],
+            "claimsTotal": 4,
+            "claimsUnvalidatable": 1,
+            "detail": "products: it has no assertions or incidents, so nothing is monitoring it."
+          }
+        ],
+        "gapUrns": [
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+          "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)"
+        ]
+      },
       "claims": {
         "total": 19,
-        "holds": 19,
+        "holds": 15,
         "broken": 0,
+        "unvalidatable": 4,
         "unverified": 0
       },
       "findings": []
     },
     "after": {
       "severity": "broken",
+      "verdict": "FINDING",
+      "coverage": {
+        "stepsTotal": 4,
+        "stepsValidated": 0,
+        "stepsPartial": 4,
+        "stepsUnvalidatable": 0,
+        "claimsTotal": 19,
+        "claimsChecked": 15,
+        "claimsUnvalidatable": 4,
+        "summary": "0/4 steps validated, 4 with catalog gaps (health, ownership)",
+        "steps": [
+          {
+            "stepIndex": 0,
+            "stepTitle": "Confirm ORDER_DETAILS is healthy and current",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+            "state": "partial",
+            "gaps": [
+              "health"
+            ],
+            "claimsTotal": 3,
+            "claimsUnvalidatable": 1,
+            "detail": "ORDER_DETAILS: it has no assertions or incidents, so nothing is monitoring it."
+          },
+          {
+            "stepIndex": 1,
+            "stepTitle": "Pull revenue and delivery cost by customer class",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+            "state": "partial",
+            "gaps": [
+              "health"
+            ],
+            "claimsTotal": 6,
+            "claimsUnvalidatable": 1,
+            "detail": "ORDER_DETAILS: it has no assertions or incidents, so nothing is monitoring it."
+          },
+          {
+            "stepIndex": 2,
+            "stepTitle": "Cross-check against the point-in-time history",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+            "state": "partial",
+            "gaps": [
+              "ownership",
+              "health"
+            ],
+            "claimsTotal": 6,
+            "claimsUnvalidatable": 1,
+            "detail": "ORDER_HISTORY: it has no owners, so a finding could not be routed to anybody; it has no assertions or incidents, so nothing is monitoring it."
+          },
+          {
+            "stepIndex": 3,
+            "stepTitle": "Get sign-off on the product margins",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+            "state": "partial",
+            "gaps": [
+              "health"
+            ],
+            "claimsTotal": 4,
+            "claimsUnvalidatable": 1,
+            "detail": "products: it has no assertions or incidents, so nothing is monitoring it."
+          }
+        ],
+        "gapUrns": [
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+          "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)"
+        ]
+      },
       "claims": {
         "total": 19,
-        "holds": 16,
+        "holds": 12,
         "broken": 3,
+        "unvalidatable": 4,
         "unverified": 0
       },
       "findings": [
@@ -254,7 +450,7 @@
           "remedy": "Current owners: Data Platform Team, Ian Chen."
         }
       ],
-      "documentUrn": "urn:li:document:shared-b0c115ce-89e1-4e4c-9d08-682b0fc57a45",
+      "documentUrn": "urn:li:document:shared-aa96e907-e20c-4f77-9f20-9b73db133cf6",
       "assertions": [
         {
           "urn": "urn:li:assertion:instaboard-0a02391ab278999326f7",
@@ -277,24 +473,27 @@
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
           "status": "prove-weekly-order-revenue: stale (checked 2026-08-02)",
           "driftValues": 1,
-          "pins": 9
+          "pins": 9,
+          "coverage": "prove-weekly-order-revenue: 0/2 steps validated, catalog gaps: health"
         },
         {
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
           "status": "prove-weekly-order-revenue: stale (checked 2026-08-02)",
           "driftValues": 1,
-          "pins": 6
+          "pins": 6,
+          "coverage": "prove-weekly-order-revenue: 0/1 steps validated, catalog gaps: ownership, health"
         },
         {
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
           "status": "prove-weekly-order-revenue: validated (checked 2026-08-02)",
           "driftValues": 1,
-          "pins": 4
+          "pins": 4,
+          "coverage": "prove-weekly-order-revenue: 0/1 steps validated, catalog gaps: health"
         }
       ],
       "incidents": [
         {
-          "urn": "urn:li:incident:b42b17d0-0837-4b21-9c97-d2c18462ba61",
+          "urn": "urn:li:incident:a3fb68d7-96ac-4244-a257-fa0f28523774",
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
           "reused": false,
           "assignees": [
@@ -303,7 +502,7 @@
           ]
         },
         {
-          "urn": "urn:li:incident:f862b1d6-9efb-4420-8208-ccb00b9eadaf",
+          "urn": "urn:li:incident:7a5eb27f-484e-4081-a06a-bb8dc6e4090c",
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
           "reused": false,
           "assignees": []
@@ -371,12 +570,127 @@
     },
     "afterRestore": {
       "severity": "ok",
+      "verdict": "INSUFFICIENT_DATA",
+      "coverage": {
+        "stepsTotal": 4,
+        "stepsValidated": 0,
+        "stepsPartial": 4,
+        "stepsUnvalidatable": 0,
+        "claimsTotal": 19,
+        "claimsChecked": 15,
+        "claimsUnvalidatable": 4,
+        "summary": "0/4 steps validated, 4 with catalog gaps (health, ownership)",
+        "steps": [
+          {
+            "stepIndex": 0,
+            "stepTitle": "Confirm ORDER_DETAILS is healthy and current",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+            "state": "partial",
+            "gaps": [
+              "health"
+            ],
+            "claimsTotal": 3,
+            "claimsUnvalidatable": 1,
+            "detail": "ORDER_DETAILS: it has no assertions or incidents, so nothing is monitoring it."
+          },
+          {
+            "stepIndex": 1,
+            "stepTitle": "Pull revenue and delivery cost by customer class",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+            "state": "partial",
+            "gaps": [
+              "health"
+            ],
+            "claimsTotal": 6,
+            "claimsUnvalidatable": 1,
+            "detail": "ORDER_DETAILS: it has no assertions or incidents, so nothing is monitoring it."
+          },
+          {
+            "stepIndex": 2,
+            "stepTitle": "Cross-check against the point-in-time history",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+            "state": "partial",
+            "gaps": [
+              "ownership",
+              "health"
+            ],
+            "claimsTotal": 6,
+            "claimsUnvalidatable": 1,
+            "detail": "ORDER_HISTORY: it has no owners, so a finding could not be routed to anybody; it has no assertions or incidents, so nothing is monitoring it."
+          },
+          {
+            "stepIndex": 3,
+            "stepTitle": "Get sign-off on the product margins",
+            "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+            "state": "partial",
+            "gaps": [
+              "health"
+            ],
+            "claimsTotal": 4,
+            "claimsUnvalidatable": 1,
+            "detail": "products: it has no assertions or incidents, so nothing is monitoring it."
+          }
+        ],
+        "gapUrns": [
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+          "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)"
+        ]
+      },
       "claims": {
         "total": 19,
-        "holds": 19,
+        "holds": 15,
         "broken": 0,
+        "unvalidatable": 4,
         "unverified": 0
-      }
+      },
+      "retracted": {
+        "attempted": true,
+        "untagged": [
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+          "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)"
+        ],
+        "kept": [],
+        "errors": [],
+        "at": "2026-08-02T23:58:03.466Z"
+      },
+      "resolvedIncidents": [
+        {
+          "urn": "urn:li:incident:a3fb68d7-96ac-4244-a257-fa0f28523774",
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+        },
+        {
+          "urn": "urn:li:incident:7a5eb27f-484e-4081-a06a-bb8dc6e4090c",
+          "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)"
+        }
+      ]
+    }
+  },
+  "tagReadBack": {
+    "tagsWhileBroken": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)": [
+        "urn:li:tag:b2fd91.__default_large_table",
+        "urn:li:tag:b2fd91.__default_high_queries",
+        "urn:li:tag:StaleRunbook"
+      ],
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)": [
+        "urn:li:tag:b2fd91.__default_large_table",
+        "urn:li:tag:StaleRunbook"
+      ],
+      "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)": [
+        "urn:li:tag:StaleRunbook"
+      ]
+    },
+    "tagsAfterRestore": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)": [
+        "urn:li:tag:b2fd91.__default_large_table",
+        "urn:li:tag:b2fd91.__default_high_queries"
+      ],
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)": [
+        "urn:li:tag:b2fd91.__default_large_table"
+      ],
+      "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)": []
     }
   }
 }

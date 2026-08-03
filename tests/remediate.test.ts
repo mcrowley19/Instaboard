@@ -70,6 +70,18 @@ describe("renameCandidate", () => {
   it("refuses to guess when nothing is close", () => {
     expect(renameCandidate("net_amount_usd", ["net_amount_usd"], ["customer_id", "shipped_at"])).toBeNull();
   });
+
+  it("matches a short column name that survives intact into the new one", () => {
+    // Found by the drift benchmark: one token out of two is a 0.5 overlap
+    // however obvious `plan` → `plan_v2` looks, so this used to fall below the
+    // threshold and every short column name declined silently.
+    expect(renameCandidate("plan", ["plan", "mrr"], ["plan_v2", "mrr"])).toMatchObject({ field: "plan_v2" });
+  });
+
+  it("still refuses on a fragment that half the schema contains", () => {
+    // `id` is in `order_id` and `customer_id` alike; boosting both is a guess.
+    expect(renameCandidate("id", ["id"], ["order_id", "customer_id"])).toBeNull();
+  });
 });
 
 describe("replacementFromNote", () => {

@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { columnsReferencedInSql, groundTruthColumns, planDrifts } from "../lib/drift-injection";
+import {
+  columnsReferencedInSql,
+  groundTruthColumns,
+  planControls,
+  planDrifts,
+  CONTROL_COLUMN,
+} from "../lib/drift-injection";
 import type { EntitySnapshot, Handoff } from "../lib/types";
 
 /**
@@ -146,5 +152,55 @@ describe("planDrifts", () => {
   it("carries what it needs to undo every plant", () => {
     const plans = planDrifts([runbook()], live, [], { decoys: 1, sharpDecoys: 1 });
     for (const plan of plans) expect(Object.keys(plan.undo).length).toBeGreaterThan(0);
+  });
+
+  it("plants a rename the similarity rule cannot solve, and says why in advance", () => {
+    const many = [URN_A, URN_B].map((urn, i) =>
+      runbook({
+        id: `rb${i}`,
+        steps: [{ title: "s", instruction: "i", why: "y", urn, sql: "SELECT net_amount_usd, revenue_date FROM t" }],
+      })
+    );
+    const plans = planDrifts(many, { [URN_A]: snapshot(URN_A), [URN_B]: snapshot(URN_B) }, [], {
+      decoys: 0,
+      sharpDecoys: 0,
+      hardRenames: 1,
+    });
+    const rename = plans.find((p) => p.kind === "column-renamed");
+
+    expect(rename?.renameTo).toBeDefined();
+    // Shares no tokens with the original — that is the whole point of the case.
+    expect(rename!.renameTo).not.toContain(rename!.subject);
+    expect(rename!.hardCase).toContain("shares no tokens");
+  });
+});
+
+describe("planControls", () => {
+  const live: Record<string, EntitySnapshot> = {
+    [URN_A]: snapshot(URN_A),
+    [URN_B]: snapshot(URN_B, { ownerUrns: ["urn:li:corpuser:sarah.chen"] }),
+  };
+
+  it("plants additive changes on datasets a runbook actually reads", () => {
+    const controls = planControls([runbook()], live);
+    expect(controls.length).toBeGreaterThan(0);
+    for (const c of controls) {
+      expect(c.control).toBe(true);
+      // Every control is a negative: the right answer is silence.
+      expect(c.expect).toBeNull();
+      expect(c.decoy).toBe(true);
+    }
+    expect(controls.find((c) => c.kind === "column-added")?.subject).toBe(CONTROL_COLUMN);
+  });
+
+  it("appends an owner without removing the one a step names", () => {
+    // One field away from real owner drift, which is what makes it worth planting.
+    const control = planControls([runbook()], live).find((c) => c.kind === "owner-added");
+    expect(control?.subject).toMatch(/^urn:li:corpuser:/);
+    expect((live[control!.urn].ownerUrns ?? []).includes(control!.subject)).toBe(false);
+  });
+
+  it("plants nothing when the catalog offers nothing to plant on", () => {
+    expect(planControls([runbook()], {})).toEqual([]);
   });
 });

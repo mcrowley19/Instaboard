@@ -72,11 +72,18 @@ function similarity(a: string, b: string): number {
    * `delivery_cost_usd` is that case, and edit distance scores it 0.06 because a
    * full reorder is nearly a maximal edit.
    *
-   * Requiring at least two content words keeps this narrow: `id` is contained in
+   * A single surviving word counts too, provided it is a word rather than a
+   * fragment. `plan` → `plan_v2` is the same shape of rename and scored 0.52
+   * without this, just below the threshold, because one token out of two is a
+   * 0.5 overlap however obvious the pair looks. The drift benchmark caught it;
+   * before that the rule silently declined on every short column name.
+   *
+   * The three-character floor is what keeps it narrow. `id` is contained in
    * `order_id`, `customer_id` and `product_id` alike, and boosting all three
-   * equally would be a guess. Two or more words that all survive is evidence.
+   * equally would be a guess. Where several candidates really are equally good,
+   * the runner-up guard in `renameCandidate` declines anyway.
    */
-  const containsAll = shared === tx.size && tx.size >= 2;
+  const containsAll = shared === tx.size && (tx.size >= 2 || [...tx][0].length > 2);
   const overlap = containsAll ? 1 : shared / Math.max(tx.size, ty.size);
 
   return 0.75 * overlap + 0.25 * edit;

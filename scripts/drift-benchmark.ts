@@ -9,11 +9,17 @@
  * decides whether a team keeps it switched on.
  *
  * This plants many drifts of each kind across every stored runbook, mixed with
- * **decoys**: real catalog changes that no runbook depends on and that must
- * produce nothing. Then it validates every runbook blind and scores precision,
- * recall and F1, overall and per kind.
+ * two kinds of negative case, then validates every runbook blind and scores it.
  *
- * Three things make the number honest:
+ *   **Decoys** — real changes to things no runbook reads. Must produce nothing.
+ *   **Controls** — real changes to things runbooks *do* read, which take nothing
+ *   away: a column added, a description rewritten, a second owner appointed.
+ *   Every one moves the aspect fingerprint a claim is pinned to, so a detector
+ *   that equates "the aspect changed" with "the runbook broke" fires on all of
+ *   them. These are the harder negatives, and they are where a real catalog
+ *   spends most of its time.
+ *
+ * Four things make the numbers honest:
  *
  *   1. **A baseline pass.** Findings that already existed before anything was
  *      planted are excluded from the false-positive count. A runbook that was
@@ -26,32 +32,52 @@
  *      column from a table a runbook reads, where the runbook never mentions
  *      that column. The engine holds a snapshot of that entity and must still
  *      stay quiet.
+ *   4. **A planted case the tool is known to fail.** One rename goes to a name
+ *      sharing no tokens with the original. Detection should still catch the
+ *      column as missing; the correction cannot be derived, and the benchmark
+ *      reports that as a miss with its structural reason rather than quietly
+ *      omitting the case. A benchmark that cannot fail is not evidence.
+ *
+ * Two axes are scored separately, because they fail separately:
+ *
+ *   **Detection** — did the engine notice the catalog moved?
+ *   **Correction** — could it work out what to put instead? This is the weaker
+ *   half, it is string similarity, and the score says so.
  *
  * Everything is restored afterwards, and the restore is verified.
+ *
+ *   npm run bench:drift             # run it against a live DataHub
+ *   npm run bench:drift -- --verify # re-derive the published table from the
+ *                                   # committed JSON, no DataHub needed
  */
 
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
-import { detectDecay, snapshotEntity } from "../lib/decay";
+import { detectDecayWithState, snapshotEntity } from "../lib/decay";
 import {
   injectDrift,
+  planControls,
   planDrifts,
   revertDrift,
-  type DriftKind,
   type PlannedDrift,
 } from "../lib/drift-injection";
 import { listHandoffs } from "../lib/handoff-store";
 import { isDemoMode } from "../lib/mcp";
 import { callDataHubTool } from "../lib/mcp";
-import type { DecayFinding, EntitySnapshot, Handoff } from "../lib/types";
+import { proposeFix } from "../lib/remediate";
+import { driftTable, extractTable, scorecard, type BenchmarkResult } from "../lib/drift-scorecard";
+import type { DecayFinding, DecayReport, EntitySnapshot, Handoff } from "../lib/types";
 
 const args = process.argv.slice(2);
 const json = args.includes("--json");
 const keep = args.includes("--keep");
+const verify = args.includes("--verify");
 const maxPerKind = Number(args.find((a) => a.startsWith("--per-kind="))?.split("=")[1] || 6);
 const decoyCount = Number(args.find((a) => a.startsWith("--decoys="))?.split("=")[1] || 6);
+const controlCount = Number(args.find((a) => a.startsWith("--controls="))?.split("=")[1] || 3);
 
 const OUT = path.join(process.cwd(), "examples", "live", "drift-benchmark.json");
+const SCORECARD = path.join(process.cwd(), "evals", "results", "drift-scorecard.md");
 const INDEX_LAG_MS = 25_000;
 
 const say = (m: string) => {
@@ -61,14 +87,22 @@ const say = (m: string) => {
 /** A finding, identified well enough to match against a planted drift. */
 const fingerprint = (f: DecayFinding) => `${f.urn}|${f.kind}|${f.detail}`;
 
-async function validateAll(runbooks: Handoff[]): Promise<DecayFinding[]> {
-  const findings: DecayFinding[] = [];
-  for (const runbook of runbooks) {
-    const report = await detectDecay(runbook);
-    findings.push(...report.findings);
-  }
-  return findings;
+interface Validation {
+  runbook: Handoff;
+  report: DecayReport;
+  live: Record<string, EntitySnapshot>;
 }
+
+async function validateAll(runbooks: Handoff[]): Promise<Validation[]> {
+  const out: Validation[] = [];
+  for (const runbook of runbooks) {
+    const { report, live } = await detectDecayWithState(runbook);
+    out.push({ runbook, report, live });
+  }
+  return out;
+}
+
+const findingsOf = (validations: Validation[]) => validations.flatMap((v) => v.report.findings);
 
 /** Did this finding report the drift we planted? */
 function matches(drift: PlannedDrift, finding: DecayFinding): boolean {
@@ -82,25 +116,88 @@ function matches(drift: PlannedDrift, finding: DecayFinding): boolean {
   return true;
 }
 
-interface Score {
-  truePositives: number;
-  falseNegatives: number;
-  falsePositives: number;
-  precision: number;
-  recall: number;
-  f1: number;
-}
-
-function score(tp: number, fp: number, fn: number): Score {
-  const precision = tp + fp === 0 ? 1 : tp / (tp + fp);
-  const recall = tp + fn === 0 ? 1 : tp / (tp + fn);
-  const f1 = precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall);
-  return { truePositives: tp, falsePositives: fp, falseNegatives: fn, precision, recall, f1 };
-}
-
 const pct = (n: number) => `${(n * 100).toFixed(1)}%`;
 
+/**
+ * Why a planted drift went undetected.
+ *
+ * Recorded at plant time where it is known (`hardCase`), and otherwise derived
+ * from the kind. A miss reported without a reason is a number to explain away;
+ * a miss reported with one is a limit somebody can act on.
+ */
+function missReason(drift: PlannedDrift): string {
+  if (drift.hardCase) return drift.hardCase;
+  switch (drift.kind) {
+    case "column-dropped":
+    case "column-renamed":
+      return (
+        `the step's dependency on \`${drift.subject}\` is detected by word-boundary matching its prose and SQL, ` +
+        `so a column reached through \`SELECT *\` or an alias is invisible to it`
+      );
+    case "deprecated":
+      return "the step's entity was already deprecated at record time, so there was no transition to see";
+    case "owner-removed":
+      return `the step never names ${drift.subject} in a form the owner matcher recognises`;
+    default:
+      return "no structural reason recorded — worth investigating before trusting this row";
+  }
+}
+
+/**
+ * Why no correction was derived for a drift that *was* detected.
+ *
+ * Taken from the remediator's own `unresolved` entry wherever it wrote one, so
+ * the published reason is the reason in the code rather than one composed
+ * afterwards to fit the result. `hardCase` is the fallback for a plant designed
+ * to be unsolvable; the last fallback says plainly that we do not know, which is
+ * worth more than a plausible guess.
+ */
+function correctionMissReason(drift: PlannedDrift, proposals: { unresolved: { detail: string; needsHuman: string }[] }[]): string {
+  const own = proposals
+    .flatMap((p) => p.unresolved)
+    .find((u) => u.detail.includes(drift.subject));
+  if (own) return own.needsHuman;
+  if (drift.hardCase) return drift.hardCase;
+  return "the remediator produced neither an edit nor an explanation — investigate before trusting this row";
+}
+
+/** Re-derive the published table from the committed run, without a DataHub. */
+function runVerify(): never {
+  const committed = JSON.parse(readFileSync(OUT, "utf8")) as BenchmarkResult;
+  const regenerated = scorecard(committed);
+  const onDisk = (() => {
+    try {
+      return readFileSync(SCORECARD, "utf8");
+    } catch {
+      return "";
+    }
+  })();
+
+  const table = driftTable(committed);
+  const readme = readFileSync(path.join(process.cwd(), "README.md"), "utf8");
+  const inReadme = extractTable(readme);
+
+  const problems: string[] = [];
+  if (onDisk.trim() !== regenerated.trim()) problems.push(`${path.relative(process.cwd(), SCORECARD)} is out of date`);
+  if (inReadme === null) problems.push("README.md has no drift-table markers");
+  else if (inReadme !== table) problems.push("the table in README.md does not match the committed run");
+
+  if (problems.length) {
+    console.error("Published drift numbers do not match the committed run:");
+    for (const p of problems) console.error(`  ✗ ${p}`);
+    console.error("\nRe-run `npm run bench:drift` against a DataHub, or paste the regenerated table below:\n");
+    console.error(table);
+    process.exit(2);
+  }
+
+  console.log(`✓ README.md and ${path.relative(process.cwd(), SCORECARD)} both match ${path.relative(process.cwd(), OUT)}`);
+  console.log(`  run at ${committed.at}, ${committed.detection.detected}/${committed.detection.plantedTotal} drifts detected`);
+  process.exit(0);
+}
+
 async function main() {
+  if (verify) runVerify();
+
   if (isDemoMode()) {
     console.error("DEMO_MODE is set. This benchmark mutates a real catalog, so unset it.");
     process.exit(1);
@@ -115,7 +212,7 @@ async function main() {
 
   /* ── 1. Baseline: what is already wrong, before we touch anything ────── */
   say("\n1/5  baseline validation (excluding pre-existing drift from the score)…");
-  const baseline = await validateAll(runbooks);
+  const baseline = findingsOf(await validateAll(runbooks));
   const preExisting = new Set(baseline.map(fingerprint));
   say(`     ${baseline.length} pre-existing finding(s) — these cannot count against precision.`);
 
@@ -139,10 +236,14 @@ async function main() {
   }
 
   /* ── 3. Plant ────────────────────────────────────────────────────────── */
-  const plans = planDrifts(runbooks, live, decoyCandidates, { maxPerKind, decoys: decoyCount });
+  const plans = [
+    ...planDrifts(runbooks, live, decoyCandidates, { maxPerKind, decoys: decoyCount }),
+    ...planControls(runbooks, live, controlCount),
+  ];
   const real = plans.filter((p) => !p.decoy);
-  const decoys = plans.filter((p) => p.decoy);
-  say(`\n3/5  planting ${real.length} drift(s) and ${decoys.length} decoy(s)…`);
+  const decoys = plans.filter((p) => p.decoy && !p.control);
+  const controls = plans.filter((p) => p.control);
+  say(`\n3/5  planting ${real.length} drift(s), ${decoys.length} decoy(s) and ${controls.length} control(s)…`);
 
   const injected: PlannedDrift[] = [];
   for (const plan of plans) {
@@ -160,7 +261,8 @@ async function main() {
 
   /* ── 4. Validate blind and score ─────────────────────────────────────── */
   say("\n4/5  validating every runbook (the engine is told nothing)…");
-  const after = await validateAll(runbooks);
+  const validations = await validateAll(runbooks);
+  const after = findingsOf(validations);
 
   // Findings that are new since the baseline. Anything already there is somebody
   // else's problem, not a false positive of ours.
@@ -195,34 +297,99 @@ async function main() {
 
   const explained = fresh.filter((f) => plantedReal.some((d) => matches(d, f)));
   const falseAlarms = fresh.filter((f) => !plantedReal.some((d) => matches(d, f)));
-  const overall = {
-    ...score(detected, falseAlarms.length, missed.length),
+
+  const recall = plantedReal.length === 0 ? 1 : detected / plantedReal.length;
+  // Precision over findings, which is the number an on-call engineer feels.
+  const precision = fresh.length === 0 ? 1 : explained.length / fresh.length;
+  const detection = {
+    plantedTotal: plantedReal.length,
+    detected,
     findingsExplained: explained.length,
     findingsTotal: fresh.length,
-    // Precision over findings, which is the number an on-call engineer feels.
-    precision: fresh.length === 0 ? 1 : explained.length / fresh.length,
+    falsePositives: falseAlarms.length,
+    precision,
+    recall,
+    f1: precision + recall === 0 ? 0 : (2 * precision * recall) / (precision + recall),
   };
-  overall.f1 =
-    overall.precision + overall.recall === 0
-      ? 0
-      : (2 * overall.precision * overall.recall) / (overall.precision + overall.recall);
+
+  /*
+   * Negatives, scored per planted change rather than per finding. Attribution is
+   * by dataset: a control shares its table with whatever drift was planted there,
+   * and anything unexplained landing on that table is charged to the control.
+   */
+  const injectedNegatives = injected.filter((p) => p.decoy);
+  const negativeDetail = injectedNegatives.map((n) => {
+    const fired = falseAlarms.filter((f) => f.urn === n.urn);
+    return {
+      id: n.id,
+      kind: n.kind,
+      urn: n.urn,
+      control: Boolean(n.control),
+      quiet: fired.length === 0,
+      findings: fired.map((f) => `${f.kind}: ${f.detail}`),
+    };
+  });
+  const negatives = {
+    decoysPlanted: negativeDetail.filter((n) => !n.control).length,
+    decoysQuiet: negativeDetail.filter((n) => !n.control && n.quiet).length,
+    controlsPlanted: negativeDetail.filter((n) => n.control).length,
+    controlsQuiet: negativeDetail.filter((n) => n.control && n.quiet).length,
+    detail: negativeDetail,
+  };
+
+  /*
+   * The second axis. Detecting that `net_amount_usd` is gone is a schema diff and
+   * it is reliable; working out that it is now called `settled_value` is string
+   * similarity and it is not. Scoring them together would let the strong half
+   * carry the weak one.
+   */
+  const renames = plantedReal.filter((d) => d.kind === "column-renamed" && fresh.some((f) => matches(d, f)));
+  const proposals = validations
+    .filter((v) => v.report.severity !== "ok")
+    .map((v) => proposeFix(v.runbook, v.report, v.live));
+  const correctionMisses: { id: string; from: string; to: string; reason: string }[] = [];
+  let proposed = 0;
+  for (const rename of renames) {
+    const derived = proposals.some((p) =>
+      p.edits.some((e) => e.kind === "column-rename" && e.from === rename.subject && e.to === rename.renameTo)
+    );
+    if (derived) proposed++;
+    else {
+      correctionMisses.push({
+        id: rename.id,
+        from: rename.subject,
+        to: rename.renameTo ?? "?",
+        reason: correctionMissReason(rename, proposals),
+      });
+    }
+  }
+  const corrections = { eligible: renames.length, proposed, misses: correctionMisses };
 
   if (!json) {
-    console.log(`\n     planted drifts detected : ${detected}/${plantedReal.length}`);
-    console.log(`     fresh findings explained: ${overall.findingsExplained}/${overall.findingsTotal}`);
-    console.log(`     missed         : ${overall.falseNegatives}${missed.length ? " — " + missed.map((m) => m.id).join(", ") : ""}`);
-    console.log(`     unexplained    : ${overall.falsePositives}`);
+    console.log(`\n     planted drifts detected : ${detection.detected}/${detection.plantedTotal}`);
+    console.log(`     fresh findings explained: ${detection.findingsExplained}/${detection.findingsTotal}`);
+    console.log(`     missed         : ${missed.length}${missed.length ? " — " + missed.map((m) => m.id).join(", ") : ""}`);
+    console.log(`     unexplained    : ${detection.falsePositives}`);
     for (const f of falseAlarms) console.log(`        ✗ ${f.kind} on ${f.urn.slice(-40)}: ${f.detail.slice(0, 90)}`);
-    console.log(`\n     precision ${pct(overall.precision)} · recall ${pct(overall.recall)} · F1 ${pct(overall.f1)}`);
+    console.log(`\n     precision ${pct(detection.precision)} · recall ${pct(detection.recall)} · F1 ${pct(detection.f1)}`);
     console.log("\n     by kind:");
     for (const [kind, counts] of Object.entries(perKind)) {
       const r = counts.tp + counts.fn === 0 ? 1 : counts.tp / (counts.tp + counts.fn);
       console.log(`       ${kind.padEnd(16)} recall ${pct(r)}  (${counts.tp}/${counts.tp + counts.fn})`);
     }
     console.log(
-      `\n     decoys planted: ${injected.filter((p) => p.decoy).length}, of which ` +
-        `${falseAlarms.filter((f) => injected.some((p) => p.decoy && p.urn === f.urn)).length} produced a finding.`
+      `\n     decoys   ${negatives.decoysQuiet}/${negatives.decoysPlanted} stayed quiet` +
+        `\n     controls ${negatives.controlsQuiet}/${negatives.controlsPlanted} stayed quiet ` +
+        `(additive changes on datasets runbooks read)`
     );
+    for (const n of negativeDetail.filter((n) => !n.quiet)) {
+      console.log(`        ✗ ${n.control ? "control" : "decoy"} ${n.kind} fired: ${n.findings[0]?.slice(0, 100)}`);
+    }
+    console.log(`\n     corrections derived for detected renames: ${proposed}/${renames.length}`);
+    for (const miss of correctionMisses) {
+      console.log(`        ~ ${miss.from} → ${miss.to}`);
+      console.log(`          ${miss.reason}`);
+    }
   }
 
   /* ── 5. Restore ──────────────────────────────────────────────────────── */
@@ -237,37 +404,70 @@ async function main() {
     say(`     restored ${restored}/${injected.length}`);
   }
 
-  const result = {
+  const result: BenchmarkResult = {
     at: new Date().toISOString(),
     catalog: process.env.DATAHUB_GMS_URL || "http://localhost:8080",
     runbooks: runbooks.map((r) => ({ id: r.id, title: r.title, steps: r.steps.length })),
     method:
-      "Known drifts planted through DataHub's own write APIs across every stored runbook, mixed with decoys that " +
-      "must produce nothing. Ground truth for column drift comes from tokenising each step's SQL, not from the " +
-      "engine's own reference matcher. Findings that pre-date the injection are excluded from the false-positive " +
-      "count. The engine is told nothing about any of it.",
+      "Known drifts planted through DataHub's own write APIs across every stored runbook, mixed with decoys " +
+      "(changes to things no runbook reads) and controls (additive changes to things runbooks do read: a column " +
+      "added, a description rewritten, a second owner appointed). Both classes must produce nothing. Ground truth " +
+      "for column drift comes from tokenising each step's SQL, not from the engine's own reference matcher. One " +
+      "rename is planted to a name sharing no tokens with the original, which the correction rule cannot solve by " +
+      "construction. Findings that pre-date the injection are excluded from the false-positive count. The engine is " +
+      "told nothing about any of it.",
     baselineFindings: baseline.length,
-    planted: injected.map((p) => ({ id: p.id, kind: p.kind, urn: p.urn, subject: p.subject, decoy: p.decoy, expect: p.expect })),
-    overall,
+    planted: injected.map((p) => ({
+      id: p.id,
+      kind: p.kind,
+      urn: p.urn,
+      subject: p.subject,
+      decoy: p.decoy,
+      ...(p.control ? { control: true } : {}),
+      expect: p.expect,
+      ...(p.hardCase ? { hardCase: p.hardCase } : {}),
+    })),
+    detection,
     byKind: Object.fromEntries(
       Object.entries(perKind).map(([kind, c]) => [
         kind,
         { truePositives: c.tp, falseNegatives: c.fn, recall: c.tp + c.fn === 0 ? 1 : c.tp / (c.tp + c.fn) },
       ])
     ),
+    negatives,
+    corrections,
     falsePositives: falseAlarms.map((f) => ({ kind: f.kind, urn: f.urn, detail: f.detail })),
-    falseNegatives: missed.map((m) => ({ id: m.id, kind: m.kind, urn: m.urn, subject: m.subject })),
+    falseNegatives: missed.map((m) => ({
+      id: m.id,
+      kind: m.kind,
+      urn: m.urn,
+      subject: m.subject,
+      reason: missReason(m),
+    })),
     restored: keep ? null : `${restored}/${injected.length}`,
   };
 
   mkdirSync(path.dirname(OUT), { recursive: true });
   writeFileSync(OUT, JSON.stringify(result, null, 2));
+  mkdirSync(path.dirname(SCORECARD), { recursive: true });
+  writeFileSync(SCORECARD, scorecard(result));
 
   if (json) console.log(JSON.stringify(result, null, 2));
-  else console.log(`\nwrote ${path.relative(process.cwd(), OUT)}`);
+  else {
+    console.log(`\nwrote ${path.relative(process.cwd(), OUT)}`);
+    console.log(`wrote ${path.relative(process.cwd(), SCORECARD)}`);
+    console.log("\nPaste this between the drift-table markers in README.md:\n");
+    console.log(driftTable(result));
+  }
 
-  // A recall or precision collapse should fail a pipeline, not just print.
-  process.exit(overall.recall < 0.9 || overall.precision < 0.9 ? 2 : 0);
+  /*
+   * A pipeline should fail on a detection collapse or a negative firing. The
+   * correction axis deliberately does not gate: one of its cases is planted to be
+   * unsolvable, so failing the build on it would mean deleting the honest case to
+   * get green — exactly the pressure this benchmark exists to resist.
+   */
+  const negativesFired = negatives.decoysPlanted - negatives.decoysQuiet + (negatives.controlsPlanted - negatives.controlsQuiet);
+  process.exit(detection.recall < 0.9 || detection.precision < 0.9 || negativesFired > 0 ? 2 : 0);
 }
 
 main().catch((err) => {

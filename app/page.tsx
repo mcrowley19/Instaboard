@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
+import DriftPlayground from "@/components/DriftPlayground";
 import "./landing.css";
 
 const STEPS = [
@@ -396,43 +397,16 @@ export default function Landing() {
               read, no LLM, every verdict confirmable in the DataHub UI in ten seconds.
             </p>
 
-            <div className="lp-decay lp-reveal" ref={decayRef}>
-              <div className="lp-trace-head">
-                <span className="dot warn" />
-                <span>runbook validation</span>
-                <span className="grow">monthly MRR report · recorded 2026-07-01 by Priya Patel</span>
-              </div>
-              <div className="lp-decay-body">
-                <div className="lp-decay-row">
-                  <span className="lp-decay-badge">step 1</span>
-                  <div>
-                    <b>failing-assertion</b> — <code>payment_health_daily</code> has a failing
-                    freshness assertion. It was passing when the runbook was recorded.
-                    <span className="lp-decay-remedy">
-                      The table may be stale. Confirm it has loaded before trusting this step.
-                    </span>
-                  </div>
-                </div>
-                <div className="lp-decay-row ok">
-                  <span className="lp-decay-badge">steps 2–3</span>
-                  <div>
-                    <b>checks out</b> — schemas, owners and health match what the recording
-                    captured.
-                  </div>
-                </div>
-              </div>
-              <div className="lp-decay-foot">
-                <span className="tick">●</span>
-                written back to DataHub as a note on the dataset — the warning lives where the
-                runbook lives
-                <span className="grow">save_document</span>
-              </div>
+            <div className="lp-reveal" ref={decayRef}>
+              <DriftPlayground />
             </div>
 
             <p className="lp-note">
               Detection diffs the catalog facts each step depended on at record time against the
               catalog now: vanished columns the step&rsquo;s SQL references, tables deprecated
-              since, newly failing assertions, owners who no longer own the thing.
+              since, newly failing assertions, owners who no longer own the thing. Against a real
+              DataHub the same result is written back as a note, a failing assertion, structured
+              properties and an incident assigned to whoever owns the table today.
             </p>
           </div>
         </div>

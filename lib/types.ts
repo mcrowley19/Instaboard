@@ -144,6 +144,17 @@ export interface EntitySnapshot {
   deprecationNote?: string;
   openIncidents: number;
   failingAssertions: number;
+  /**
+   * How many assertions are defined on this entity at all, excluding the ones
+   * instaboard writes itself. Zero failing assertions means "healthy" only if
+   * something is actually being asserted; on an unmonitored dataset it means
+   * nobody is looking. Deliberately *not* part of the fingerprint — adding a
+   * monitor to a table is not drift in a runbook that reads it.
+   *
+   * `undefined` means it was not determined, which is treated the same as zero:
+   * we could not establish that health is observable.
+   */
+  assertionCount?: number;
   capturedAt: string;
   /** Optional: runbooks recorded before provenance shipped have no version. */
   version?: EntityVersion;
@@ -174,9 +185,22 @@ export interface RunbookClaim {
   validatedAgainst?: ClaimPin;
 }
 
+/**
+ * What re-checking one claim concluded.
+ *
+ * `unvalidatable` is the state that stops a clean report from lying. A claim that
+ * the catalog holds no evidence either way for — "no failing assertions" on a
+ * dataset nobody monitors, "the column is still there" on a dataset whose schema
+ * never ingested — is not a claim that holds. Collapsing it into `holds` is how a
+ * runbook comes back 17/17 green on a catalog that could not answer the question.
+ *
+ * `unverified` is different and narrower: the catalog could not be read at all.
+ */
+export type ClaimStatus = "holds" | "broken" | "unvalidatable" | "unverified";
+
 export interface ClaimVerdict {
   claimId: string;
-  status: "holds" | "broken" | "unverified";
+  status: ClaimStatus;
   /** The version this re-check ran against — the far end of the provenance chain. */
   checkedAgainst?: ClaimPin;
   /** True when the pinned aspect has not moved at all since the claim was recorded. */
@@ -207,10 +231,68 @@ export interface DecayFinding {
   claimId?: string;
 }
 
+/**
+ * The three things a validation run can conclude, kept separate from severity.
+ *
+ * `severity` answers "how bad is what we found". `verdict` answers the prior
+ * question: did we find anything, and were we able to look?
+ *
+ *   PASS               every claim was checked and every claim holds.
+ *   FINDING            something concrete drifted. See `findings`.
+ *   INSUFFICIENT_DATA  nothing drifted among the claims we could check, but the
+ *                      catalog could not answer for all of them. Not a clean run.
+ *
+ * FINDING outranks INSUFFICIENT_DATA: a run that both found drift and had gaps
+ * reports the drift, with the gaps still recorded in `coverage`.
+ */
+export type RunbookVerdict = "PASS" | "FINDING" | "INSUFFICIENT_DATA";
+
+/** The kinds of catalog evidence a claim can be checked against. */
+export type CoverageDimension = "schema" | "ownership" | "health";
+
+export interface StepCoverage {
+  stepIndex: number;
+  stepTitle: string;
+  urn?: string;
+  /** `validated` = every claim this step makes was actually checked. */
+  state: "validated" | "partial" | "unvalidatable";
+  /** Dimensions the catalog held no evidence for, so nothing could be concluded. */
+  gaps: CoverageDimension[];
+  claimsTotal: number;
+  claimsUnvalidatable: number;
+  detail: string;
+}
+
+/**
+ * How much of the runbook this run was actually able to check.
+ *
+ * Published alongside the result, and written into DataHub as a structured
+ * property, because a coverage figure nobody can see turns back into the thing
+ * it exists to prevent.
+ */
+export interface RevalidationCoverage {
+  stepsTotal: number;
+  stepsValidated: number;
+  stepsPartial: number;
+  stepsUnvalidatable: number;
+  claimsTotal: number;
+  claimsChecked: number;
+  claimsUnvalidatable: number;
+  /** "14/17 steps validated" — the headline, and the structured-property value. */
+  summary: string;
+  steps: StepCoverage[];
+  /** Datasets carrying at least one gap, for the tag write-back. */
+  gapUrns: string[];
+}
+
 export interface DecayReport {
   handoffId: string;
   checkedAt: string;
   severity: DecaySeverity;
+  /** Optional for reports stored before the three-state verdict shipped. */
+  verdict?: RunbookVerdict;
+  /** What this run could and could not check. Optional for the same reason. */
+  coverage?: RevalidationCoverage;
   stepsChecked: number;
   entitiesChecked: number;
   /** False for runbooks written before snapshotting — absolute checks only. */

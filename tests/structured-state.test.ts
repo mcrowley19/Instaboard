@@ -247,8 +247,40 @@ describe("writeStructuredState", () => {
     expect(created).toEqual([
       "instaboard_runbook_status",
       "instaboard_runbook_drift",
+      "instaboard_revalidation_coverage",
       "instaboard_runbook_validated_against",
     ]);
+  });
+
+  it("writes the coverage figure alongside the status, per dataset", async () => {
+    const receipt = await writeStructuredState(handoff(), {
+      ...report(),
+      coverage: {
+        stepsTotal: 2,
+        stepsValidated: 1,
+        stepsPartial: 1,
+        stepsUnvalidatable: 0,
+        claimsTotal: 5,
+        claimsChecked: 4,
+        claimsUnvalidatable: 1,
+        summary: "1/2 steps validated, 1 with catalog gaps (health)",
+        gapUrns: [URN],
+        steps: [
+          {
+            stepIndex: 0,
+            stepTitle: "Pull revenue",
+            urn: URN,
+            state: "partial",
+            gaps: ["health"],
+            claimsTotal: 3,
+            claimsUnvalidatable: 1,
+            detail: "fct_revenue: it has no assertions or incidents, so nothing is monitoring it.",
+          },
+        ],
+      },
+    });
+    expect(receipt.properties[0].coverage).toContain("0/1 steps validated");
+    expect(receipt.properties[0].coverage).toContain("catalog gaps: health");
   });
 });
 
