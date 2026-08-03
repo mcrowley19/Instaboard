@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import DriftPlayground from "@/components/DriftPlayground";
+import WriteBackPlayground from "@/components/WriteBackPlayground";
 import "./landing.css";
 
 const STEPS = [
@@ -400,6 +401,10 @@ export default function Landing() {
             <div className="lp-reveal" ref={decayRef}>
               <DriftPlayground />
             </div>
+
+            {/* Renders only where the deployment has a DataHub it is allowed to
+                write to. Everywhere else it is absent rather than disabled. */}
+            <WriteBackPlayground />
 
             <p className="lp-note">
               Detection diffs the catalog facts each step depended on at record time against the

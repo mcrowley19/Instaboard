@@ -499,3 +499,40 @@ export function provenanceBlock(report: DecayReport, datasetUrn?: string): strin
     })
     .join("\n");
 }
+
+/**
+ * The status of a runbook's assertion, read off DataHub rather than taken from
+ * the receipt that wrote it.
+ *
+ * `null` means no assertion exists for this (runbook, dataset) pair — which is a
+ * different thing from one that exists and is passing, and the caller needs to
+ * be able to tell those apart before reporting a retraction.
+ */
+export async function readAssertionStatus(
+  runbookId: string,
+  datasetUrn: string
+): Promise<{ urn: string; result: string; at?: number } | null> {
+  const urn = assertionUrnFor(runbookId, datasetUrn);
+  const res = await datahubGraphQL<{
+    assertion: {
+      urn: string;
+      runEvents: { runEvents: { timestampMillis: number; result: { type: string } | null }[] } | null;
+    } | null;
+  }>(
+    `query readAssertion($urn: String!) {
+       assertion(urn: $urn) {
+         urn
+         runEvents(limit: 1) { runEvents { timestampMillis result { type } } }
+       }
+     }`,
+    { urn }
+  );
+  const assertion = res.data?.assertion;
+  if (!assertion) return null;
+  const latest = assertion.runEvents?.runEvents?.[0];
+  return {
+    urn: assertion.urn,
+    result: latest?.result?.type ?? "NO_RESULT",
+    ...(latest?.timestampMillis ? { at: latest.timestampMillis } : {}),
+  };
+}

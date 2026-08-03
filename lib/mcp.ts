@@ -1,6 +1,8 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { callDemoTool, DEMO_TOOLS } from "./demo-mcp";
+import { gmsReachable } from "./datahub-graphql";
+import { callToolOverGraphQL, GRAPHQL_TOOLS } from "./mcp-over-graphql";
 import type { ToolDef } from "./types";
 
 /** Demo mode answers all tools from the fixture Northbeam catalog — no DataHub needed. */
@@ -27,6 +29,13 @@ interface McpState {
   /** Set when the MCP server can't be spawned (e.g. serverless hosts with no
    *  uvx) — the process falls back to the demo catalog instead of erroring. */
   fallbackDemo: boolean;
+  /**
+   * Set when the subprocess is unavailable but GMS answers over HTTP. The four
+   * tools the loop needs then go over GraphQL instead of to the fixture, which
+   * is what lets a serverless deployment read and write a real catalog.
+   * `null` means not yet determined.
+   */
+  graphqlTransport: boolean | null;
 }
 
 // Survive Next.js dev-mode module reloads by stashing on globalThis.
@@ -36,10 +45,24 @@ const state: McpState = (g.__datahubMcp ??= {
   connecting: null,
   tools: null,
   fallbackDemo: false,
+  graphqlTransport: null,
 });
 
 function demoActive(): boolean {
   return isDemoMode() || state.fallbackDemo;
+}
+
+/**
+ * Can we reach a real catalog over plain HTTP, having failed to spawn the
+ * subprocess? Explicit demo mode is never overridden — being asked for the
+ * fixture and answering from a live catalog would be the same class of
+ * dishonesty as the reverse.
+ */
+async function graphqlTransportAvailable(): Promise<boolean> {
+  if (isDemoMode()) return false;
+  if (state.graphqlTransport !== null) return state.graphqlTransport;
+  state.graphqlTransport = await gmsReachable();
+  return state.graphqlTransport;
 }
 
 async function connect(): Promise<Client> {
@@ -111,12 +134,25 @@ export async function callDataHubTool(
   name: string,
   args: Record<string, unknown>
 ): Promise<{ content: string; isError: boolean }> {
+  if (isDemoMode()) return callDemoTool(name, args);
+
+  // Already known to have no subprocess: try GraphQL before the fixture. A real
+  // catalog answered over HTTP beats a fixture answered perfectly.
+  if (state.fallbackDemo && GRAPHQL_TOOLS.has(name) && (await graphqlTransportAvailable())) {
+    const viaGraphQL = await callToolOverGraphQL(name, args);
+    if (viaGraphQL) return viaGraphQL;
+  }
   if (demoActive()) return callDemoTool(name, args);
+
   let client: Client;
   try {
     client = await getMcpClient();
   } catch {
     state.fallbackDemo = true;
+    if (GRAPHQL_TOOLS.has(name) && (await graphqlTransportAvailable())) {
+      const viaGraphQL = await callToolOverGraphQL(name, args);
+      if (viaGraphQL) return viaGraphQL;
+    }
     return callDemoTool(name, args);
   }
   try {
@@ -144,15 +180,25 @@ export async function mcpStatus(): Promise<{
   toolCount: number;
   demo?: boolean;
   fallback?: boolean;
+  /** True when catalog reads and writes are going over GraphQL, not the fixture. */
+  graphql?: boolean;
+  catalog?: string;
   error?: string;
 }> {
   try {
     const tools = await listDataHubTools();
+    // `fallbackDemo` used to mean "answering from the fixture". It now means
+    // only "no subprocess", so the pill has to distinguish the two or it will
+    // report a live catalog as a demo.
+    const overGraphQL = state.fallbackDemo && (await graphqlTransportAvailable());
     return {
       connected: true,
       toolCount: tools.length,
-      ...(demoActive() ? { demo: true } : {}),
+      ...(demoActive() && !overGraphQL ? { demo: true } : {}),
       ...(state.fallbackDemo ? { fallback: true } : {}),
+      ...(overGraphQL
+        ? { graphql: true, catalog: process.env.DATAHUB_GMS_URL || "http://localhost:8080" }
+        : {}),
     };
   } catch (err) {
     return {

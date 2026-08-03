@@ -1,13 +1,19 @@
 {
   "meta": {
+    "models": [
+      "nvidia/nemotron-3-ultra-550b-a55b:free"
+    ],
     "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "runs": 1,
     "mode": "demo catalog (fixture)",
-    "at": "2026-08-02 18:49 UTC",
+    "at": "2026-08-03 13:58 UTC",
     "suite": "northbeam"
   },
-  "arms": [
+  "cells": [
     {
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
       "arm": "grounded",
+      "run": 0,
       "cases": [
         {
           "id": "revenue-tables",
@@ -623,7 +629,9 @@
       "durationMs": 775279
     },
     {
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
       "arm": "schema",
+      "run": 0,
       "cases": [
         {
           "id": "revenue-tables",
@@ -1264,7 +1272,9 @@
       "durationMs": 807064
     },
     {
+      "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
       "arm": "blind",
+      "run": 0,
       "cases": [
         {
           "id": "revenue-tables",

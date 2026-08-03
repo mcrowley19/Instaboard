@@ -512,3 +512,21 @@ export async function writeBackNative(
 
   return receipt;
 }
+
+/* ── Reading the writes back ──────────────────────────────────────────── */
+
+/**
+ * The tags DataHub actually holds on a dataset, and whether ours is among them.
+ *
+ * The write-back receipt says what was sent. This says what the catalog has, and
+ * they are not the same claim — a retraction proved from the receipt alone is
+ * the tool marking its own homework. Both sides of tag → repair → tag-gone read
+ * back through here.
+ */
+export async function readStaleTag(urn: string): Promise<{ present: boolean; tags: string[] }> {
+  const res = await datahubGraphQL<{
+    dataset: { tags: { tags: { tag: { urn: string } }[] } | null } | null;
+  }>(`query readTags($urn: String!) { dataset(urn: $urn) { tags { tags { tag { urn } } } } }`, { urn });
+  const tags = (res.data?.dataset?.tags?.tags ?? []).map((t) => t.tag.urn);
+  return { present: tags.includes(STALE_RUNBOOK_TAG_URN), tags };
+}

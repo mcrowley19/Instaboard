@@ -1,6 +1,7 @@
 # instaboard onboarding benchmark
 
-_Generated 2026-08-02 18:49 UTC · model `nvidia/nemotron-3-ultra-550b-a55b:free` · catalog: demo catalog (fixture)_
+_Generated 2026-08-03 13:58 UTC · catalog: demo catalog (fixture)_
+_model `nvidia/nemotron-3-ultra-550b-a55b:free` · 1 run per case_
 
 20 questions a new hire asks in week 1, scored deterministically against
 Northbeam, seeded by this repo with `npm run seed`. Every arm runs through the identical agent loop; the only
@@ -18,7 +19,7 @@ difference is what is in the tool list.
 
 The middle arm is the one that makes this readable. It has real tools and makes real lookups against the same warehouse — it just cannot see anything the catalog adds on top of the schema. It scores **9/20**, putting **10 of 20** questions beyond the reach of a database connection alone. That gap is the metadata, not the tooling.
 
-It is not that it tried less hard: it made 111 tool calls to the grounded arm's 86, and still finished 10 cases behind. Listing every table in the warehouse does not tell you which of six identically-named copies is the one people use, who to ask about it, or what the company means by "active user".
+It is not that it tried less hard: it made 111 tool calls per pass to the grounded arm's 86, and still finished 10 cases behind. Listing every table in the warehouse does not tell you which of six identically-named copies is the one people use, who to ask about it, or what the company means by "active user".
 
 ## By category
 
@@ -237,7 +238,7 @@ It is not that it tried less hard: it made 111 tool calls to the grounded arm's 
 
 - **Scoring is deterministic.** Every check is a case-insensitive substring match
   against the agent's final answer. There is no LLM judge and no partial credit —
-  a case passes only if all of its checks pass. Raw answers for every case are in
+  a case passes only if all of its checks pass. Raw answers for every pass are in
   `latest.json` so any check can be verified by hand.
 - **All three arms share one code path** (`runAgent` in `lib/agent.ts`). The control
   arm is the same loop with `tools: []`; the schema arm is the same loop pointed at
