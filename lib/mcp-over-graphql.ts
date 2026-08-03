@@ -74,6 +74,31 @@ type ToolResult = { content: string; isError: boolean };
 const ok = (value: unknown): ToolResult => ({ content: JSON.stringify(value), isError: false });
 const fail = (message: string): ToolResult => ({ content: message, isError: true });
 
+/**
+ * `get_entities` and `get_dataset_health` resolve to the same query here, and
+ * `snapshotEntity` calls them back to back for the same URN. That is two
+ * identical round trips, and the entity query is not cheap: `health` is computed
+ * from assertions and incidents at request time and costs ~1.3s against this
+ * catalog where a plain field read costs 25ms.
+ *
+ * So a read is reused for a couple of seconds. Short enough that it is still the
+ * catalog as it is now — the two calls it collapses are moments apart and
+ * `decay.ts` already treats them as one snapshot — and long enough to halve the
+ * cost of every snapshot.
+ */
+const READ_TTL_MS = 2_000;
+const entityReads = new Map<string, { at: number; result: ToolResult }>();
+
+function cachedRead(key: string): ToolResult | undefined {
+  const hit = entityReads.get(key);
+  if (!hit) return undefined;
+  if (Date.now() - hit.at > READ_TTL_MS) {
+    entityReads.delete(key);
+    return undefined;
+  }
+  return hit.result;
+}
+
 function urnsFrom(args: Record<string, unknown>): string[] {
   const raw = args.urns ?? args.urn;
   if (Array.isArray(raw)) return raw.filter((u): u is string => typeof u === "string");
@@ -98,6 +123,11 @@ export async function callToolOverGraphQL(
     case "get_dataset_health": {
       const urns = urnsFrom(args);
       if (urns.length === 0) return fail("get_entities: no urns given");
+
+      const key = urns.slice().sort().join("|");
+      const reused = cachedRead(key);
+      if (reused) return reused;
+
       const result = await datahubGraphQL<{ entities: ({ exists?: boolean } | null)[] }>(GET_ENTITIES, {
         urns,
       });
@@ -111,8 +141,12 @@ export async function callToolOverGraphQL(
       const entities = (result.data?.entities ?? []).filter(
         (e): e is { exists?: boolean } => Boolean(e) && e!.exists !== false
       );
-      if (entities.length === 0) return ok({ entities: [], error: "not found in catalog" });
-      return ok(entities.length === 1 ? entities[0] : entities);
+      const answer =
+        entities.length === 0
+          ? ok({ entities: [], error: "not found in catalog" })
+          : ok(entities.length === 1 ? entities[0] : entities);
+      entityReads.set(key, { at: Date.now(), result: answer });
+      return answer;
     }
 
     case "add_tags": {
