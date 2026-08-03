@@ -3,6 +3,7 @@
  *
  *   npm run bench:scale
  *   npm run bench:scale -- --sizes=2000,5000,10000
+ *   npm run bench:scale -- --repeats=5  # more sweeps per size; wall-clock is noisy
  *   npm run bench:scale -- --verify     # re-derive the table, no DataHub needed
  *
  * "We haven't proven it scales" is a fair thing to disclose and a bad thing to
@@ -23,6 +24,14 @@
  * O(runbooks), and a company with 10,000 datasets and 40 runbooks pays for the
  * 40. It is also the claim most likely to be wrong for a reason nobody predicted,
  * which is why it is measured rather than argued.
+ *
+ * **Two columns, and only one of them is trustworthy.** Catalog reads are exact
+ * and deterministic. Wall-clock is not: the same sweep over the same unchanged
+ * catalog measured 50.1s and 107.1s minutes apart on the machine this was
+ * written on, because DataHub is a seven-container stack indexing and compacting
+ * underneath the measurement. So every size is swept several times and the
+ * spread is published, and the conclusion rests on the read count rather than on
+ * a timing curve that noise could have drawn either way.
  *
  * ## Tokens
  *
@@ -51,6 +60,7 @@ import { listHandoffs } from "../lib/handoff-store";
 const args = process.argv.slice(2);
 const verify = args.includes("--verify");
 const keep = args.includes("--keep");
+const repeats = Math.max(1, Number(args.find((a) => a.startsWith("--repeats="))?.split("=")[1] || 3));
 const sizes = (args.find((a) => a.startsWith("--sizes="))?.split("=")[1] || "1000,5000,10000")
   .split(",")
   .map((n) => Number(n.trim()))
@@ -90,8 +100,26 @@ interface Measurement {
   /** Runbooks swept, and the distinct entities they reference. */
   runbooks: number;
   entitiesReferenced: number;
-  sweepMs: number;
+  /**
+   * Wall-clock for each sweep at this size, one entry per repeat.
+   *
+   * Plural because it has to be. The same sweep over the same 91-dataset catalog
+   * measured 50.1s and then 107.1s minutes apart on this machine — DataHub is a
+   * seven-container stack doing its own indexing and compaction underneath, and a
+   * single sample cannot tell a catalog that got bigger from a machine that got
+   * busy. One number per size would have supported whatever conclusion the noise
+   * happened to favour.
+   */
+  sweepMsSamples: number[];
+  sweepMsMean: number;
+  sweepMsMin: number;
+  sweepMsMax: number;
   msPerRunbook: number;
+  /**
+   * The invariant, and the reason this table is worth publishing at all: it is
+   * exact, it is not wall-clock, and it does not move. The sweep reads the
+   * entities the runbooks name, so the count is a property of the runbooks.
+   */
   catalogReads: number;
   readsByTool: Record<string, number>;
   llmCalls: number;
@@ -214,26 +242,41 @@ async function settle(expected: number, timeoutMs = 60_000): Promise<number> {
 
 /* ── Measuring ────────────────────────────────────────────────────────── */
 
-async function measure(catalogDatasets: number): Promise<Measurement> {
+async function measure(catalogDatasets: number, repeats: number): Promise<Measurement> {
   const runbooks = listHandoffs();
   const entities = new Set(runbooks.flatMap((h) => h.steps.map((s) => s.urn).filter(Boolean)));
 
-  resetToolCallCounts();
-  const started = Date.now();
-  const result = await sweepRunbooks({ propose: true });
-  const sweepMs = Date.now() - started;
+  const samples: number[] = [];
+  let checked = 0;
+  let catalogReads = 0;
+  let readsByTool: Record<string, number> = {};
 
-  const catalogReads = Object.values(toolCallCounts).reduce((a, b) => a + b, 0);
+  for (let i = 0; i < repeats; i++) {
+    resetToolCallCounts();
+    const started = Date.now();
+    const result = await sweepRunbooks({ propose: true });
+    samples.push(Date.now() - started);
+    checked = result.checked;
+    // Deterministic across repeats; taking the last is taking any of them.
+    catalogReads = Object.values(toolCallCounts).reduce((a, b) => a + b, 0);
+    readsByTool = { ...toolCallCounts };
+    process.stdout.write("·");
+  }
+
+  const mean = samples.reduce((a, b) => a + b, 0) / samples.length;
 
   return {
     catalogDatasets,
     searchVisible: await datasetCount(),
-    runbooks: result.checked,
+    runbooks: checked,
     entitiesReferenced: entities.size,
-    sweepMs,
-    msPerRunbook: Math.round(sweepMs / Math.max(1, result.checked)),
+    sweepMsSamples: samples,
+    sweepMsMean: Math.round(mean),
+    sweepMsMin: Math.min(...samples),
+    sweepMsMax: Math.max(...samples),
+    msPerRunbook: Math.round(mean / Math.max(1, checked)),
     catalogReads,
-    readsByTool: { ...toolCallCounts },
+    readsByTool,
     // Not an estimate. The sweep ran with no credentials in the environment, so
     // any LLM call would have thrown rather than quietly costing something.
     llmCalls: 0,
@@ -248,10 +291,11 @@ export function scaleTable(result: ScaleResult): string {
   const rows = result.measurements.map(
     (m) =>
       `| ${m.catalogDatasets.toLocaleString()} | ${m.runbooks} | ${m.entitiesReferenced} | ` +
-      `${(m.sweepMs / 1000).toFixed(1)}s | ${(m.msPerRunbook / 1000).toFixed(1)}s | ${m.catalogReads} | 0 |`
+      `${(m.sweepMsMean / 1000).toFixed(1)}s | ${(m.sweepMsMin / 1000).toFixed(1)}\u2013${(m.sweepMsMax / 1000).toFixed(1)}s | ` +
+      `**${m.catalogReads}** | 0 |`
   );
   return [
-    "| Datasets in catalog | Runbooks swept | Entities referenced | Sweep wall-clock | Per runbook | Catalog reads | LLM tokens |",
+    "| Datasets in catalog | Runbooks | Entities referenced | Sweep wall-clock (mean) | Range over repeats | Catalog reads | LLM tokens |",
     "| --- | --- | --- | --- | --- | --- | --- |",
     ...rows,
   ].join("\n");
@@ -261,7 +305,14 @@ function scorecard(result: ScaleResult): string {
   const first = result.measurements[0];
   const last = result.measurements[result.measurements.length - 1];
   const growth = first && last && first.catalogDatasets > 0 ? last.catalogDatasets / first.catalogDatasets : 0;
-  const slowdown = first && last && first.sweepMs > 0 ? last.sweepMs / first.sweepMs : 0;
+  const slowdown = first && last && first.sweepMsMean > 0 ? last.sweepMsMean / first.sweepMsMean : 0;
+  const readsConstant = result.measurements.every((m) => m.catalogReads === first?.catalogReads);
+  const repeats = first?.sweepMsSamples.length ?? 1;
+  // The widest spread seen at any single size — the honest yardstick for whether
+  // a difference between sizes means anything.
+  const worstSpread = Math.max(
+    ...result.measurements.map((m) => (m.sweepMsMin > 0 ? m.sweepMsMax / m.sweepMsMin : 1))
+  );
 
   return [
     "# Scale benchmark",
@@ -279,14 +330,24 @@ function scorecard(result: ScaleResult): string {
     "## What this says",
     "",
     growth > 1
-      ? `The catalog grew **${growth.toFixed(0)}×** across these rows and the sweep got ` +
-        (slowdown < 1.25
-          ? `**${slowdown.toFixed(2)}× slower** — which is to say, it did not. Re-validation reads the entities the ` +
-            `runbooks name and nothing else, so its cost tracks the number of runbooks, not the size of the catalog.`
-          : `**${slowdown.toFixed(2)}× slower**. That is more than flat, and the reason is worth knowing before ` +
-            `trusting the top row: every catalog read goes through DataHub's own indices, which are doing more ` +
-            `work per call on the bigger catalog.`)
+      ? `**Catalog reads do not move.** The catalog grew **${growth.toFixed(0)}×** across these rows and the sweep ` +
+        (readsConstant
+          ? `made exactly **${first?.catalogReads} catalog reads every time**. That is the claim this table is ` +
+            `really making, and it is exact rather than timed: re-validation reads the entities the runbooks name ` +
+            `and nothing else, so its cost is a property of how many runbooks you have, not of how big your ` +
+            `catalog is. A company with 10,000 datasets and 40 runbooks pays for the 40.`
+          : `did not make a constant number of catalog reads, which contradicts the design and is worth ` +
+            `investigating before trusting any other row.`)
       : "Not enough rows to say anything about growth.",
+    "",
+    growth > 1
+      ? `**Wall-clock is noisier than the effect being measured, and is reported as a range for that reason.** ` +
+        `Mean sweep time moved ${slowdown.toFixed(2)}× from the smallest catalog to the largest, while repeats at a ` +
+        `single unchanged size varied by up to ${worstSpread.toFixed(2)}×. DataHub is a seven-container stack doing ` +
+        `its own indexing and compaction underneath the measurement, so ${repeats} sweeps were run at every size and ` +
+        `the spread published. Read the timing column as "the same order of magnitude throughout", not as a ` +
+        `precise scaling curve — the read count is the number to rely on.`
+      : "",
     "",
     "**No tokens, at any size.** The sweep ran with no LLM credentials in the environment,",
     "so this is not an estimate of a small number — a model call would have thrown. Detection",
@@ -365,15 +426,17 @@ async function main() {
   const measurements: Measurement[] = [];
   const largest = Math.max(...sizes);
 
-  console.log(`\n  scale benchmark · ${runbooks.length} runbooks · sizes ${sizes.join(", ")}\n`);
+  console.log(
+    `\n  scale benchmark · ${runbooks.length} runbooks · sizes ${sizes.join(", ")} · ${repeats} sweeps per size\n`
+  );
 
   // Baseline first: the catalog as it stands, before anything is added.
   console.log("  measuring the catalog as it is…");
   const startingDatasets = await datasetCount();
-  measurements.push(await measure(startingDatasets));
+  measurements.push(await measure(startingDatasets, repeats));
   console.log(
-    `    ${measurements[0].catalogDatasets.toLocaleString()} datasets · ` +
-      `${(measurements[0].sweepMs / 1000).toFixed(1)}s · ${measurements[0].catalogReads} catalog reads`
+    `\n    ${measurements[0].catalogDatasets.toLocaleString()} datasets · ` +
+      `${(measurements[0].sweepMsMean / 1000).toFixed(1)}s mean · ${measurements[0].catalogReads} catalog reads`
   );
 
   const baselineDatasets = startingDatasets;
@@ -388,10 +451,11 @@ async function main() {
       const settled = await settle(baselineDatasets + ingested);
       console.log(` written (${settled.toLocaleString()} of them searchable so far)`);
 
-      const m = await measure(baselineDatasets + ingested);
+      const m = await measure(baselineDatasets + ingested, repeats);
       measurements.push(m);
       console.log(
-        `    ${m.catalogDatasets.toLocaleString()} datasets · ${(m.sweepMs / 1000).toFixed(1)}s · ` +
+        `\n    ${m.catalogDatasets.toLocaleString()} datasets · ${(m.sweepMsMean / 1000).toFixed(1)}s mean ` +
+          `(${(m.sweepMsMin / 1000).toFixed(1)}\u2013${(m.sweepMsMax / 1000).toFixed(1)}s) · ` +
           `${m.catalogReads} catalog reads · 0 tokens`
       );
     }
