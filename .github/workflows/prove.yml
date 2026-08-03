@@ -1,0 +1,114 @@
+name: prove
+
+# The receipts in this repo are only worth what regenerating them is worth.
+#
+# `ci.yml` re-reads the committed artifacts and checks they say what the README
+# says they say. That is a real check and a weak one: it passes just as happily
+# on a receipt nobody has regenerated since the code moved underneath it. This
+# workflow does the other half. On a clean Ubuntu runner with nothing cached, it
+# boots a real DataHub through DataHub's own quickstart, runs the entire loop
+# against it — capture, validate, break the catalog through DataHub's write
+# APIs, catch the drift, write it back, propose the correction, restore, go
+# green — and then checks the artifact it just produced against the one
+# committed at HEAD.
+#
+# So a judge does not have to trust `examples/live/*.json`. The machine
+# regenerates them from nothing on every push, on both catalogs, and the build
+# goes red if the committed copy and a fresh run have come apart.
+#
+# No secrets. Drift detection is a schema-and-health diff against fingerprints
+# captured at record time, with no model in the loop, so this runs on pull
+# requests from forks with no API key of any kind.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  # Weekly, so the receipts are re-derived against a freshly pulled DataHub even
+  # in a week nobody pushes. Rot in the dependency is rot in the claim.
+  schedule:
+    - cron: "0 6 * * 1"
+
+concurrency:
+  group: prove-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prove:
+    name: prove the loop against a live DataHub (${{ matrix.catalog }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix:
+        # northbeam is the catalog this repo seeds. showcase is the datapack
+        # DataHub publishes, which nobody here authored — the same proof on data
+        # we did not choose. Both, every time, or the second one stops counting.
+        catalog: [northbeam, showcase]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      - run: npm ci
+
+      - name: Make room and headroom for DataHub
+        # The quickstart images run to several GB, and OpenSearch will not start
+        # under the runner's default mmap limit — it exits during boot with no
+        # obvious cause, which is a bad half hour to spend twice.
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo sysctl -w vm.max_map_count=262144
+          df -h /
+          free -h
+
+      - name: Run the whole loop against a real DataHub
+        # Boots the quickstart itself if GMS is not already answering, ingests
+        # the catalog, and asserts its way through every phase. Non-zero exit if
+        # any check fails, so this step *is* the test.
+        run: npm run prove -- --catalog=${{ matrix.catalog }}
+
+      - name: Re-run the receipt assertions against what this run just produced
+        # The same file `tests/prove-receipts.test.ts` reads in `ci.yml` — but
+        # the copy on disk is now this run's output rather than the committed
+        # one, so the assertions are being made about a receipt generated
+        # minutes ago on this machine.
+        run: npx vitest run tests/prove-receipts.test.ts
+
+      - name: Fail if the fresh run and the committed receipts disagree
+        # Every check, verdict, coverage figure, tag read-back and proposed edit
+        # has to match the committed artifact. Server-minted UUIDs and the run
+        # timestamps are masked; nothing else is.
+        run: npm run prove:verify -- --catalog=${{ matrix.catalog }}
+
+      - name: Keep the receipts this run produced
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: prove-receipts-${{ matrix.catalog }}
+          path: |
+            examples/live/prove-loop-receipts*.json
+            proposals/
+          if-no-files-found: warn
+
+      - name: DataHub logs, if it was DataHub that failed
+        if: failure()
+        run: |
+          docker ps -a
+          for container in $(docker ps -aq); do
+            echo "───────── $(docker inspect --format '{{.Name}}' "$container") ─────────"
+            docker logs --tail 120 "$container" 2>&1 || true
+          done
+
+      - name: Tear the catalog down
+        if: always()
+        run: uv run --with acryl-datahub datahub docker quickstart --stop || true

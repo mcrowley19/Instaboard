@@ -33,7 +33,7 @@ import { readAspect, writeAspect } from "../lib/gms-aspects";
 import { callDataHubTool, isDemoMode } from "../lib/mcp";
 import { deleteHandoff, saveHandoff } from "../lib/handoff-store";
 import { sweepRunbooks, type SweepResult } from "../lib/sweep";
-import { resolveIncidentsFor } from "../lib/native-writeback";
+import { resolveIncidentsFor, STALE_RUNBOOK_TAG_URN } from "../lib/native-writeback";
 import { proposalToMarkdown } from "../lib/remediate";
 import type { Handoff } from "../lib/types";
 
@@ -311,7 +311,20 @@ async function ingestCatalog(): Promise<boolean> {
   if (!skipSeed && step) {
     say(`    ${step.note}`);
     try {
-      execFileSync(step.command, step.args, { stdio: json ? "ignore" : "inherit", timeout: 15 * 60_000 });
+      execFileSync(step.command, step.args, {
+        stdio: json ? "ignore" : "inherit",
+        timeout: 15 * 60_000,
+        // Tell the CLI where GMS is explicitly. Left to itself it reads
+        // `~/.datahubenv`, which only exists if `datahub docker quickstart` was
+        // run by this user on this machine — so `datapack load` fails with
+        // "could not connect to check version compatibility" against a DataHub
+        // that is up and answering. On a CI runner there is no such file at all.
+        env: {
+          ...process.env,
+          DATAHUB_GMS_URL: process.env.DATAHUB_GMS_URL || "http://localhost:8080",
+          ...(process.env.DATAHUB_GMS_TOKEN ? { DATAHUB_GMS_TOKEN: process.env.DATAHUB_GMS_TOKEN } : {}),
+        },
+      });
     } catch (err) {
       return check("ingest", "sample catalog ingested", false, err instanceof Error ? err.message : String(err));
     }
@@ -424,15 +437,6 @@ async function breakCatalog(): Promise<Change[]> {
 }
 
 async function restoreCatalog(): Promise<void> {
-  // Resolve the incidents this run raised before the runbook is deleted below.
-  // An orphaned incident cannot be closed by a later sweep — nothing left in the
-  // store matches its title — so it would sit on the dataset forever.
-  const touched = [...new Set(runbook().steps.map((s) => s.urn).filter((u): u is string => Boolean(u)))];
-  const resolved = await resolveIncidentsFor(runbook(), touched);
-  for (const incident of resolved) {
-    say(`    ✓ resolved incident ${incident.urn.slice(-12)} on ${shortName(incident.datasetUrn)}`);
-  }
-
   const { urn: renameUrn, from, to } = CATALOG.rename;
   const schema = await readAspect(renameUrn, "schemaMetadata");
   const fields = (schema?.fields ?? []) as Record<string, unknown>[];
@@ -465,6 +469,20 @@ async function sweep(): Promise<SweepResult> {
   return sweepRunbooks({ filter: runbook().id });
 }
 
+/**
+ * Read the tags DataHub actually holds on a dataset.
+ *
+ * The write-back receipt says what was sent; this says what the catalog has. A
+ * tag retraction proved from the receipt alone is the tool marking its own
+ * homework, so both sides of tag → repair → tag-gone are read back from GMS.
+ */
+async function tagsOn(urn: string): Promise<string[]> {
+  const res = await datahubGraphQL<{
+    dataset: { tags: { tags: { tag: { urn: string } }[] } | null } | null;
+  }>(`query($urn: String!) { dataset(urn: $urn) { tags { tags { tag { urn } } } } }`, { urn });
+  return (res.data?.dataset?.tags?.tags ?? []).map((t) => t.tag.urn);
+}
+
 function assertClean(result: SweepResult, phase: string): void {
   const row = result.rows[0];
   check(phase, "no drift reported", result.drifted === 0, `${result.checked} runbook checked, ${result.drifted} drifted`);
@@ -485,6 +503,31 @@ function assertClean(result: SweepResult, phase: string): void {
     "validated-against pins are written to the catalog",
     Boolean(row?.structured?.properties.some((p) => p.pins > 0)),
     row?.structured?.properties.map((p) => `${p.pins} pins`).join(", ") || "no properties written"
+  );
+
+  /*
+   * "No drift" is only good news if everything was actually checked. These two
+   * assert the run says which of the two it is, rather than letting a reader
+   * assume the better one.
+   */
+  const coverage = row?.coverage;
+  check(
+    phase,
+    "the run reports how much of the runbook it could check",
+    Boolean(coverage && coverage.stepsTotal > 0 && coverage.summary),
+    coverage?.summary ?? "no coverage reported"
+  );
+  check(
+    phase,
+    "a clean run with unvalidatable claims is not reported as a pass",
+    Boolean(coverage) && row!.verdict === (coverage!.claimsUnvalidatable > 0 ? "INSUFFICIENT_DATA" : "PASS"),
+    `verdict ${row?.verdict}, ${coverage?.claimsUnvalidatable ?? 0}/${coverage?.claimsTotal ?? 0} claims unvalidatable`
+  );
+  check(
+    phase,
+    "the coverage figure is written to the catalog",
+    Boolean(row?.structured?.properties.some((p) => p.coverage)),
+    row?.structured?.properties.find((p) => p.coverage)?.coverage ?? "not written"
   );
 }
 
@@ -655,7 +698,19 @@ async function main() {
   }
   assertCaught(after, liveOwners);
 
+  // Read the tag back out of DataHub rather than trusting the write receipt.
+  const taggedUrns = after.rows[0]?.native?.tagged ?? [];
+  const tagsWhileBroken: Record<string, string[]> = {};
+  for (const urn of taggedUrns) tagsWhileBroken[urn] = await tagsOn(urn);
+  check(
+    "write-back",
+    "the Stale Runbook tag reads back off the dataset in DataHub",
+    taggedUrns.length > 0 && taggedUrns.every((u) => tagsWhileBroken[u]?.includes(STALE_RUNBOOK_TAG_URN)),
+    `${taggedUrns.filter((u) => tagsWhileBroken[u]?.includes(STALE_RUNBOOK_TAG_URN)).length}/${taggedUrns.length} carry it`
+  );
+
   let restored: SweepResult | null = null;
+  let tagsAfterRestore: Record<string, string[]> = {};
   if (keepBroken) {
     say("\n7/7  leaving the catalog broken (--keep-broken). Look at it in the DataHub UI:");
     for (const c of changes) say(`     ${entityUrl(c.urn)}`);
@@ -665,9 +720,54 @@ async function main() {
     await new Promise((r) => setTimeout(r, 25_000));
     restored = await sweep();
     assertClean(restored, "restore");
+
+    /*
+     * Closing the incident is the sweep's job, and it has to be the sweep that
+     * does it here or the proof is only proving the cleanup code in this script.
+     * The manual close below runs afterwards, for anything the sweep left — an
+     * incident orphaned by deleting this run's temporary runbook could never be
+     * closed by a later sweep, because nothing would match its title.
+     */
+    check(
+      "restore",
+      "the sweep itself closes the incidents it opened",
+      (restored.rows[0]?.resolved.length ?? 0) > 0,
+      `${restored.rows[0]?.resolved.length ?? 0} incident(s) resolved by the sweep`
+    );
+
+    /*
+     * Cleanup, not a check: this run's runbook is deleted below, and an incident
+     * left open could never be matched by a later sweep. Usually this re-closes
+     * what the sweep just closed — DataHub's incident index lags a resolve by a
+     * few seconds, so the second read still sees them ACTIVE — and re-resolving
+     * is a no-op.
+     */
+    const touched = [...new Set(runbook().steps.map((s) => s.urn).filter((u): u is string => Boolean(u)))];
+    const swept = await resolveIncidentsFor(runbook(), touched);
+    if (swept.length) say(`    · re-checked for open incidents, closed ${swept.length} (index lag makes this a repeat)`);
+
+    /*
+     * The half almost nothing does: take the warning back down. A tool that only
+     * ever adds state leaves a catalog full of warnings about problems fixed
+     * months ago, and the state stops meaning anything. Read back on both sides.
+     */
+    for (const urn of taggedUrns) tagsAfterRestore[urn] = await tagsOn(urn);
+    check(
+      "restore",
+      "the Stale Runbook tag is retracted from every dataset it was applied to",
+      taggedUrns.length > 0 && taggedUrns.every((u) => !tagsAfterRestore[u]?.includes(STALE_RUNBOOK_TAG_URN)),
+      `${taggedUrns.filter((u) => !tagsAfterRestore[u]?.includes(STALE_RUNBOOK_TAG_URN)).length}/${taggedUrns.length} cleared`
+    );
+    check(
+      "restore",
+      "the retraction is recorded as a receipt, not just a side effect",
+      Boolean(restored.rows[0]?.retracted?.attempted) && (restored.rows[0]?.retracted?.untagged.length ?? 0) > 0,
+      `${restored.rows[0]?.retracted?.untagged.length ?? 0} untagged, ` +
+        `${restored.rows[0]?.retracted?.kept.length ?? 0} kept for other runbooks`
+    );
   }
 
-  finish(started, before, changes, after, restored);
+  finish(started, before, changes, after, restored, { tagsWhileBroken, tagsAfterRestore });
 }
 
 function finish(
@@ -675,7 +775,11 @@ function finish(
   before: SweepResult | null,
   changes: Change[],
   after: SweepResult | null,
-  restored: SweepResult | null = null
+  restored: SweepResult | null = null,
+  tagReadBack: { tagsWhileBroken: Record<string, string[]>; tagsAfterRestore: Record<string, string[]> } = {
+    tagsWhileBroken: {},
+    tagsAfterRestore: {},
+  }
 ): void {
   const passed = checks.filter((c) => c.passed).length;
   const failed = checks.length - passed;
@@ -701,9 +805,17 @@ function finish(
     checks,
     summary: { total: checks.length, passed, failed },
     validations: {
-      before: before && { severity: before.rows[0]?.severity, claims: before.rows[0]?.claims, findings: before.rows[0]?.findings },
+      before: before && {
+        severity: before.rows[0]?.severity,
+        verdict: before.rows[0]?.verdict,
+        coverage: before.rows[0]?.coverage,
+        claims: before.rows[0]?.claims,
+        findings: before.rows[0]?.findings,
+      },
       after: after && {
         severity: after.rows[0]?.severity,
+        verdict: after.rows[0]?.verdict,
+        coverage: after.rows[0]?.coverage,
         claims: after.rows[0]?.claims,
         findings: after.rows[0]?.findings,
         documentUrn: after.rows[0]?.receipt?.documentUrn ?? null,
@@ -718,8 +830,17 @@ function finish(
           diff: proposal.diff,
         },
       },
-      afterRestore: restored && { severity: restored.rows[0]?.severity, claims: restored.rows[0]?.claims },
+      afterRestore: restored && {
+        severity: restored.rows[0]?.severity,
+        verdict: restored.rows[0]?.verdict,
+        coverage: restored.rows[0]?.coverage,
+        claims: restored.rows[0]?.claims,
+        retracted: restored.rows[0]?.retracted ?? null,
+        resolvedIncidents: restored.rows[0]?.resolved ?? [],
+      },
     },
+    /* What DataHub itself reported holding, either side of the repair. */
+    tagReadBack,
   };
 
   mkdirSync(OUT_DIR, { recursive: true });

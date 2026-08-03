@@ -1,6 +1,7 @@
 # ⚡ instaboard
 
 [![ci](https://github.com/mcrowley19/Instaboard/actions/workflows/ci.yml/badge.svg)](https://github.com/mcrowley19/Instaboard/actions/workflows/ci.yml)
+[![prove](https://github.com/mcrowley19/Instaboard/actions/workflows/prove.yml/badge.svg)](https://github.com/mcrowley19/Instaboard/actions/workflows/prove.yml)
 
 **Captured knowledge that tells you when it has gone wrong.**
 
@@ -26,7 +27,7 @@ selects, deprecates a table it routes you to, and moves the owner it tells you t
 page**, through DataHub's own write APIs, and checks that revalidation catches all
 three. Then it restores the catalog and checks the runbook goes green again.
 
-**29 assertions. Non-zero exit if any fails. Last run: 29/29 — on both catalogs.**
+**39 assertions. Non-zero exit if any fails. Last run: 39/39 — on both catalogs.**
 
 ```bash
 npm run prove                        # the catalog this repo seeds
@@ -36,26 +37,53 @@ npm run prove -- --catalog=showcase  # DataHub's own showcase-ecommerce datapack
 ```
 4/7  validate — should be clean
     ✓ no drift reported — 1 runbook checked, 0 drifted
-    ✓ every catalog claim holds — 17/17 claims hold
+    ✓ every catalog claim holds — 16/17 claims hold
+    ✓ the run reports how much of the runbook it could check — 2/3 steps validated,
+      1 with catalog gaps (health)
+    ✓ a clean run with unvalidatable claims is not reported as a pass —
+      verdict INSUFFICIENT_DATA, 1/17 claims unvalidatable
 5/7  break the catalog for real
     ✓ renamed net_amount_usd → net_revenue_usd on fct_revenue
     ✓ deprecated mrr_monthly
     ✓ removed Mike Rodriguez from fct_revenue
 6/7  revalidate — should catch all of it
     ✓ the runbook is reported broken — 1 broken of 1
-    ✓ broken claims moved the aspect they were pinned to — 3 of 17 broken, 14 still hold
-    ✓ an incident is raised and assigned to the current owner — 88bdde80effa → urn:li:corpuser:priya.patel
+    ✓ broken claims moved the aspect they were pinned to — 3 of 17 broken, 13 still hold
+    ✓ every incident on an owned dataset reaches its current owner —
+      fct_revenue → urn:li:corpuser:priya.patel
     ✓ a correction is proposed for the renamed column — net_amount_usd→net_revenue_usd
+    ✓ the Stale Runbook tag reads back off the dataset in DataHub — 2/2 carry it
 7/7  restore the catalog and revalidate — should go green again
-    ✓ every catalog claim holds — 17/17 claims hold
+    ✓ every catalog claim holds — 16/17 claims hold
+    ✓ the sweep itself closes the incidents it opened — 2 incident(s) resolved
+    ✓ the Stale Runbook tag is retracted from every dataset it was applied to — 2/2 cleared
 ```
+
+Two of those lines are the ones worth reading twice. **The clean runs do not
+report as passes** — one claim on `mrr_monthly` cannot be checked at all, because
+nothing in the catalog is monitoring that table, and a verdict that called it
+green would be inventing evidence. And **the tag comes back off**: applied when
+the runbook breaks, retracted when it is repaired, with DataHub read back on both
+sides rather than the write receipt taken on trust.
 
 The decay engine is told nothing about the breaking changes. It re-reads the
 catalog and works out what happened. Receipts for both runs:
 [northbeam](examples/live/prove-loop-receipts.json),
 [showcase-ecommerce](examples/live/prove-loop-receipts-showcase.json), walked
-through in [`docs/loop-verification.md`](docs/loop-verification.md). CI re-verifies
-both on every push, so a stale or partial capture fails the build.
+through in [`docs/loop-verification.md`](docs/loop-verification.md).
+
+**You do not have to trust those two files.** A second workflow,
+[`prove.yml`](.github/workflows/prove.yml), boots a real DataHub on a clean
+Ubuntu runner on every push, runs this loop against it on both catalogs, and
+then checks the receipts it just generated against the ones committed here.
+Every check, verdict, coverage figure, tag read-back and proposed edit has to
+match; only server-minted UUIDs and the run timestamps are masked. The badge
+above says whether the last run reproduced them. It needs no API key — drift
+detection has no model in it — so it runs on pull requests from forks too.
+
+Every claim below has a row in [`EVIDENCE.md`](EVIDENCE.md): the artifact that
+proves it and the command that re-derives that artifact. Most of them need
+nothing but `npm install`.
 
 Running it on DataHub's datapack immediately earned its keep: it caught a real
 weakness in the rename detector (a full token reorder,
@@ -112,6 +140,35 @@ something you can confirm in the DataHub UI in ten seconds:
 The report says `18 of 19 claims still hold`, which tells a reader the runbook is
 followable apart from one named thing. "Stale" does not.
 
+**And it says what it could not check.** A verdict is one of three things, not
+two:
+
+| | |
+| --- | --- |
+| `PASS` | every claim was checked, and every claim holds |
+| `FINDING` | something concrete drifted — here is the step and the fact |
+| `INSUFFICIENT_DATA` | nothing drifted among the claims that could be checked, and some could not be checked at all |
+
+The third one exists because the failure mode of a validator is silence. A step
+pointing at a dataset with no assertions cannot be told apart from one whose
+checks are all passing — "no failing assertions" is true and means nothing when
+nothing is asserting. Same for a dataset the catalog holds no schema for: before
+this, an empty field list read as *every column the runbook names has been
+dropped*, which is the loudest possible false positive on the least reliable
+input. Both are now reported as coverage gaps, per step, naming the dimension:
+
+```
+2/3 steps validated, 1 with catalog gaps (health)
+~ step 3 · mrr_monthly: it has no assertions or incidents, so nothing is monitoring it
+```
+
+The figure is written into DataHub as `instaboard.revalidationCoverage`, because
+a coverage number nobody can see turns back into the thing it exists to prevent.
+On DataHub's own `showcase-ecommerce` datapack the honest answer is
+**0/4 steps validated** — that catalog ships with no assertions and several
+unowned tables, so none of the runbook's steps are fully checkable, and saying so
+is more use than a green tick.
+
 **4. Write it back as state.** Not just prose in a document nobody opens:
 
 - a **custom assertion** per (runbook, dataset) that fails while the runbook is
@@ -119,13 +176,24 @@ followable apart from one named thing. "Stale" does not.
   and the provenance chain in its result properties;
 - **structured properties** with the runbook's status, the change that broke it,
   and every validated-against pin;
-- a **`Stale Runbook` tag** on everything that drifted;
+- a **`Stale Runbook` tag** on everything that drifted, and an
+  **`Unvalidated Runbook Step` tag** on anything the catalog held too little
+  about to check — kept separate, because the first says fix the runbook and the
+  second says fix the catalog entry;
 - a real **Incident** on any dataset where a step would now fail — **assigned to
   whoever owns that dataset today**, which in the owner-drift case is precisely
   the person the runbook has never heard of.
 
 Clean runs are written too. A dataset only written to when something breaks can't
 distinguish "fine" from "nobody checked".
+
+**And all of it comes back off.** When the runbook is repaired the incident is
+resolved, the assertion goes back to passing, and the `Stale Runbook` tag is
+removed — guarded, because the tag is shared: if a *different* stored runbook is
+still stale on that dataset, the tag stays and the receipt says whose it is. A
+detector that only ever adds state ends up as a catalog full of warnings about
+problems fixed months ago, which is the same as no warnings at all. The proof
+loop asserts the retraction with a read-back from DataHub on both sides.
 
 **5. Propose the fix.** `npm run propose` derives the correction from the catalog
 — the renamed column matched against columns that appeared since, the replacement
@@ -142,7 +210,7 @@ a broken one, so it works as a cron job or a CI gate.
 
 ---
 
-## How good is the detector? Precision and recall on injected drift.
+## How good is the detector? Precision, recall, and the case it fails.
 
 The proof loop breaks three things and catches three things. That is a
 demonstration with N=1 per kind, and it only measures recall — it says nothing
@@ -150,23 +218,42 @@ about how often the engine fires when nothing is wrong, which is the number that
 decides whether a team keeps it switched on.
 
 ```bash
-npm run bench:drift
+npm run bench:drift              # plant, score, restore — needs a DataHub
+npm run bench:drift -- --verify  # re-derive this table from the committed run
 ```
 
-plants known drifts across every stored runbook, mixed with **decoys** — real
-catalog changes that no runbook depends on and that must produce nothing — then
-validates blind and scores both.
+plants known drifts across every stored runbook, mixed with two kinds of negative,
+then validates blind and scores two axes separately.
 
+<!-- drift-table:start -->
 | | Result |
 | --- | --- |
-| Planted drifts detected | **6/6** across 3 kinds (column dropped, column renamed, deprecated) |
-| Decoys that produced a finding | **0 of 6** |
+| Planted drifts detected | **6/6** across 3 kinds |
+| Controls that stayed quiet | **3/3** — column added, description edited, owner appended |
+| Decoys that stayed quiet | **6/6** |
 | Unexplained findings | **0** |
-| Precision · recall · F1 | **100% · 100% · 100%** |
-| Catalog changes restored afterwards | 12/12 |
+| Detection precision · recall · F1 | **100.0% · 100.0% · 100.0%** |
+| Corrections derived for detected renames | **1/2** — 1 named below |
+| Catalog changes restored afterwards | 15/15 |
+<!-- drift-table:end -->
 
-[Full run](examples/live/drift-benchmark.json). Three things make that number
-mean something rather than flatter us:
+**The miss, and why.** `product_status` → `settled_value` was detected as a
+missing column and no correction was derived for it. The rename rule scores token
+overlap and edit distance; the new name shares nothing with the old, so it
+declines rather than guessing, and the finding goes to the human list. That case
+is planted deliberately, every run, because a benchmark whose cases were all
+chosen after the rule was written measures the rule against itself.
+
+Two axes, because they fail separately. **Detection** is a schema-and-health diff
+and it is reliable. **Correction** is string similarity and it is not; scoring
+them together lets the strong half carry the weak one.
+
+[Full run](examples/live/drift-benchmark.json) ·
+[scorecard](evals/results/drift-scorecard.md), which lists every negative case and
+what it produced. `npm test` fails if the table above stops matching the committed
+run, so it cannot drift from the artifact it came from.
+
+Four things make the numbers mean something rather than flatter us:
 
 - **A baseline pass.** Findings that pre-date the injection are excluded from the
   false-positive count, so a runbook that was already stale isn't blamed on the
@@ -178,10 +265,26 @@ mean something rather than flatter us:
   from a table a runbook uses, where no step mentions that column. The engine
   holds a snapshot of those entities and has to stay quiet anyway. Decoys on
   unrelated tables are nearly free to pass; these are not.
+- **Controls that change what runbooks *do* read.** A column added, a description
+  rewritten, a second owner appointed. Every one moves the aspect fingerprint a
+  claim is pinned to, and none of them invalidates anything — so a detector that
+  equates "the aspect changed" with "the runbook broke" fires on all three. This
+  is where a real catalog spends most of its time, and it is the negative worth
+  having. A fourth control belongs on that list, "an assertion was added and
+  passes", and isn't planted: `deleteAssertion` refuses the assertions
+  `upsertCustomAssertion` creates ([filed](https://github.com/datahub-project/datahub/issues/18817)),
+  so it could not be reversed, and every other change here is.
 
 Recall is counted per planted drift and precision per finding, on purpose: one
 drift legitimately produces several findings when two runbooks read the same
 table, and both are right.
+
+Running it earned its keep immediately, twice over. `plan` → `plan_v2` came back
+as a detected drift with no correction proposed: one surviving token out of two
+is a 0.5 overlap however obvious the pair looks, so the rule declined on every
+short column name. That is fixed and
+[tested](tests/remediate.test.ts). The `settled_value` case above is the one that
+remains, and it is structural rather than a bug.
 
 ## Does grounding in DataHub actually help? Three arms, two catalogs.
 
@@ -228,20 +331,33 @@ have their full transcripts committed with the arms side by side, at
 Everything above is a real run. These are the places where a reader should
 discount us, and we would rather name them than have them found.
 
-**The proof loop is one machine, one version, and not a pass rate.** `npm run
-prove` has passed 29/29 repeatedly during development on both catalogs, always on
-the same macOS laptop against DataHub 1.5.0.6 from the OSS quickstart. It has
-never run on DataHub Cloud, never on another DataHub version, and never in CI —
-CI re-verifies the committed receipts, which is a weaker check.
+**The proof loop is not a pass rate, and CI is new.** `npm run prove` has passed
+39/39 repeatedly during development on both catalogs, on a macOS laptop against
+DataHub 1.5.0.6 from the OSS quickstart. It now also runs in CI on a clean
+Ubuntu runner — a second OS, a second machine, a fresh quickstart, nobody's
+laptop state — and re-derives the committed receipts rather than re-reading
+them. That is the check the badge reports, and it is young: read it as "this
+reproduced on the last push", not as a measured pass rate. It has still never
+run on DataHub Cloud, never on another DataHub version, and never by a second
+operator.
 
 **The drift benchmark is still small, and does not cover every kind.** Six
-planted drifts and six decoys is enough to catch a broken detector, not enough to
-put a confidence interval on 100%. The last run covered three of the four drift
-kinds: no `owner-removed` drift was planted, because the planner only plants one
-when a step names an owner whose username tokens appear in its prose, and none of
-the stored runbooks happened to qualify. So the owner path is proved by the proof
-loop (twice, on both catalogs) and not by the benchmark. Both numbers come from
-one run on one catalog family; neither is a distribution.
+planted drifts, six decoys and three controls is enough to catch a broken
+detector, not enough to put a confidence interval on 100%. The last run covered
+three of the four drift kinds: no `owner-removed` drift was planted, because the
+planner only plants one when a step names an owner whose username tokens appear in
+its prose, and none of the stored runbooks happened to qualify. So the owner path
+is proved by the proof loop (twice, on both catalogs) and not by the benchmark. A
+fourth control — an assertion added that passes — is missing for a reason given
+above. Both numbers come from one run on one catalog family; neither is a
+distribution.
+
+**Coverage is measured per dimension, not per question a runbook actually asks.**
+A step is counted as validated when the catalog holds schema, owners and at least
+one assertion for its dataset. That is a proxy. A table with one stale freshness
+assertion and nothing else counts as monitored, and a step whose real dependency
+is a column's *meaning* counts as covered when the column still exists. Coverage
+says the catalog could answer, not that the answer was worth much.
 
 **The decay engine checks five kinds of claim, and misses the worst kind.** It
 catches an entity that vanished, a referenced column that vanished, a table
@@ -263,14 +379,17 @@ word survived" as a strong signal, proposes above 0.55, and refuses when the top
 two are within 0.1 of each other. A coincidentally similar name would be proposed
 just as readily as a real rename, and a genuine rename to something unrelated
 (`net_amount_usd` → `settled_value`) will not be found at all — it lands in the
-"needs a person" list, which is the right failure but still a miss. The human
+"needs a person" list, which is the right failure but still a miss. That case is
+planted in the benchmark on every run so the number reflects it. The human
 reviewing the diff is the actual check here, not the score.
 
-This rule has already been wrong once in a way we only found by running on a
-catalog we didn't build: the original weighting scored
-`cost_of_delivery` → `delivery_cost_usd` at 0.49 and missed it, because edit
-distance punishes reordering far harder than a reader would. Assume there are
-more cases like that one.
+This rule has been wrong twice in ways we only found by running it against
+something we didn't hand-pick. The original weighting scored
+`cost_of_delivery` → `delivery_cost_usd` at 0.49 and missed it on DataHub's own
+datapack, because edit distance punishes reordering far harder than a reader
+would. Then the drift benchmark caught `plan` → `plan_v2` at 0.52: one surviving
+token out of two is a 0.5 overlap however obvious the pair looks, so the rule was
+declining on every short column name. Both are fixed. Assume there are more.
 
 **Drafted runbooks are a starting point, not knowledge.** Everything a draft
 contains is derived from catalog evidence, and the reason a step exists is not in
@@ -297,6 +416,13 @@ entities. The sweep is serial per runbook and does one entity read per URN. We
 make no claim about a catalog with 100,000 entities, and the structured-property
 merge reads before it writes, which would get expensive.
 
+**DataHub is not the source of truth for a runbook's text — it can't be.** The
+body is written with `save_document` and cannot be read back: `get_entities` on a
+document URN returns the URN and nothing else. So the runbook lives in local
+storage and DataHub holds the shared copy, and the two can diverge with nothing to
+detect it. Every claim, pin and verdict comes from the catalog; the prose does not.
+[Filed, with the probe.](submission/oss/issues/07-documents-cannot-be-read-back-by-urn.md)
+
 **The write-back has no permissions model.** It uses whatever token you configure.
 There is no RBAC awareness, no notion of who triggered a sweep, and no guard
 against two sweeps running at once over the same runbook.
@@ -312,6 +438,18 @@ tested against URLs captured from a running DataHub, and there is one real
 end-to-end [capture](examples/live/extension-receipt.json). The panel itself is
 exercised by hand. We shipped a detection bug that no test caught because no
 test drove a real browser — see the upstream issue below.
+
+## What this is not
+
+Institutional memory is a crowded idea, and two things get called it. One is
+**recall**: an agent that remembers what it learned about a catalog so the next
+session starts warmer — [`datahub-memory`](https://github.com/datahub-project/datahub-skills/pull/69)
+is that, and it is a different problem. This is the other one: capturing what a
+*person* knew as a runbook a human wrote and vouched for, then deterministically
+re-checking it against the catalog and reporting which specific claim stopped
+being true. The half that matters here is revalidation — the claims, the pins, the
+coverage, the write-back and the retraction — and none of it depends on an agent
+remembering anything.
 
 ## When you shouldn't use this
 
@@ -329,13 +467,15 @@ test drove a real browser — see the upstream issue below.
 
 ## Contributing back upstream
 
-Seven contributions came out of building this, all filed. Write-ups stay in
+Eight contributions came out of building this, seven filed and one written up below. Write-ups stay in
 [`submission/oss/`](submission/oss/) so the reproductions are readable here too.
 
 | What | Where |
 | --- | --- |
 | **`datahub-onboarding` skill** — the onboarding, capture and validation workflow generalised into a registry skill, with a `/catalog-onboarding` command, three evaluation cases and the router registration | [datahub-skills#79](https://github.com/datahub-project/datahub-skills/pull/79) |
 | ↳ follow-up: claim-level provenance, write-back as catalog state, and catalog-derived corrections | [same PR](https://github.com/datahub-project/datahub-skills/pull/79#issuecomment-5159658074) |
+| ↳ second follow-up: the three-state verdict, coverage tracking, and retracting the tag on repair — written and ready to push | [`submission/oss/`](submission/oss/PR_INSTRUCTIONS.md) |
+| **A document written with `save_document` cannot be read back by its URN.** `get_entities` returns only the URN, `search_documents` returns metadata without content, and `grep_documents` repeats the same excerpt once per match position — so an agent cannot read its own writes | [write-up with a live repro](submission/oss/issues/07-documents-cannot-be-read-back-by-urn.md) |
 | Nothing in the 20-tool MCP surface returns usage, and `get_entities` doesn't inline it, so an agent cannot rank six lookalike tables by query volume | [mcp-server-datahub#171](https://github.com/acryldata/mcp-server-datahub/issues/171) |
 | `get_entities` on an incident URN errors, and health reports `causes: ["ACTIVE_INCIDENTS"]` where the assertions branch of the same field returns URNs | [mcp-server-datahub#172](https://github.com/acryldata/mcp-server-datahub/issues/172) |
 | Two tool schemas use multi-type `anyOf` unions that make OpenAI-compatible providers 422 the whole tool list | [mcp-server-datahub#173](https://github.com/acryldata/mcp-server-datahub/issues/173) |
@@ -358,10 +498,13 @@ One more thing we hit was already filed: the `datapack --help` crash
 [comment confirming it still reproduces on 1.6.0.17](https://github.com/datahub-project/datahub/issues/18497#issuecomment-5159253562)
 rather than a duplicate.
 
-Two of them changed this codebase.
+Three of them changed this codebase.
 [#172](https://github.com/acryldata/mcp-server-datahub/issues/172) is why
 `lib/datahub-graphql.ts` exists and why `discountSelfWrittenState` in `lib/decay.ts`
-has to stop the sweep reading its own incidents and assertions as drift.
+has to stop the sweep reading its own incidents and assertions as drift. The
+document read-back gap is why a runbook's body lives in local storage with DataHub
+holding the shared copy, rather than DataHub being the single source — which is
+the opposite of what we wanted, and is named in *What we haven't proven*.
 
 ---
 
@@ -375,7 +518,7 @@ Everything above was produced this way, so it is the path worth taking.
 npm install
 npm run datahub:up      # datahub docker quickstart — GMS :8080, UI :9002
 npm run seed            # 14 datasets, 4 owners, glossary, lineage, saved SQL
-npm run prove           # the whole loop, 29 assertions
+npm run prove           # the whole loop, 39 assertions
 npm run dev             # the app on :3000
 ```
 
@@ -423,6 +566,16 @@ catalog, and the hosted demo at
 recording of a real session, so chat works with **no API key at all**. Replayed
 answers are labelled *recorded session*.
 
+**You can break the catalog yourself there.** The validation panel on the hosted
+page has buttons — drop the column step 2's SQL selects, deprecate the table step
+3 routes you to, move the owner step 2 tells you to page — and the verdict
+recomputes. Nothing about it is scripted: the buttons mutate a copy of the fixture
+snapshots and the result comes back from `diffAgainstCatalog`, the same function
+the live sweep calls, with no demo branch inside the engine. It runs the untouched
+catalog first, so the clean state you are comparing against is one you watched it
+produce. What it cannot do is write back — incidents, assertions and tags need a
+real DataHub, and those receipts are committed under `examples/live/` instead.
+
 It is a fixture, so treat it as a tour rather than evidence. Two of its 7 tools
 (`get_dataset_health`, `get_usage_stats`) have no equivalent on the real 20-tool
 server — DataHub inlines `health` and `deprecation` on `get_entities` and exposes
@@ -453,13 +606,15 @@ reads were already there, and a new hire needs them on day one:
 
 | Script | Purpose |
 | --- | --- |
-| `npm run prove` | **the whole loop end to end, 29 assertions** (`-- --catalog=showcase` for DataHub's datapack) |
+| `npm run prove` | **the whole loop end to end, 39 assertions** (`-- --catalog=showcase` for DataHub's datapack) |
+| `npm run prove:verify` | check the receipts that run just wrote against the committed ones — CI runs this |
 | `npm run draft` | draft runbooks from catalog evidence, no recording needed (`--query=`, `--urn=`, `--save`) |
-| `npm run bench:drift` | plant known drift + decoys, score the detector's precision and recall |
+| `npm run bench:drift` | plant known drift, decoys and controls; score detection and correction |
+| `npm run bench:verify` | re-derive the published drift table from the committed run — CI runs this |
 | `npm run validate` | sweep every runbook for decay; write notes, assertions, properties, incidents and tags back |
 | `npm run propose` | derive corrections as reviewable diffs (`--apply`, `--pr`) |
 | `npm run examples` | export stored runbooks to `examples/runbooks/` |
-| `npm test` | vitest suite (181 tests, MCP and GMS mocked) |
+| `npm test` | vitest suite (229 tests, MCP and GMS mocked) |
 | `npm run eval` | the 20-case benchmark, all three arms (`-- --suite=showcase`) |
 | `npm run eval:verify` | re-score the committed answers for both suites — CI runs this |
 | `npm run showcase:drill` | `record` / `break` / `receipts` / `restore` on DataHub's own datapack |
@@ -508,16 +663,20 @@ reads were already there, and a new hire needs them on day one:
 ## Project layout
 
 ```
+EVIDENCE.md     one row per claim: the artifact, and the command that re-derives it
 app/            page.tsx (landing) · (app)/ signed-in pages · api/ routes
 components/     Sidebar, ToolTrace, Markdown, SettingsModal
+                DriftPlayground.tsx (break the catalog from the browser)
 lib/            mcp.ts (MCP client) · agent.ts (loop) · decay.ts (validation)
-                provenance.ts (claims, fingerprints, pins) · remediate.ts (corrections + diff)
-                sweep.ts (the unattended pass) · native-writeback.ts (incidents + tags)
+                provenance.ts (claims, fingerprints, pins, coverage) · remediate.ts (corrections + diff)
+                sweep.ts (the unattended pass) · native-writeback.ts (incidents, tags, retraction)
                 structured-state.ts (assertions + structured properties)
                 draft-runbook.ts (drafting from evidence) · drift-injection.ts (the drift benchmark)
+                drift-scorecard.ts (the published table, re-derivable offline)
                 warehouse-introspection.ts (the eval's third arm)
                 datahub-graphql.ts (what MCP has no tool for) · gms-aspects.ts (drill writes)
-                replay.ts (zero-key demo) · providers.ts · prompts.ts · demo-*.ts
+                replay.ts (zero-key demo) · demo-drift.ts (the interactive demo)
+                providers.ts · prompts.ts · demo-*.ts
 evals/          benchmark.ts + benchmark-showcase.ts (20 cases each) · suites.ts
                 score.ts · run.ts · verify.ts · transcripts.ts · results/
 extension/      Chrome side panel · entity-from-url.js (the detection contract)
@@ -528,7 +687,7 @@ scripts/        prove-loop.ts (the one-command proof) · drift-benchmark.ts
 examples/       runbooks/ (five real ones + validation reports) · drafts/ · proposals/
                 live/ (dated receipts from live runs, both catalogs)
 submission/oss/ the upstream skill PR, the friction reports, the entity-detection package
-tests/          vitest suite (181 tests)
+tests/          vitest suite (229 tests)
 ```
 
 ## Security notes

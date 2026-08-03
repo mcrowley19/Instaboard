@@ -19,9 +19,12 @@ jobs:
         run: npx tsc --noEmit
       - name: Unit tests
         # Includes tests/prove-receipts.test.ts, which re-verifies the committed
-        # end-to-end receipts. `npm run prove` itself needs Docker and a live
-        # DataHub, so CI cannot run it — but it can refuse receipts that do not
-        # say what the README says they say.
+        # end-to-end receipts: they must carry no failed check, cover every phase
+        # of the loop, and say what the README says they say.
+        #
+        # That check re-reads an artifact. The one that re-derives it lives in
+        # prove.yml, which boots a real DataHub, runs `npm run prove` on both
+        # catalogs and fails if a fresh run disagrees with what is committed here.
         run: npm test
       - name: Verify scorecards from committed answers
         # Scoring is deterministic, so CI re-scores the committed raw eval
@@ -30,5 +33,10 @@ jobs:
         # if a published number could not be reproduced from them. No LLM key,
         # no DataHub instance needed: it is a pure re-run of the scorer.
         run: npm run eval:verify
+      - name: Verify the drift benchmark table from the committed run
+        # The benchmark itself mutates a real catalog, so CI cannot run it. It
+        # can re-derive the published table from the committed run and fail if
+        # the README, the scorecard and the artifact have come apart.
+        run: npm run bench:verify
       - name: Production build
         run: npm run build
