@@ -178,25 +178,54 @@ const REPORT_RESULT = `
   }
 `;
 
+const READ_ASSERTION = `query($urn: String!) { assertion(urn: $urn) { urn } }`;
+
+/**
+ * Wait for an assertion that was just upserted to become readable.
+ *
+ * Cheaper and more honest than reporting into the void and retrying on the
+ * error: ask whether the thing exists before writing against it.
+ */
+async function waitForAssertion(urn: string, timeoutMs = 60_000): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const res = await datahubGraphQL<{ assertion: { urn: string } | null }>(READ_ASSERTION, { urn });
+    if (res.data?.assertion?.urn) return true;
+    await new Promise((r) => setTimeout(r, 2_000));
+  }
+  return false;
+}
+
 /**
  * `upsertCustomAssertion` returns a URN before GMS has finished associating the
  * assertion with its dataset, and reporting a result against an assertion in that
  * window fails with "does not exist or is not associated with any entity". So
- * retry briefly rather than dropping the result — the first attempt usually
- * lands, and when it doesn't the second one does.
+ * retry rather than dropping the result.
+ *
+ * The budget here used to be four attempts over about twelve seconds, which is
+ * plenty on a machine that has run this before — the URN is a hash of
+ * (runbook, dataset), so the assertion already exists and there is nothing to
+ * wait for. On a catalog seeing it for the first time, under the load of a
+ * thousand-entity ingest, twelve seconds is not enough: CI reported six of these
+ * failures in one run and the receipt recorded "no assertion written" for a
+ * write that had in fact succeeded moments earlier. Read it back first, then
+ * report, and keep the retry as a backstop for the association step that the
+ * read cannot see.
  */
 async function reportResultWithRetry(
   urn: string,
   result: Record<string, unknown>,
-  attempts = 4
+  attempts = 6
 ): Promise<{ ok: boolean; error?: string }> {
+  await waitForAssertion(urn);
+
   let last = "no attempt made";
   for (let i = 0; i < attempts; i++) {
     const res = await datahubGraphQL<{ reportAssertionResult: boolean }>(REPORT_RESULT, { urn, result });
     if (res.data?.reportAssertionResult) return { ok: true };
     last = res.errors?.map((e) => e.message).join("; ") || "reportAssertionResult returned false";
     if (!/does not exist|not associated/i.test(last)) break;
-    await new Promise((r) => setTimeout(r, 2_000 * (i + 1)));
+    await new Promise((r) => setTimeout(r, 3_000 * (i + 1)));
   }
   return { ok: false, error: last };
 }

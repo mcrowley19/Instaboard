@@ -55,6 +55,11 @@ beforeEach(() => {
     if (body.query.includes("upsertCustomAssertion")) {
       return reply({ upsertCustomAssertion: { urn: (body.variables.urn as string) ?? "urn:li:assertion:x" } });
     }
+    // A result is only reported once the assertion reads back, so the fake
+    // catalog has to be able to answer for one it was just asked to create.
+    if (body.query.includes("assertion(urn:")) {
+      return reply({ assertion: { urn: (body.variables.urn as string) ?? "urn:li:assertion:x" } });
+    }
     if (body.query.includes("reportAssertionResult")) return reply({ reportAssertionResult: true });
     if (body.query.includes("upsertStructuredProperties")) return reply({ upsertStructuredProperties: { properties: [] } });
     return reply({});
@@ -185,6 +190,37 @@ describe("writeStructuredState", () => {
     expect(receipt.attempted).toBe(true);
     expect(receipt.assertions).toEqual([{ urn: assertionUrnFor("monthly-close", URN), datasetUrn: URN, result: "SUCCESS" }]);
   });
+
+  /*
+   * Found by CI on the showcase datapack, where the assertion URN was new
+   * because the catalog was. `upsertCustomAssertion` returns before GMS can
+   * answer for what it created, and the run event is rejected — six times in one
+   * run — leaving the receipt saying "no assertion written" for a write that had
+   * succeeded. Invisible on a machine that has run this before, because the URN
+   * is a hash of (runbook, dataset) and the assertion is already there.
+   */
+  it("waits for a newly created assertion to be readable before reporting against it", async () => {
+    let reads = 0;
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", async (url: string, init: { body: string }) => {
+      const body = JSON.parse(init.body) as Call;
+      if (body.query.includes("assertion(urn:")) {
+        calls.push(body);
+        reads += 1;
+        // Not there, not there, then there — the window CI hit.
+        const assertion = reads >= 3 ? { urn: (body.variables.urn as string) ?? "urn:li:assertion:x" } : null;
+        return new Response(JSON.stringify({ data: { assertion } }), { status: 200 });
+      }
+      return realFetch(url, init as RequestInit);
+    });
+
+    const receipt = await writeStructuredState(handoff(), report());
+
+    expect(reads).toBeGreaterThanOrEqual(3);
+    expect(receipt.assertions).toEqual([
+      { urn: assertionUrnFor("monthly-close", URN), datasetUrn: URN, result: "SUCCESS" },
+    ]);
+  }, 30_000);
 
   it("reports it failing, with the specific catalog change and the provenance chain attached", async () => {
     await writeStructuredState(handoff(), brokenReport());
