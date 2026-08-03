@@ -146,7 +146,9 @@ export async function callToolOverGraphQL(
           title,
           subType: typeof args.document_type === "string" ? args.document_type : "Note",
           contents: { text: content },
-          ...(related.length ? { relatedAssets: related.map((urn) => ({ asset: urn })) } : {}),
+          // `[String!]`, not objects. Sending `{ asset: urn }` makes GMS try to
+          // resolve the whole object as a URN and fail the write.
+          ...(related.length ? { relatedAssets: related } : {}),
         },
       });
       if (result.errors?.length) return fail(`save_document: ${result.errors[0].message}`);

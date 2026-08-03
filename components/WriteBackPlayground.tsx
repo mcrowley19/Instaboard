@@ -47,7 +47,7 @@ interface LoopResult {
   severity?: string;
   findings?: { kind: string; detail: string; severity: string; urn: string }[];
   wrote?: {
-    document: { urn?: string; roundTrip?: { matches: boolean; readBack: boolean; writtenChars: number; readChars: number } };
+    document: { written?: boolean; urn?: string; roundTrip?: { matches: boolean; readBack: boolean; writtenChars: number; readChars: number } };
     incidents: { urn: string; datasetUrn: string; reused: boolean; assignees: string[] }[];
     tagged: string[];
     assertions: { urn: string; datasetUrn: string; result: string }[];
@@ -186,6 +186,12 @@ export default function WriteBackPlayground() {
                   {result.wrote.assertions.filter((a) => a.result === "FAILURE").length} assertion
                   {result.wrote.assertions.filter((a) => a.result === "FAILURE").length === 1 ? "" : "s"} failing
                 </b>
+                {result.wrote.document.written === false && (
+                  <span className="lp-decay-remedy">
+                    The drift note was <b>not</b> written — see the error below. The incident and tag above did land;
+                    they are reported separately because they succeeded separately.
+                  </span>
+                )}
                 {result.wrote.document.roundTrip && (
                   <span className="lp-decay-remedy">
                     Drift note {result.wrote.document.urn?.slice(-12)} written and read back:{" "}
@@ -234,12 +240,30 @@ export default function WriteBackPlayground() {
 
           {/* Read straight back off DataHub after the writes, not derived from
               them. This is the row a sceptic should be reading. */}
-          {result?.readBack?.map((r) => (
+          {result?.readBack?.map((r) => {
+            // What we wrote for this dataset, so a read-back that disagrees can
+            // say so rather than sitting silently under a receipt that
+            // contradicts it. Assertion *results* are timeseries data and index
+            // a beat behind the upsert, so a brief disagreement is expected and
+            // a lasting one is a finding — either way it gets named.
+            const wroteHere = (result.wrote?.assertions ?? result.retracted?.assertions ?? []).find(
+              (a) => a.datasetUrn === r.urn
+            );
+            const lagging = Boolean(wroteHere && r.assertion && r.assertion.result !== wroteHere.result);
+            return (
             <div key={r.urn} className={`lp-decay-row${r.staleTag?.present ? "" : " ok"}`}>
               <span className="lp-decay-badge">{shortName(r.urn)}</span>
               <div>
                 <b>Stale Runbook tag: {r.staleTag?.present ? "present" : "absent"}</b>
                 {r.assertion ? ` · assertion ${r.assertion.result}` : " · no assertion written"}
+                {lagging && (
+                  <span className="lp-decay-remedy">
+                    We wrote <b>{wroteHere!.result}</b> and the catalog still reports{" "}
+                    <b>{r.assertion!.result}</b>. Assertion results are timeseries data and land in their own index
+                    a beat after the write, so this is the read catching up rather than the write failing — but it
+                    is shown, not smoothed over.
+                  </span>
+                )}
                 <span className="lp-decay-remedy">
                   <a href={r.url} target="_blank" rel="noreferrer">
                     open this dataset in DataHub
@@ -248,7 +272,8 @@ export default function WriteBackPlayground() {
                 </span>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="lp-decay-foot">

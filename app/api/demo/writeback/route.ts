@@ -207,7 +207,8 @@ async function fire(runbook: Handoff, urns: string[], started: number) {
     const structured = await writeStructuredState(recorded, report);
 
     // …then ask DataHub for each of them back. A write nobody read is a claim.
-    const readBack = await readEverythingBack(recorded, urns);
+    // The datasets that drifted should now carry a FAILING assertion.
+    const readBack = await readEverythingBack(recorded, urns, "FAILURE");
 
     return {
       ok: true,
@@ -218,6 +219,7 @@ async function fire(runbook: Handoff, urns: string[], started: number) {
       findings: report.findings.map((f) => ({ kind: f.kind, detail: f.detail, severity: f.severity, urn: f.urn })),
       wrote: {
         document: {
+          written: document.written,
           urn: document.documentUrn,
           /* The read-back that used to be impossible — see lib/document-readback.ts. */
           roundTrip: document.roundTrip,
@@ -225,7 +227,14 @@ async function fire(runbook: Handoff, urns: string[], started: number) {
         incidents: native.incidents,
         tagged: native.tagged,
         assertions: structured.assertions,
-        errors: [...native.errors, ...structured.errors],
+        // The document write's own error belongs here. It was missing, so a
+        // failed `save_document` showed up as an absent URN next to a green
+        // incident and tag — three writes reported as if all three had landed.
+        errors: [
+          ...(document.error ? [`save_document: ${document.error}`] : []),
+          ...native.errors,
+          ...structured.errors,
+        ],
       },
       readBack,
       links: urns.map((urn) => ({ urn, url: datasetLink(urn) })),
@@ -274,7 +283,7 @@ async function repair(runbook: Handoff, urns: string[], started: number) {
   const clean = report.severity === "ok" && structured.attempted;
   const resolved = clean ? await resolveIncidentsFor(recorded, urns) : [];
   const retraction = clean ? await retractStaleTags(recorded, urns) : null;
-  const readBack = await readEverythingBack(recorded, urns);
+  const readBack = await readEverythingBack(recorded, urns, clean ? "SUCCESS" : undefined);
 
   return {
     ok: true,
@@ -306,13 +315,43 @@ async function repair(runbook: Handoff, urns: string[], started: number) {
  * from what we just sent it. This is the difference between "we called the API"
  * and "the catalog holds this".
  */
-async function readEverythingBack(runbook: Handoff, urns: string[]) {
+async function readEverythingBack(runbook: Handoff, urns: string[], expect?: "FAILURE" | "SUCCESS") {
   return Promise.all(
     urns.map(async (urn) => ({
       urn,
       url: datasetLink(urn),
       staleTag: await readStaleTag(urn),
-      assertion: await readAssertionStatus(runbook.id, urn),
+      assertion: await assertionSettlingOn(runbook.id, urn, expect),
     }))
   );
+}
+
+/**
+ * Read the assertion back, giving its result a moment to arrive.
+ *
+ * Assertion *results* are timeseries data and land in their own index a beat
+ * after the upsert returns. Reading immediately caught the previous run's
+ * verdict: the receipt said one assertion was now FAILING and the read-back
+ * underneath it said SUCCESS, which is the single most damaging thing this panel
+ * could show — the row that exists to prove the write is the row contradicting
+ * it.
+ *
+ * So poll briefly for the result we just wrote. Bounded, and it returns whatever
+ * the catalog says when the budget runs out rather than pretending: a
+ * disagreement that survives ten seconds is a real disagreement and should be
+ * visible.
+ */
+async function assertionSettlingOn(
+  runbookId: string,
+  urn: string,
+  expect?: "FAILURE" | "SUCCESS",
+  budgetMs = 20_000
+) {
+  const deadline = Date.now() + budgetMs;
+  let latest = await readAssertionStatus(runbookId, urn);
+  while (expect && latest && latest.result !== expect && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 1_000));
+    latest = await readAssertionStatus(runbookId, urn);
+  }
+  return latest;
 }

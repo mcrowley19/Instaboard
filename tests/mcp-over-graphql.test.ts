@@ -108,11 +108,20 @@ describe("save_document", () => {
         title: "Stale runbook: x",
         subType: "Note",
         contents: { text: "# body" },
-        relatedAssets: [{ asset: DATASET }],
+        relatedAssets: [DATASET],
       },
     });
     // The caller pulls the URN out of this text — it has to be in it.
     expect(result!.content).toContain("urn:li:document:shared-abc");
+  });
+
+  it("sends related assets as bare URNs, which is what the schema takes", async () => {
+    // `[String!]`. Wrapping them in `{ asset: urn }` made GMS try to resolve the
+    // object as a URN — every document write failed, and the demo reported the
+    // incident and tag it had also written as if all three had landed.
+    response = { data: { createDocument: "urn:li:document:shared-abc" } };
+    await callToolOverGraphQL("save_document", { title: "x", content: "y", related_assets: [DATASET, OTHER] });
+    expect((sent[0].variables.input as { relatedAssets: unknown }).relatedAssets).toEqual([DATASET, OTHER]);
   });
 
   it("fails loudly when DataHub returns no URN, rather than reporting a write", async () => {
