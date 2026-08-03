@@ -10,9 +10,11 @@
  * detection function the live sweep runs — no scripted response, no branch in
  * the engine for the demo.
  *
- * It is still a fixture, and the panel says so. What it cannot show is the
- * write-back: incidents, assertions and tags need a DataHub, and the receipts
- * from real runs are committed in the repo instead.
+ * It is still a fixture where no catalog is configured, and the panel says so.
+ * What *this* panel cannot show is the write-back: incidents, assertions and
+ * tags change the catalog, and being read-only is what makes this one safe to
+ * leave running in public. `WriteBackPlayground` is the half that writes, and it
+ * renders only where the deployment has a catalog it is allowed to break.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -267,11 +269,11 @@ export default function DriftPlayground() {
           {result.live.cached ? ", shared with another visitor in the last few seconds" : ` in ${result.live.readMs}ms`}
           . Fingerprints computed from what it returned:{" "}
           {result.live.entities.map((e) => `${e.urn.split(",")[1]?.split(".").pop()}@${e.version ?? "—"}`).join(", ")}.
-          Your changes were applied to that read and thrown away — nothing is written to the catalog, so nobody
-          visiting this page can damage it, and you are not seeing anyone else&apos;s changes. Write-back against a
-          real catalog is what{" "}
+          Your changes were applied to that read and thrown away — <em>this panel</em> writes nothing, so nobody
+          driving it can damage the catalog, and you are not seeing anyone else&apos;s changes. Write-back is the
+          other half: it is the panel below where this deployment has a catalog it is allowed to break, and{" "}
           <a href="https://github.com/mcrowley19/Instaboard/blob/main/.github/workflows/prove.yml">CI</a> re-derives
-          on every push.
+          it from nothing on every push.
         </p>
       ) : (
         <p className="lp-note">

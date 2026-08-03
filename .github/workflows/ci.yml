@@ -27,16 +27,22 @@ jobs:
         # catalogs and fails if a fresh run disagrees with what is committed here.
         run: npm test
       - name: Verify scorecards from committed answers
-        # Scoring is deterministic, so CI re-scores the committed raw eval
-        # answers for BOTH suites on every push — Northbeam (19/20 vs 5/20) and
-        # DataHub's own showcase-ecommerce datapack (20/20 vs 3/20) — and fails
-        # if a published number could not be reproduced from them. No LLM key,
-        # no DataHub instance needed: it is a pure re-run of the scorer.
+        # Scoring is deterministic, so CI re-scores every committed pass of the
+        # eval on every push — all three live passes of Northbeam plus DataHub's
+        # own showcase-ecommerce datapack — and fails if a published number could
+        # not be reproduced from them. No LLM key, no DataHub instance needed: it
+        # is a pure re-run of the scorer over the stored answers.
         run: npm run eval:verify
       - name: Verify the drift benchmark table from the committed run
         # The benchmark itself mutates a real catalog, so CI cannot run it. It
         # can re-derive the published table from the committed run and fail if
         # the README, the scorecard and the artifact have come apart.
         run: npm run bench:verify
+      - name: Verify the scale table from the committed run
+        # Same shape: the scale benchmark writes ten thousand datasets into a
+        # real catalog and deletes them again, which is not something to do on
+        # every push. Re-deriving its scorecard from the committed measurements
+        # is, and it fails if the two have come apart.
+        run: npm run bench:scale:verify
       - name: Production build
         run: npm run build
