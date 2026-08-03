@@ -58,7 +58,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { datahubGraphQL } from "../lib/datahub-graphql";
-import { isDemoMode, resetToolCallCounts, toolCallCounts } from "../lib/mcp";
+import { isDemoMode, mcpStatus, resetToolCallCounts, toolCallCounts } from "../lib/mcp";
 import { sweepRunbooks } from "../lib/sweep";
 import { listHandoffs } from "../lib/handoff-store";
 
@@ -144,6 +144,13 @@ interface Measurement {
 interface ScaleResult {
   at: string;
   catalog: string;
+  /**
+   * Which transport the catalog reads went over: the `mcp-server-datahub`
+   * subprocess, or GraphQL directly. Recorded because it changes what the timing
+   * column means, and because the two are not always both available — see the
+   * note in the scorecard.
+   */
+  transport: "mcp" | "graphql";
   note: string;
   measurements: Measurement[];
 }
@@ -361,7 +368,8 @@ function scorecard(result: ScaleResult): string {
     "[`examples/live/scale-benchmark.json`](../../examples/live/scale-benchmark.json) with",
     "`npm run bench:scale -- --verify`.",
     "",
-    `Run at ${result.at} against ${result.catalog}.`,
+    `Run at ${result.at} against ${result.catalog}, reading the catalog over ` +
+      `${result.transport === "graphql" ? "**GraphQL**" : "the **mcp-server-datahub** subprocess"}.`,
     "",
     "<!-- scale-table:start -->",
     scaleTable(result),
@@ -408,6 +416,17 @@ function scorecard(result: ScaleResult): string {
     "the same incidents, tags, assertions and structured properties — over the real stored",
     "runbooks. Afterwards every synthetic URN is hard-deleted individually and the teardown is",
     "verified against the catalog count.",
+    "",
+    result.transport === "graphql"
+      ? "**On the transport.** These reads went over DataHub's GraphQL API rather than through the\n" +
+        "`mcp-server-datahub` subprocess. That was not a preference: after this catalog had ten thousand\n" +
+        "datasets written and deleted through it, MCP tool calls stopped returning — a `get_entities` call\n" +
+        "that GraphQL answers in 4.5s hung past 295s with the subprocess and DataHub both idle at 0% CPU,\n" +
+        "while GMS answered the equivalent query directly in 26ms. The sweep's work is identical either\n" +
+        "way (`lib/mcp-over-graphql.ts` implements the same four tools), and GraphQL is the transport a\n" +
+        "serverless deployment uses regardless. But the timing column here is GraphQL's, not MCP's, and\n" +
+        "the hang is its own finding: it is why `callDataHubTool` now carries a deadline.\n"
+      : "",
     "",
     "**What this does not measure.** The agent's chat path, which searches the catalog and",
     "does scale with it — a question like \"which table holds revenue\" gets harder to answer",
@@ -530,9 +549,11 @@ async function main() {
     }
   }
 
+  const status = await mcpStatus();
   const result: ScaleResult = {
     at: new Date().toISOString(),
     catalog: GMS(),
+    transport: status.graphql ? "graphql" : "mcp",
     note:
       "Synthetic datasets under instaboard_scale.generated, hard-deleted afterwards. The sweep is the real " +
       "sweepRunbooks over the real stored runbooks, run with no LLM credentials in the environment.",
