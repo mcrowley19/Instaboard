@@ -340,19 +340,29 @@ async function waitForCatalogToSettle(): Promise<void> {
   const read = async () => {
     const snapshots = await Promise.all(urns.map((urn) => snapshotEntity(urn)));
     return {
-      allPresent: snapshots.every((s) => s.exists),
+      present: snapshots.filter((s) => s.exists).length,
       fingerprint: snapshots.map((s) => `${s.urn}@${s.version?.entity ?? "none"}`).join("|"),
       described: snapshots.filter((s) => s.fields.length > 0).length,
+      owned: snapshots.filter((s) => s.owners.length > 0).length,
     };
   };
 
-  const deadline = Date.now() + 6 * 60_000;
+  /*
+   * Fifteen minutes, because the budget has to fit the slower of the two
+   * catalogs rather than the one that happens to be the default. Northbeam is
+   * fourteen datasets and settles in seconds; the showcase datapack is 3,561
+   * events across a thousand entities, and on a cold runner with nothing cached
+   * it was still moving after six — which is how a capture ended up seeing one
+   * of its three datasets and a rename that could not be caught. Waiting costs
+   * nothing on the catalog that is already still.
+   */
+  const deadline = Date.now() + 15 * 60_000;
   let previous = await read();
   let announced = false;
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 10_000));
     const current = await read();
-    if (current.allPresent && current.fingerprint === previous.fingerprint) return;
+    if (current.present === urns.length && current.fingerprint === previous.fingerprint) return;
     if (!announced) {
       say("    the catalog is still settling after ingest; waiting for it to hold still…");
       announced = true;
@@ -360,8 +370,9 @@ async function waitForCatalogToSettle(): Promise<void> {
     previous = current;
   }
   say(
-    `    the catalog never held still (${previous.described}/${urns.length} entities carry a schema) — ` +
-      `capturing anyway, and the checks below will say what that cost.`
+    `    the catalog never held still in 15 minutes — ${previous.present}/${urns.length} of the runbook's ` +
+      `datasets present, ${previous.described} with a schema, ${previous.owned} with owners. Capturing ` +
+      `anyway, and the checks below will say what that cost.`
   );
 }
 
