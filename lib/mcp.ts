@@ -129,11 +129,25 @@ export async function listDataHubTools(): Promise<ToolDef[]> {
 
 const MAX_RESULT_CHARS = 30_000;
 
+/**
+ * How many catalog reads have been made, by tool.
+ *
+ * Here so the scale benchmark can report the sweep's cost as a count of calls
+ * rather than an estimate of one. Nothing depends on it being reset, and it is
+ * never read in the request path.
+ */
+export const toolCallCounts: Record<string, number> = {};
+
+export function resetToolCallCounts(): void {
+  for (const key of Object.keys(toolCallCounts)) delete toolCallCounts[key];
+}
+
 /** Call a DataHub MCP tool and return its result flattened to a string. */
 export async function callDataHubTool(
   name: string,
   args: Record<string, unknown>
 ): Promise<{ content: string; isError: boolean }> {
+  toolCallCounts[name] = (toolCallCounts[name] ?? 0) + 1;
   if (isDemoMode()) return callDemoTool(name, args);
 
   // Already known to have no subprocess: try GraphQL before the fixture. A real

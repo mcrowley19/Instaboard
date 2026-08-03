@@ -17,6 +17,8 @@
     "draft": "tsx scripts/draft-runbooks.ts",
     "bench:drift": "tsx scripts/drift-benchmark.ts",
     "bench:verify": "tsx scripts/drift-benchmark.ts --verify",
+    "bench:scale": "tsx scripts/scale-benchmark.ts",
+    "bench:scale:verify": "tsx scripts/scale-benchmark.ts --verify",
     "validate": "tsx scripts/validate-runbooks.ts",
     "propose": "tsx scripts/propose-fixes.ts",
     "examples": "tsx scripts/export-examples.ts",
