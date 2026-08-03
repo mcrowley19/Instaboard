@@ -7,17 +7,52 @@ read, and the fingerprints that came back.
 
 This directory is what it takes to run the second kind.
 
-## Why it is not on Vercel
+## Two shapes, and when to use which
 
-The app reaches DataHub through `mcp-server-datahub`, which it spawns as a
-subprocess over stdio. Serverless runtimes will not do that. So the app is
-deployed *next to* DataHub on one box rather than in front of it — which is also
-the safer shape: `datahub-gms` is never published, and the only port on the
-internet belongs to the app.
+### A. Serverless in front of a DataHub it can reach over HTTP
 
-The app writes nothing to the catalog on this path. A visitor's breaking changes
-are applied to the snapshot their request just read and thrown away. Write-back
-against a real catalog is `npm run prove`, which CI re-derives on every push.
+The app reaches DataHub through `mcp-server-datahub`, spawned as a subprocess
+over stdio, and serverless runtimes will not do that. That used to rule Vercel
+out entirely — the hosted deployment fell back to the fixture and said so.
+
+It no longer does. The four tools the validation and write-back loop needs —
+`get_entities`, `get_dataset_health`, `save_document`, `add_tags` — all have
+GraphQL equivalents, and GraphQL is plain HTTP. `lib/mcp-over-graphql.ts`
+implements exactly those four and nothing else, and `lib/mcp.ts` reaches for it
+when the subprocess is unavailable but a GMS is answering. So a Vercel
+deployment pointed at a reachable GMS reads and writes a real catalog:
+
+```bash
+vercel env add DATAHUB_GMS_URL production        # where GMS answers
+vercel env add DATAHUB_FRONTEND_URL production   # where "open in DataHub" should go
+vercel env add DEMO_MODE production              # false
+vercel env add DEMO_WRITEBACK_ENABLED production # true, on a disposable catalog only
+vercel deploy --prod
+```
+
+`/api/status` will report `graphql: true` and name the catalog it is talking to.
+If it reports `demo: true`, it could not reach GMS.
+
+The agent's chat path still needs the real MCP server — it uses the full 20-tool
+surface, not four — so on this shape the chat answers from the committed replay
+while the drift and write-back panels are live. That split is what the status
+pill exists to make legible.
+
+**Exposing GMS.** The quickstart's GMS has no authentication. If you tunnel it
+(`cloudflared tunnel --url http://localhost:8080` needs no account and no card),
+anyone with the URL can read and write that catalog. That is acceptable for a
+disposable demo catalog and unacceptable for anything else. A quick-tunnel
+hostname is random, which is obscurity, not security.
+
+### B. Next to DataHub on one box
+
+The older shape, and the better one for anything long-lived: `datahub-gms` is
+never published, and the only port on the internet belongs to the app.
+
+On this path the drift playground writes nothing to the catalog — a visitor's
+breaking changes are applied to the snapshot their request just read and thrown
+away. `DEMO_WRITEBACK_ENABLED=true` is what opts into the write-back demo, on
+either shape.
 
 ## What free costs
 

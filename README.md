@@ -233,7 +233,7 @@ then validates blind and scores two axes separately.
 | Decoys that stayed quiet | **6/6** |
 | Unexplained findings | **0** |
 | Detection precision · recall · F1 | **100.0% · 100.0% · 100.0%** |
-| Corrections derived for detected renames | **1/2** — 1 named below |
+| Corrections derived for detected renames | **2/2** |
 | Catalog changes restored afterwards | 15/15 |
 <!-- drift-table:end -->
 

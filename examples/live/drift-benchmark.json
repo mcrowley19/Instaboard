@@ -1,5 +1,5 @@
 {
-  "at": "2026-08-02T22:38:58.270Z",
+  "at": "2026-08-03T15:23:48.980Z",
   "catalog": "http://localhost:8080",
   "runbooks": [
     {
@@ -28,7 +28,7 @@
       "steps": 3
     }
   ],
-  "method": "Known drifts planted through DataHub's own write APIs across every stored runbook, mixed with decoys (changes to things no runbook reads) and controls (additive changes to things runbooks do read: a column added, a description rewritten, a second owner appointed). Both classes must produce nothing. Ground truth for column drift comes from tokenising each step's SQL, not from the engine's own reference matcher. One rename is planted to a name sharing no tokens with the original, which the correction rule cannot solve by construction. Findings that pre-date the injection are excluded from the false-positive count. The engine is told nothing about any of it.",
+  "method": "Known drifts planted through DataHub's own write APIs across every stored runbook, mixed with decoys (changes to things no runbook reads) and controls (additive changes to things runbooks do read: a column added, a description rewritten, a second owner appointed). Both classes must produce nothing. Ground truth for column drift comes from tokenising each step's SQL, not from the engine's own reference matcher. One rename is planted to a name sharing no tokens with the original, so no name-based matcher can solve it and one that appeared to would be matching noise; it is solvable only from the shape of the change — one column left, one arrived, in the same slot — and is proposed at lower confidence for that reason. Findings that pre-date the injection are excluded from the false-positive count. The engine is told nothing about any of it.",
   "baselineFindings": 1,
   "planted": [
     {
@@ -62,7 +62,7 @@
       "subject": "product_status",
       "decoy": false,
       "expect": "column-missing",
-      "hardCase": "`product_status` → `settled_value` shares no tokens with the original. The rename detector scores token overlap and edit distance, so it cannot connect the two and will decline to propose a correction. Detection should still catch the column as missing."
+      "hardCase": "`product_status` → `settled_value` shares no tokens with the original, so the name carries no signal at all: token overlap and edit distance both score it near zero, and any matcher that connected the two on their names would be matching noise. It is solvable only structurally — one column left, one arrived, in the same slot — which is a strictly weaker kind of evidence and is proposed at lower confidence. Detection should catch the column as missing either way."
     },
     {
       "id": "deprecated:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD):urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
@@ -265,15 +265,8 @@
   },
   "corrections": {
     "eligible": 2,
-    "proposed": 1,
-    "misses": [
-      {
-        "id": "column-renamed:urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD):product_status",
-        "from": "product_status",
-        "to": "settled_value",
-        "reason": "No column on products is a close enough match to `product_status` to propose as a rename. It may have been dropped outright, or split across several columns."
-      }
-    ]
+    "proposed": 2,
+    "misses": []
   },
   "falsePositives": [],
   "falseNegatives": [],
