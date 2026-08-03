@@ -53,3 +53,7 @@ evals/results/cache.json
 .env
 .env.local
 .vercel
+
+# Written by scripts/isolate-catalog.ts while a catalog is temporarily isolated.
+# Runtime state, and losing it would strand soft-deleted datasets.
+data/isolation-manifest.json*

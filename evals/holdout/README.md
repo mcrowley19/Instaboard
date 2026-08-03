@@ -133,8 +133,29 @@ the catalog.
 The two packs **share platforms**: Northbeam seeds `snowflake` and `postgres`,
 and showcase uses both as well. So there is no platform filter, domain or
 DataHub View that separates them for an agent that searches the whole catalog.
-Isolating them means removing Northbeam's datasets by URN and putting them back
-afterwards with `npm run seed`.
+The separation has to be per-URN, so there is a tool for it:
+
+```bash
+npm run catalog:status     # what would the holdout see right now?
+npm run catalog:isolate    # soft-delete everything not in catalog-dump.json
+npm run eval -- --live --runs=3 --suite=holdout
+npm run catalog:restore    # put back exactly what was hidden
+```
+
+`catalog:isolate` derives its keep-list from `catalog-dump.json` itself — the
+same file the author model was shown — so the visible catalog and the questions
+cannot drift apart. It soft-deletes through `batchUpdateSoftDeleted`, the
+mutation DataHub's own UI uses, which takes the entity out of the search index
+while leaving every aspect it owns untouched; restoring is the same call with
+the flag flipped. The URNs it hid go to a manifest first, so `--restore` puts
+back precisely what it took and cannot resurrect something that was already
+soft-deleted for its own reasons.
+
+Verified on a live catalog: with 24 datasets hidden, the exact
+`analytics.marts.fct_revenue` URN stops appearing in search results and comes
+back after `--restore`. Writing the `status` aspect directly does *not* achieve
+this — the aspect lands and the entity stays in the index — which is worth
+knowing before reaching for the obvious approach.
 
 That matters if the same instance is doing anything else. It is the same catalog
 the hosted write-back demo reads — `demoRunbook()` names three Northbeam
