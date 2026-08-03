@@ -1,0 +1,479 @@
+{
+  "provenance": {
+    "catalog": "showcase-ecommerce, DataHub's published demo datapack",
+    "authorModel": "openai/gpt-oss-20b:free",
+    "authorProvider": "openrouter",
+    "catalogDumpSha256": "aa50d8e83570424dd7879e5cf88f5bf0b10d8b64ada7a9ee0433b6d8b269bad0",
+    "authorPromptSha256": "99cacc7599f79d4e62e723ad35ff880875d203636a5ee26776aad69f63a95895",
+    "casesReturned": 20,
+    "casesKept": 18,
+    "note": "Written by the model above from catalog-dump.json and author-prompt.md and nothing else. It was not shown instaboard's prompts, tools, scorer or existing benchmark cases, and was not told what system would answer these questions. Rejections below were applied by the mechanical filter in author.ts before any arm ran; re-check with `--validate-only`."
+  },
+  "rejected": [
+    {
+      "id": "average-items-per-order",
+      "reason": "no check is grounded in the catalog",
+      "detail": "none of 1 mustInclude group(s) names anything present in the dump"
+    },
+    {
+      "id": "average-order-to-dispatch-time",
+      "reason": "no check is grounded in the catalog",
+      "detail": "none of 1 mustInclude group(s) names anything present in the dump"
+    }
+  ],
+  "cases": [
+    {
+      "id": "order-details-view-dataset",
+      "category": "finding-the-right-asset",
+      "question": "Which dataset contains the order details view that combines orders, customers, and products?",
+      "stakes": "Incorrectly identifying the dataset could lead to querying the wrong data, causing analysis errors.",
+      "mustInclude": [
+        {
+          "label": "dataset name",
+          "anyOf": [
+            "order_details"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong dataset name",
+          "anyOf": [
+            "orders_view",
+            "order_details_view"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "business-owner-order-details",
+      "category": "who-to-ask",
+      "question": "Who is the business owner responsible for the order_details dataset?",
+      "stakes": "Misidentifying the owner could delay data access approvals and impact project timelines.",
+      "mustInclude": [
+        {
+          "label": "owner name",
+          "anyOf": [
+            "Ian Chen",
+            "David Kim",
+            "Ben Porter",
+            "Julia Novak",
+            "James Wilson",
+            "Karen Okonkwo",
+            "Fiona Green",
+            "Sarah Chen"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong owner",
+          "anyOf": [
+            "John Doe",
+            "Alice Smith"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "glossary-term-pii",
+      "category": "business-terms",
+      "question": "Which business glossary term indicates that the data contains personally identifiable information?",
+      "stakes": "Using the wrong term could lead to non-compliance with privacy regulations.",
+      "mustInclude": [
+        {
+          "label": "glossary term",
+          "anyOf": [
+            "PII"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong term",
+          "anyOf": [
+            "PII2",
+            "PII3"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "source-table-order-total",
+      "category": "where-numbers-come-from",
+      "question": "Which source table provides the order_total field used in the order_details view?",
+      "stakes": "Wrong source leads to incorrect data lineage and potential data quality issues.",
+      "mustInclude": [
+        {
+          "label": "source table",
+          "anyOf": [
+            "orders"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong source",
+          "anyOf": [
+            "customers_view",
+            "products_view"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "upstream-datasets-order-details",
+      "category": "what-feeds-what",
+      "question": "What datasets feed the order_details view?",
+      "stakes": "Missing an upstream could cause incomplete data in reports.",
+      "mustInclude": [
+        {
+          "label": "upstream dataset",
+          "anyOf": [
+            "orders",
+            "customers",
+            "addresses",
+            "countries",
+            "regions",
+            "warehouses",
+            "promotions",
+            "order_items",
+            "products",
+            "product_categories",
+            "inventories"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong upstream",
+          "anyOf": [
+            "order_history_view",
+            "order_details_view"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "top-customers-query",
+      "category": "writing-a-query",
+      "question": "Write a SQL query to list the top 10 customers by total order value from the order_details view.",
+      "stakes": "An incorrect query could produce misleading insights and affect business decisions.",
+      "mustInclude": [
+        {
+          "label": "dataset",
+          "anyOf": [
+            "order_details"
+          ]
+        },
+        {
+          "label": "field",
+          "anyOf": [
+            "order_total",
+            "cust_first_name",
+            "cust_last_name"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong dataset",
+          "anyOf": [
+            "order_history_view"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "inventories-dataset",
+      "category": "finding-the-right-asset",
+      "question": "Which dataset contains the inventory levels across warehouses?",
+      "stakes": "Using the wrong dataset could lead to inaccurate stock level reporting.",
+      "mustInclude": [
+        {
+          "label": "dataset name",
+          "anyOf": [
+            "inventories"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong dataset",
+          "anyOf": [
+            "inventory_view",
+            "inventories_view"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "technical-owner-customers",
+      "category": "who-to-ask",
+      "question": "Who is the technical owner for the customers dataset?",
+      "stakes": "Misidentifying the owner could delay data access approvals and impact project timelines.",
+      "mustInclude": [
+        {
+          "label": "owner name",
+          "anyOf": [
+            "Ian Chen",
+            "Julia Novak",
+            "James Wilson",
+            "Karen Okonkwo",
+            "Fiona Green",
+            "Sarah Chen"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong owner",
+          "anyOf": [
+            "Alice Johnson"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "glossary-term-revenue-by-customer-class",
+      "category": "business-terms",
+      "question": "Which glossary term is used to describe the revenue aggregated by customer class?",
+      "stakes": "Using the wrong term could lead to misinterpretation of metrics.",
+      "mustInclude": [
+        {
+          "label": "glossary term",
+          "anyOf": [
+            "Revenue by Customer Class"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong term",
+          "anyOf": [
+            "Revenue by Product"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "source-table-cost-of-delivery",
+      "category": "where-numbers-come-from",
+      "question": "Where does the cost_of_delivery field come from in the order_details view?",
+      "stakes": "Wrong source leads to incorrect data lineage and potential data quality issues.",
+      "mustInclude": [
+        {
+          "label": "source table",
+          "anyOf": [
+            "orders"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong source",
+          "anyOf": [
+            "products_view",
+            "inventories_view"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "upstream-dataset-order-items",
+      "category": "what-feeds-what",
+      "question": "Which dataset is an upstream of the order_items table?",
+      "stakes": "Missing an upstream could cause incomplete data in reports.",
+      "mustInclude": [
+        {
+          "label": "upstream dataset",
+          "anyOf": [
+            "orders",
+            "products",
+            "inventories"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong upstream",
+          "anyOf": [
+            "order_history_view",
+            "order_items_view"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "average-discount-query",
+      "category": "writing-a-query",
+      "question": "Write a query to calculate the average discount percent for orders in the last month from the order_details view.",
+      "stakes": "An incorrect query could produce misleading insights and affect business decisions.",
+      "mustInclude": [
+        {
+          "label": "dataset",
+          "anyOf": [
+            "order_details"
+          ]
+        },
+        {
+          "label": "field",
+          "anyOf": [
+            "discount_percent",
+            "order_date"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong dataset",
+          "anyOf": [
+            "order_history_view"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "promotions-dataset",
+      "category": "finding-the-right-asset",
+      "question": "Which dataset contains the promotions applied to orders?",
+      "stakes": "Using the wrong dataset could lead to inaccurate promotion reporting.",
+      "mustInclude": [
+        {
+          "label": "dataset name",
+          "anyOf": [
+            "promotions"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong dataset",
+          "anyOf": [
+            "promotion_view",
+            "promotions_view"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "data-steward-order-details",
+      "category": "who-to-ask",
+      "question": "Who is the data steward for the order_details view?",
+      "stakes": "Misidentifying the steward could delay data governance actions.",
+      "mustInclude": [
+        {
+          "label": "steward name",
+          "anyOf": [
+            "DataHub SE Team",
+            "Data Platform Team"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong steward",
+          "anyOf": [
+            "Marketing Team"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tag-sensitive-data",
+      "category": "business-terms",
+      "question": "Which tag indicates that the dataset contains sensitive customer information?",
+      "stakes": "Using the wrong tag could lead to non-compliance with privacy regulations.",
+      "mustInclude": [
+        {
+          "label": "tag",
+          "anyOf": [
+            "PII_Data"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong tag",
+          "anyOf": [
+            "Public_Data"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "field-delivery-type",
+      "category": "where-numbers-come-from",
+      "question": "Which field in the order_details view represents the shipping method?",
+      "stakes": "Wrong field leads to incorrect analysis of shipping options.",
+      "mustInclude": [
+        {
+          "label": "field",
+          "anyOf": [
+            "delivery_type"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong field",
+          "anyOf": [
+            "delivery_status_code"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "upstream-dataset-warehouses",
+      "category": "what-feeds-what",
+      "question": "Which dataset feeds the warehouses table?",
+      "stakes": "Missing an upstream could cause incomplete data in reports.",
+      "mustInclude": [
+        {
+          "label": "dataset",
+          "anyOf": [
+            "warehouses"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong dataset",
+          "anyOf": [
+            "warehouse_view",
+            "warehouses_view"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "orders-per-delivery-type-query",
+      "category": "writing-a-query",
+      "question": "Write a query to find the number of orders per delivery type from the order_details view.",
+      "stakes": "An incorrect query could produce misleading insights and affect business decisions.",
+      "mustInclude": [
+        {
+          "label": "dataset",
+          "anyOf": [
+            "order_details"
+          ]
+        },
+        {
+          "label": "field",
+          "anyOf": [
+            "delivery_type",
+            "order_id"
+          ]
+        }
+      ],
+      "mustNotInclude": [
+        {
+          "label": "wrong dataset",
+          "anyOf": [
+            "order_history_view"
+          ]
+        }
+      ]
+    }
+  ]
+}

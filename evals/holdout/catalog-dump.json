@@ -1,0 +1,4828 @@
+{
+  "catalog": "showcase-ecommerce",
+  "source": "DataHub's published demo datapack, read over GraphQL from a live GMS",
+  "datasetCount": 67,
+  "datasets": [
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.ORDER_ENTRY_DB.analytics.order_details,PROD)",
+      "name": "order_details",
+      "platform": "dbt",
+      "description": "# Order Details Model\n\n## Overview\n\nThe `order_details` model provides a comprehensive view of customer orders by combining data from multiple tables in the `order_entry` schema. It includes detailed information about orders, customers, products, shipping, billing, inventory, and promotions.\n\nThis denormalized view is designed to support reporting, analysis, and operational insights across the order management process.\n\n## Model Information\n\n- **Name**: `order_details`\n- **Type**: View\n- **Source Schema**: `order_entry`\n- **Database**: `order_entry_db`\n- **Update Frequency**: Refreshed on query with current timestamp\n\n## Data Structure\n\n### Order Information\n\n| Column                | Type         | Description                                                | Example                            |\n| --------------------- | ------------ | ---------------------------------------------------------- | ---------------------------------- |\n| order_id              | NUMBER       | Unique identifier for the order                            | 12345                              |\n| order_date            | TIMESTAMP_TZ | Date and time when the order was placed including timezone | 2023-05-01 14:30:00-07:00          |\n| order_mode            | VARCHAR      | Method of order placement                                  | 'online', 'phone', 'direct'        |\n| order_status          | NUMBER       | Current status of the order                                | 1=Pending, 2=Processing, 3=Shipped |\n| order_total           | NUMBER       | Total monetary value of the order                          | 156.78                             |\n| cost_of_delivery      | NUMBER       | Shipping and handling cost                                 | 12.99                              |\n| delivery_type         | VARCHAR      | Shipping method                                            | 'Standard', 'Express', 'Overnight' |\n| wait_till_complete_yn | VARCHAR      | Ship complete order or partial                             | 'Y', 'N'                           |\n| payment_method_code   | VARCHAR      | Code indicating payment method used                        | 'CC', 'PayPal', 'ApplePay'         |\n\n### Customer Information\n\n| Column          | Type    | Description                        | Example                      |\n| --------------- | ------- | ---------------------------------- | ---------------------------- |\n| customer_id     | NUMBER  | Unique identifier for the customer | 5001                         |\n| cust_first_name | VARCHAR | Customer first name                | 'John'                       |\n| cust_last_name  | VARCHAR | Customer last name                 | 'Smith'                      |\n| cust_email      | VARCHAR | Customer email address             | 'john.smith@example.com'     |\n| phone_number    | VARCHAR | Customer contact phone number      | '555-123-4567'               |\n| customer_class  | VARCHAR | Classification of the customer     | 'Platinum', 'Gold', 'Silver' |\n\n### Billing Address Information\n\n| Column                | Type    | Description                                   | Example         |\n| --------------------- | ------- | --------------------------------------------- | --------------- |\n| billing_address_line1 | VARCHAR | First line of customer billing address        | '123 Main St'   |\n| billing_address_line2 | VARCHAR | Second line of customer billing address       | 'Apt 4B'        |\n| billing_town_city     | VARCHAR | Town or city of customer billing address      | 'Springfield'   |\n| billing_country       | VARCHAR | Country name for the billing address          | 'United States' |\n| billing_zipcode       | VARCHAR | Postal code of customer billing address       | '12345'         |\n| billing_region        | VARCHAR | Region/state/province for the billing address | 'Illinois'      |\n\n### Shipping Address Information\n\n| Column                 | Type    | Description                                | Example         |\n| ---------------------- | ------- | ------------------------------------------ | --------------- |\n| shipping_address_line1 | VARCHAR | First line of customer shipping address    | '456 Oak St'    |\n| shipping_address_line2 | VARCHAR | Second line of customer shipping address   | 'Suite 101'     |\n| shipping_town_city     | VARCHAR | Town or city of customer shipping address  | 'Chicago'       |\n| shipping_country       | VARCHAR | Country name for the shipping address      | 'United States' |\n| shipping_zipcode       | VARCHAR | Postal code of customer shipping address   | '60601'         |\n| shipping_region        | VARCHAR | Region/state/province for shipping address | 'Illinois'      |\n\n### Warehouse Information\n\n| Column         | Type    | Description                                      | Example                       |\n| -------------- | ------- | ------------------------------------------------ | ----------------------------- |\n| warehouse_id   | NUMBER  | Identifier of the warehouse fulfilling the order | 3                             |\n| warehouse_name | VARCHAR | Name of the warehouse location                   | 'Chicago Distribution Center' |\n\n### Promotion Information\n\n| Column                | Type    | Description                                      | Example                      |\n| --------------------- | ------- | ------------------------------------------------ | ---------------------------- |\n| promotion_id          | NUMBER  | Identifier of the promotion applied to the order | 42                           |\n| promotion_name        | VARCHAR | Name of the marketing promotion                  | 'Summer Sale 2023'           |\n| promotion_description | VARCHAR | Detailed description of the promotion            | '20% off all summer apparel' |\n\n### Order Line Item Information\n\n| Column              | Type    | Description                                            | Example                                       |\n| ------------------- | ------- | ------------------------------------------------------ | --------------------------------------------- |\n| line_item_id        | NUMBER  | Line item sequence number within the order             | 1                                             |\n| product_id          | NUMBER  | Identifier of the product ordered                      | 10042                                         |\n| product_name        | VARCHAR | Name of the product                                    | 'Ergonomic Office Chair'                      |\n| product_description | VARCHAR | Brief description of the product                       | 'Adjustable office chair with lumbar support' |\n| category_id         | NUMBER  | Identifier of the product category                     | 15                                            |\n| category_name       | VARCHAR | Name of the product category                           | 'Office Furniture'                            |\n| unit_price          | NUMBER  | Selling price per unit at time of order                | 149.99                                        |\n| quantity            | NUMBER  | Number of units ordered                                | 2                                             |\n| line_total          | NUMBER  | Total price for the line item (unit_price \\* quantity) | 299.98                                        |\n| dispatch_date       | DATE    | Date when item was dispatched from warehouse           | 2023-05-03                                    |\n| return_date         | DATE    | Date when item was returned if applicable              | 2023-05-15                                    |\n| gift_wrap           | VARCHAR | Flag or type of gift wrapping requested                | 'Y', 'Premium', 'Basic'                       |\n| condition           | VARCHAR | Condition of product                                   | 'New', 'Refurbished'                          |\n| estimated_delivery  | DATE    | Estimated delivery date for this item                  | 2023-05-07                                    |\n| list_price          | NUMBER  | Standard list price for the product                    | 179.99                                        |\n| product_status      | VARCHAR | Current status of the product                          | 'Available', 'Discontinued'                   |\n| quantity_on_hand    | NUMBER  | Current inventory count in the fulfilling warehouse    | 24                                            |\n| stock_status        | VARCHAR | Status of current inventory levels                     | 'Low Stock', 'In Stock', 'Overstocked'        |\n\n### Calculated Fields\n\n| Column           | Type    | Description                                          | Example                                  |\n| ---------------- | ------- | ---------------------------------------------------- | ---------------------------------------- |\n| discount_amount  | NUMBER  | Amount of discount applied (list_price - unit_price) | 30.00                                    |\n| discount_percent | NUMBER  | Percentage discount applied                          | 16.67                                    |\n| delivery_status  | VARCHAR | Current status of delivery                           | 'Not Shipped', 'In Transit', 'Delivered' |\n| return_status    | VARCHAR | Status indicating if item was returned               | 'Returned', 'Not Returned'               |\n\n### Timestamp Information\n\n| Column     | Type         | Description                                                             | Example                             |\n| ---------- | ------------ | ----------------------------------------------------------------------- | ----------------------------------- |\n| updated_at | TIMESTAMP_TZ | Timestamp when this record was last refreshed with nanosecond precision | 2023-07-15 08:23:45.123456789-07:00 |\n\n## Sources and Joins\n\nThis model combines data from the following source tables:\n\n- `orders` - Primary table containing order header information\n- `customers` - Customer demographic and contact information\n- `addresses` - Billing and shipping address details\n- `countries` - Country information for addresses\n- `regions` - Regional information for addresses\n- `warehouses` - Warehouse details for order fulfillment\n- `promotions` - Promotion information applied to orders\n- `order_items` - Individual line items within each order\n- `products` - Product information for ordered items\n- `product_categories` - Category information for products\n- `inventories` - Inventory levels for products at warehouses\n\n## Data Tests\n\nThe following data quality tests are applied to this model:\n\n### Primary Key Tests\n\n- `order_id` and `line_item_id` combination is unique\n- `order_id` is not null\n\n### Referential Integrity Tests\n\n- `customer_id` exists in the customers table\n- `product_id` exists in the products table\n- `warehouse_id` exists in the warehouses table\n- `promotion_id` exists in the promotions table (when not null)\n- `category_id` exists in the product_categories table\n\n### Value Tests\n\n- `unit_price` and `quantity` are positive values\n- `line_total` equals `unit_price` \\* `quantity`\n- `order_status` contains valid status codes\n- `wait_till_complete_yn` contains only 'Y' or 'N'\n- `stock_status` contains only valid values: 'Low Stock', 'In Stock', 'Overstocked', 'Unknown'\n- `delivery_status` contains only valid values: 'Not Shipped', 'In Transit', 'Delivered', 'Unknown'\n- `return_status` contains only valid values: 'Returned', 'Not Returned'\n\n## Usage Examples\n\n### Basic Order Query\n\n```sql\nSELECT\n    order_id,\n    order_date,\n    cust_first_name || ' ' || cust_last_name AS customer_name,\n    order_total,\n    delivery_status\nFROM order_details\nWHERE order_date >= DATEADD(month, -1, CURRENT_DATE())\nORDER BY order_date DESC\n```\n\n### Order Analysis by Category\n\n```sql\nSELECT\n    category_name,\n    COUNT(DISTINCT order_id) AS order_count,\n    SUM(line_total) AS total_revenue,\n    AVG(discount_percent) AS avg_discount_pct\nFROM order_details\nWHERE order_date >= DATEADD(year, -1, CURRENT_DATE())\nGROUP BY category_name\nORDER BY total_revenue DESC\n```\n\n### Delivery Performance\n\n```sql\nSELECT\n    warehouse_name,\n    delivery_type,\n    AVG(DATEDIFF(day, order_date, dispatch_date)) AS avg_processing_days,\n    AVG(DATEDIFF(day, dispatch_date, estimated_delivery)) AS avg_transit_days,\n    COUNT(*) AS shipment_count\nFROM order_details\nWHERE dispatch_date IS NOT NULL\n  AND order_date >= DATEADD(month, -6, CURRENT_DATE())\nGROUP BY warehouse_name, delivery_type\nORDER BY warehouse_name, avg_processing_days\n```\n\n### Returns Analysis\n\n```sql\nSELECT\n    product_name,\n    COUNT(*) AS total_ordered,\n    SUM(CASE WHEN return_status = 'Returned' THEN 1 ELSE 0 END) AS total_returned,\n    (SUM(CASE WHEN return_status = 'Returned' THEN 1 ELSE 0 END) / COUNT(*)::float) * 100 AS return_rate\nFROM order_details\nWHERE order_date >= DATEADD(month, -3, CURRENT_DATE())\nGROUP BY product_name\nHAVING COUNT(*) > 10\nORDER BY return_rate DESC\nLIMIT 20\n```\n\n## Maintenance and Refresh\n\nAs a view, this model is refreshed with each query. The timestamp indicates when the data was last queried and can be used to track data freshness. Since the model pulls directly from source tables, it always reflects the current state of the data. `updated_at`\n\n## Dependencies\n\nThis model depends on:\n\n- Source tables from the schema `order_entry`\n- Any data quality tests defined in the file `schema.yml`\n\n## Additional Notes\n\n- This model includes sensitive customer information. Ensure appropriate access controls are in place.\n- Performance considerations: This view joins multiple tables and may be resource-intensive for large datasets. Consider materializing as a table with scheduled refreshes for frequent reporting needs.\n- For large reporting needs, consider creating aggregated models derived from this model rather than running complex aggregations directly.",
+      "owners": [
+        {
+          "urn": "urn:li:corpGroup:b2fd91.1e0398a3-113f-475e-b6fc-32ab72a634d2",
+          "name": "DataHub SE Team",
+          "type": "__system__data_steward"
+        },
+        {
+          "urn": "urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM",
+          "name": "Data Platform Team",
+          "type": "__system__data_steward"
+        },
+        {
+          "urn": "urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM",
+          "name": "Data Platform Team",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.EMP006",
+          "name": "Ian Chen",
+          "type": "__system__business_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.brock1@example.com",
+          "name": "David Kim",
+          "type": "__system__business_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.bryan@example.com",
+          "name": "Ben Porter",
+          "type": "__system__business_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.jonny1@example.com",
+          "name": "Julia Novak",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.jonny2@example.com",
+          "name": "James Wilson",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.kirk@example.com",
+          "name": "Karen Okonkwo",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.marty@example.com",
+          "name": "Fiona Green",
+          "type": "__system__business_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.marty@example.com",
+          "name": "Fiona Green",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.sam@example.com",
+          "name": "Sarah Chen",
+          "type": "__system__technical_owner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "NUMBER",
+          "description": "Unique identifier for the order"
+        },
+        {
+          "name": "order_date",
+          "type": "TEXT",
+          "description": "Date and time when the order was placed including timezone"
+        },
+        {
+          "name": "order_mode",
+          "type": "TEXT",
+          "description": "Method of order placement (e.g., online, phone, instore)"
+        },
+        {
+          "name": "order_status",
+          "type": "NUMBER",
+          "description": "Current status of the order (e.g., 1=Pending, 2=Processing, 3=Shipped)"
+        },
+        {
+          "name": "order_total",
+          "type": "FLOAT",
+          "description": "Total monetary value of the order"
+        },
+        {
+          "name": "cost_of_delivery",
+          "type": "FLOAT",
+          "description": "Shipping and handling cost"
+        },
+        {
+          "name": "delivery_type",
+          "type": "TEXT",
+          "description": "Shipping method (e.g., Standard, Curbside, Overnight)"
+        },
+        {
+          "name": "wait_till_complete_yn",
+          "type": "TEXT",
+          "description": "Flag indicating whether to ship complete order or partial (Y/N)"
+        },
+        {
+          "name": "payment_method_code",
+          "type": "TEXT",
+          "description": "Code indicating payment method used"
+        },
+        {
+          "name": "customer_id",
+          "type": "NUMBER",
+          "description": "Unique identifier for the customer"
+        },
+        {
+          "name": "cust_first_name",
+          "type": "TEXT",
+          "description": "Customer first name"
+        },
+        {
+          "name": "cust_last_name",
+          "type": "TEXT",
+          "description": "Customer last name"
+        },
+        {
+          "name": "cust_email",
+          "type": "TEXT",
+          "description": "Customer email address"
+        },
+        {
+          "name": "phone_number",
+          "type": "TEXT",
+          "description": "Customer contact phone number"
+        },
+        {
+          "name": "customer_class",
+          "type": "TEXT",
+          "description": "Classification of the customer (e.g., Retail, Enterprise, Online)"
+        },
+        {
+          "name": "billing_address_line1",
+          "type": "TEXT",
+          "description": "First line of customer billing address"
+        },
+        {
+          "name": "billing_address_line2",
+          "type": "TEXT",
+          "description": "Second line of customer billing address"
+        },
+        {
+          "name": "billing_town_city",
+          "type": "TEXT",
+          "description": "Town or city of customer billing address"
+        },
+        {
+          "name": "billing_country",
+          "type": "TEXT",
+          "description": "Country name for the billing address"
+        },
+        {
+          "name": "billing_zipcode",
+          "type": "NUMBER",
+          "description": "Postal code of customer billing address"
+        },
+        {
+          "name": "billing_region",
+          "type": "TEXT",
+          "description": "Region/state/province name for the billing address"
+        },
+        {
+          "name": "shipping_address_line1",
+          "type": "TEXT",
+          "description": "First line of customer shipping address"
+        },
+        {
+          "name": "shipping_address_line2",
+          "type": "TEXT",
+          "description": "Second line of customer shipping address"
+        },
+        {
+          "name": "shipping_town_city",
+          "type": "TEXT",
+          "description": "Town or city of customer shipping address"
+        },
+        {
+          "name": "shipping_country",
+          "type": "TEXT",
+          "description": "Country name for the shipping address"
+        },
+        {
+          "name": "shipping_zipcode",
+          "type": "NUMBER",
+          "description": "Postal code of customer shipping address"
+        },
+        {
+          "name": "shipping_region",
+          "type": "TEXT",
+          "description": "Region/state/province name for the shipping address"
+        },
+        {
+          "name": "warehouse_id",
+          "type": "NUMBER",
+          "description": "Identifier of the warehouse fulfilling the order"
+        },
+        {
+          "name": "warehouse_name",
+          "type": "TEXT",
+          "description": "Name of the warehouse location"
+        },
+        {
+          "name": "promotion_id",
+          "type": "NUMBER",
+          "description": "Identifier of the promotion applied to the order"
+        },
+        {
+          "name": "promotion_name",
+          "type": "TEXT",
+          "description": "Name of the marketing promotion"
+        },
+        {
+          "name": "promotion_description",
+          "type": "TEXT",
+          "description": "Detailed description of the promotion"
+        },
+        {
+          "name": "line_item_id",
+          "type": "NUMBER",
+          "description": "Line item sequence number within the order"
+        },
+        {
+          "name": "product_id",
+          "type": "NUMBER",
+          "description": "Identifier of the product ordered"
+        },
+        {
+          "name": "product_name",
+          "type": "TEXT",
+          "description": "Name of the product"
+        },
+        {
+          "name": "product_description",
+          "type": "TEXT",
+          "description": "Brief description of the product"
+        },
+        {
+          "name": "category_id",
+          "type": "NUMBER",
+          "description": "Identifier of the product category"
+        },
+        {
+          "name": "category_name",
+          "type": "TEXT",
+          "description": "Name of the product category"
+        },
+        {
+          "name": "unit_price",
+          "type": "FLOAT",
+          "description": "Selling price per unit at time of order"
+        },
+        {
+          "name": "quantity",
+          "type": "NUMBER",
+          "description": "Number of units ordered"
+        },
+        {
+          "name": "line_total",
+          "type": "FLOAT",
+          "description": "Total price for the line item (unit_price * quantity)"
+        },
+        {
+          "name": "dispatch_date",
+          "type": "TEXT",
+          "description": "Date when item was dispatched from warehouse"
+        },
+        {
+          "name": "return_date",
+          "type": "TEXT",
+          "description": "Date when item was returned if applicable"
+        },
+        {
+          "name": "gift_wrap",
+          "type": "TEXT",
+          "description": "Flag or type of gift wrapping requested"
+        },
+        {
+          "name": "condition",
+          "type": "TEXT",
+          "description": "Condition of product (e.g., New, Refurbished)"
+        },
+        {
+          "name": "estimated_delivery",
+          "type": "TEXT",
+          "description": "Estimated delivery date for this item"
+        },
+        {
+          "name": "list_price",
+          "type": "FLOAT",
+          "description": "Standard list price for the product"
+        },
+        {
+          "name": "product_status",
+          "type": "TEXT",
+          "description": "Current status of the product (e.g., Active, Inactive, Backordered)"
+        },
+        {
+          "name": "quantity_on_hand",
+          "type": "NUMBER",
+          "description": "Current inventory count for this product in the fulfilling warehouse"
+        },
+        {
+          "name": "stock_status",
+          "type": "TEXT",
+          "description": "Status of current inventory levels (Low Stock, In Stock, Overstocked)"
+        },
+        {
+          "name": "discount_amount",
+          "type": "FLOAT",
+          "description": "Amount of discount applied (list_price - unit_price)"
+        },
+        {
+          "name": "discount_percent",
+          "type": "FLOAT",
+          "description": "Percentage discount applied ((list_price - unit_price) / list_price * 100)"
+        },
+        {
+          "name": "delivery_status",
+          "type": "TEXT",
+          "description": "Current status of delivery (Not Shipped, In Transit, Delivered)"
+        },
+        {
+          "name": "return_status",
+          "type": "TEXT",
+          "description": "Status indicating if item was returned (Returned, Not Returned)"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP_LTZ",
+          "description": "Timestamp indicating when this record was last refreshed"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "Certified",
+        "GDPR",
+        "Order Total",
+        "Revenue by Customer Class"
+      ],
+      "tags": [
+        "PII_Data",
+        "Authoritative Source"
+      ],
+      "domain": "Data Platform Team",
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.orders,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.product_categories,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.warehouses,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.inventories,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.regions,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.customers,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.countries,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.addresses,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.ORDER_ENTRY_DB.analytics.order_history,PROD)",
+      "name": "order_history",
+      "platform": "dbt",
+      "description": "Incremental table containing all historical order information",
+      "owners": [],
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "NUMBER"
+        },
+        {
+          "name": "customer_id",
+          "type": "NUMBER"
+        },
+        {
+          "name": "order_status",
+          "type": "NUMBER"
+        },
+        {
+          "name": "order_total",
+          "type": "FLOAT"
+        },
+        {
+          "name": "as_of_date",
+          "type": "DATE"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "domain": "E-Commerce",
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.addresses,PROD)",
+      "name": "addresses",
+      "platform": "dbt",
+      "description": "Contains multiple shipping and billing addresses for customers",
+      "owners": [
+        {
+          "urn": "urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM",
+          "name": "Data Platform Team",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.EMP006",
+          "name": "Ian Chen",
+          "type": "__system__business_owner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "address_id",
+          "type": "NUMBER",
+          "description": "Unique identifier for the address"
+        },
+        {
+          "name": "customer_id",
+          "type": "NUMBER",
+          "description": "Foreign key to the customers table"
+        },
+        {
+          "name": "date_created",
+          "type": "TEXT",
+          "description": "Date when address was added to the system"
+        },
+        {
+          "name": "address_line1",
+          "type": "TEXT",
+          "description": "First line of address"
+        },
+        {
+          "name": "address_line2",
+          "type": "TEXT",
+          "description": "Second line of address"
+        },
+        {
+          "name": "town_city",
+          "type": "TEXT",
+          "description": "Town or city of the address"
+        },
+        {
+          "name": "country_id",
+          "type": "NUMBER",
+          "description": "Reference to country table"
+        },
+        {
+          "name": "zipcode",
+          "type": "NUMBER",
+          "description": "Postal code of address"
+        },
+        {
+          "name": "region_id",
+          "type": "NUMBER",
+          "description": "Reference to region table"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "Order Total",
+        "Revenue by Customer Class"
+      ],
+      "tags": [],
+      "domain": "Data Platform Team",
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_addresses_to_snowflake,b2fd91.default),b2fd91.import_table_addresses_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.countries,PROD)",
+      "name": "countries",
+      "platform": "dbt",
+      "description": "Reference table for country information",
+      "owners": [
+        {
+          "urn": "urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM",
+          "name": "Data Platform Team",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.EMP006",
+          "name": "Ian Chen",
+          "type": "__system__business_owner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "country_id",
+          "type": "NUMBER",
+          "description": "Unique identifier for the country"
+        },
+        {
+          "name": "country_name",
+          "type": "TEXT",
+          "description": "Name of the country"
+        },
+        {
+          "name": "country_code",
+          "type": "TEXT",
+          "description": "ISO two-letter country code"
+        },
+        {
+          "name": "nls_territory",
+          "type": "TEXT",
+          "description": "NLS territory setting for localization"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "Order Total",
+        "Revenue by Customer Class"
+      ],
+      "tags": [],
+      "domain": "Data Platform Team",
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_countries_to_snowflake,b2fd91.default),b2fd91.import_table_countries_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.customers,PROD)",
+      "name": "customers",
+      "platform": "dbt",
+      "description": "Contains customer demographic and contact information",
+      "owners": [
+        {
+          "urn": "urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM",
+          "name": "Data Platform Team",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.EMP006",
+          "name": "Ian Chen",
+          "type": "__system__business_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.jonny1@example.com",
+          "name": "Julia Novak",
+          "type": "__system__technical_owner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "customer_id",
+          "type": "NUMBER",
+          "description": "Unique identifier for the customer"
+        },
+        {
+          "name": "cust_first_name",
+          "type": "TEXT",
+          "description": "Customer first name"
+        },
+        {
+          "name": "cust_last_name",
+          "type": "TEXT",
+          "description": "Customer last name"
+        },
+        {
+          "name": "nls_language",
+          "type": "TEXT",
+          "description": "Preferred language code"
+        },
+        {
+          "name": "nls_territory",
+          "type": "TEXT",
+          "description": "Geographical territory for localization settings"
+        },
+        {
+          "name": "credit_limit",
+          "type": "FLOAT",
+          "description": "Maximum credit amount for the customer"
+        },
+        {
+          "name": "cust_email",
+          "type": "TEXT",
+          "description": "Customer email address"
+        },
+        {
+          "name": "account_mgr_id",
+          "type": "NUMBER",
+          "description": "ID of the account manager assigned to the customer"
+        },
+        {
+          "name": "customer_since",
+          "type": "TEXT",
+          "description": "Date when customer was first registered"
+        },
+        {
+          "name": "customer_class",
+          "type": "TEXT",
+          "description": "Classification of the customer (e.g., Platinum, Gold, Silver)"
+        },
+        {
+          "name": "suggestions",
+          "type": "TEXT",
+          "description": "Customer product suggestions or preferences"
+        },
+        {
+          "name": "dob",
+          "type": "TEXT",
+          "description": "Customer date of birth"
+        },
+        {
+          "name": "mailshot",
+          "type": "NUMBER",
+          "description": "Flag indicating if customer has opted for marketing emails (Y/N)"
+        },
+        {
+          "name": "partner_mailshot",
+          "type": "NUMBER",
+          "description": "Flag indicating if customer has opted for partner marketing (Y/N)"
+        },
+        {
+          "name": "phone_number",
+          "type": "TEXT",
+          "description": "Customer contact phone number"
+        },
+        {
+          "name": "address_line1",
+          "type": "TEXT",
+          "description": "First line of customer primary address"
+        },
+        {
+          "name": "address_line2",
+          "type": "TEXT",
+          "description": "Second line of customer primary address"
+        },
+        {
+          "name": "address_line3",
+          "type": "TEXT",
+          "description": "Third line of customer primary address"
+        },
+        {
+          "name": "town_city",
+          "type": "TEXT",
+          "description": "Town or city of customer primary address"
+        },
+        {
+          "name": "country_id",
+          "type": "NUMBER",
+          "description": "Reference to country table for primary address"
+        },
+        {
+          "name": "zipcode",
+          "type": "NUMBER",
+          "description": "Postal code of customer primary address"
+        },
+        {
+          "name": "region_id",
+          "type": "NUMBER",
+          "description": "Reference to region table for primary address"
+        }
+      ],
+      "glossaryTerms": [
+        "GDPR",
+        "PII",
+        "Order Total",
+        "Revenue by Customer Class"
+      ],
+      "tags": [],
+      "domain": "Data Platform Team",
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_customers_to_snowflake,b2fd91.default),b2fd91.import_table_customers_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.inventories,PROD)",
+      "name": "inventories",
+      "platform": "dbt",
+      "description": "Tracks product inventory levels across warehouses",
+      "owners": [
+        {
+          "urn": "urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM",
+          "name": "Data Platform Team",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.EMP006",
+          "name": "Ian Chen",
+          "type": "__system__business_owner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "NUMBER",
+          "description": "Foreign key to the products table"
+        },
+        {
+          "name": "warehouse_id",
+          "type": "NUMBER",
+          "description": "Foreign key to the warehouses table"
+        },
+        {
+          "name": "quantity_on_hand",
+          "type": "NUMBER",
+          "description": "Current inventory count for this product in this warehouse"
+        },
+        {
+          "name": "restock_level",
+          "type": "NUMBER",
+          "description": "Threshold at which restocking is initiated"
+        },
+        {
+          "name": "max_stock_level",
+          "type": "NUMBER",
+          "description": "Maximum storage capacity for this product"
+        },
+        {
+          "name": "reorder_quantity",
+          "type": "NUMBER",
+          "description": "Standard reorder quantity when restocking"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "Order Total",
+        "Revenue by Customer Class"
+      ],
+      "tags": [],
+      "domain": "Data Platform Team",
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_inventories_to_snowflake,b2fd91.default),b2fd91.import_table_inventories_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+      "name": "order_items",
+      "platform": "dbt",
+      "description": "Contains line items for each order",
+      "owners": [
+        {
+          "urn": "urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM",
+          "name": "Data Platform Team",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.EMP006",
+          "name": "Ian Chen",
+          "type": "__system__business_owner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "NUMBER",
+          "description": "Foreign key to the orders table"
+        },
+        {
+          "name": "line_item_id",
+          "type": "NUMBER",
+          "description": "Line item sequence number within the order"
+        },
+        {
+          "name": "product_id",
+          "type": "NUMBER",
+          "description": "Foreign key to the products table"
+        },
+        {
+          "name": "unit_price",
+          "type": "FLOAT",
+          "description": "Selling price per unit at time of order"
+        },
+        {
+          "name": "quantity",
+          "type": "NUMBER",
+          "description": "Number of units ordered"
+        },
+        {
+          "name": "dispatch_date",
+          "type": "TEXT",
+          "description": "Date when item was dispatched from warehouse"
+        },
+        {
+          "name": "return_date",
+          "type": "TEXT",
+          "description": "Date when item was returned if applicable"
+        },
+        {
+          "name": "gift_wrap",
+          "type": "TEXT",
+          "description": "Flag or type of gift wrapping requested"
+        },
+        {
+          "name": "condition",
+          "type": "TEXT",
+          "description": "Condition of product (e.g., New, Refurbished)"
+        },
+        {
+          "name": "supplier_id",
+          "type": "NUMBER",
+          "description": "ID of the supplier if dropshipped"
+        },
+        {
+          "name": "estimated_delivery",
+          "type": "TEXT",
+          "description": "Estimated delivery date for this item"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "Order Total",
+        "Revenue by Customer Class"
+      ],
+      "tags": [],
+      "domain": "Data Platform Team",
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_order_items_to_snowflake,b2fd91.default),b2fd91.import_table_order_items_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.orders,PROD)",
+      "name": "orders",
+      "platform": "dbt",
+      "description": "Contains header information for customer orders",
+      "owners": [
+        {
+          "urn": "urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM",
+          "name": "Data Platform Team",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.EMP006",
+          "name": "Ian Chen",
+          "type": "__system__business_owner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "NUMBER",
+          "description": "Unique identifier for the order"
+        },
+        {
+          "name": "order_date",
+          "type": "TEXT",
+          "description": "Date and time when the order was placed including timezone"
+        },
+        {
+          "name": "order_mode",
+          "type": "TEXT",
+          "description": "Method of order placement (e.g., online, phone, direct)"
+        },
+        {
+          "name": "customer_id",
+          "type": "NUMBER",
+          "description": "Foreign key to the customers table"
+        },
+        {
+          "name": "order_status",
+          "type": "NUMBER",
+          "description": "Current status of the order (e.g., 1=Pending, 2=Processing, 3=Shipped)"
+        },
+        {
+          "name": "order_total",
+          "type": "FLOAT",
+          "description": "Total monetary value of the order"
+        },
+        {
+          "name": "sales_rep_id",
+          "type": "NUMBER",
+          "description": "ID of the sales representative handling the order"
+        },
+        {
+          "name": "promotion_id",
+          "type": "FLOAT",
+          "description": "Foreign key to promotions table if applicable"
+        },
+        {
+          "name": "warehouse_id",
+          "type": "NUMBER",
+          "description": "Foreign key to warehouses table for fulfillment location"
+        },
+        {
+          "name": "delivery_type",
+          "type": "TEXT",
+          "description": "Shipping method (e.g., Standard, Express, Overnight)"
+        },
+        {
+          "name": "cost_of_delivery",
+          "type": "FLOAT",
+          "description": "Shipping and handling cost"
+        },
+        {
+          "name": "wait_till_complete_yn",
+          "type": "TEXT",
+          "description": "Flag indicating whether to ship complete order or partial (Y/N)"
+        },
+        {
+          "name": "billing_address_id",
+          "type": "NUMBER",
+          "description": "Reference to the billing address"
+        },
+        {
+          "name": "delivery_address_id",
+          "type": "NUMBER",
+          "description": "Reference to the shipping address"
+        },
+        {
+          "name": "payment_method_code",
+          "type": "TEXT",
+          "description": "Code indicating payment method used"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "Order Total",
+        "Revenue by Customer Class"
+      ],
+      "tags": [],
+      "domain": "Data Platform Team",
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_orders_to_snowflake,b2fd91.default),b2fd91.import_table_orders_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.product_categories,PROD)",
+      "name": "product_categories",
+      "platform": "dbt",
+      "description": "Hierarchical product category classification system",
+      "owners": [
+        {
+          "urn": "urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM",
+          "name": "Data Platform Team",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.EMP006",
+          "name": "Ian Chen",
+          "type": "__system__business_owner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "category_id",
+          "type": "NUMBER",
+          "description": "Unique identifier for the product category"
+        },
+        {
+          "name": "category_name",
+          "type": "TEXT",
+          "description": "Name of the product category"
+        },
+        {
+          "name": "category_description",
+          "type": "TEXT",
+          "description": "Detailed description of the product category"
+        },
+        {
+          "name": "parent_category_id",
+          "type": "FLOAT",
+          "description": "Self-referential key to parent category (allows hierarchy)"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "Order Total",
+        "Revenue by Customer Class"
+      ],
+      "tags": [],
+      "domain": "Data Platform Team",
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_product_categories_to_snowflake,b2fd91.default),b2fd91.import_table_product_categories_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+      "name": "products",
+      "platform": "dbt",
+      "description": "Contains information about products available for sale",
+      "owners": [
+        {
+          "urn": "urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM",
+          "name": "Data Platform Team",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.EMP006",
+          "name": "Ian Chen",
+          "type": "__system__business_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.patrick1@example.com",
+          "name": "Priya Sharma",
+          "type": "__system__technical_owner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "NUMBER",
+          "description": "Unique identifier for the product"
+        },
+        {
+          "name": "product_name",
+          "type": "TEXT",
+          "description": "Name of the product"
+        },
+        {
+          "name": "product_description",
+          "type": "TEXT",
+          "description": "Brief description of the product"
+        },
+        {
+          "name": "category_id",
+          "type": "NUMBER",
+          "description": "Foreign key to the product_categories table"
+        },
+        {
+          "name": "weight_class",
+          "type": "NUMBER",
+          "description": "Weight class for shipping calculations"
+        },
+        {
+          "name": "warranty_period",
+          "type": "TEXT",
+          "description": "Standard warranty period for the product"
+        },
+        {
+          "name": "supplier_id",
+          "type": "NUMBER",
+          "description": "ID of the supplier for this product"
+        },
+        {
+          "name": "product_status",
+          "type": "TEXT",
+          "description": "Current status (e.g., Available, Discontinued, Planned)"
+        },
+        {
+          "name": "list_price",
+          "type": "FLOAT",
+          "description": "Standard list price for the product"
+        },
+        {
+          "name": "min_price",
+          "type": "FLOAT",
+          "description": "Minimum selling price for the product"
+        },
+        {
+          "name": "catalog_url",
+          "type": "TEXT",
+          "description": "URL to the product in the online catalog"
+        },
+        {
+          "name": "date_added",
+          "type": "TEXT",
+          "description": "Date when product was added to the catalog"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "Order Total",
+        "Revenue by Customer Class"
+      ],
+      "tags": [],
+      "domain": "Data Platform Team",
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_products_to_snowflake,b2fd91.default),b2fd91.import_table_products_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+      "name": "promotions",
+      "platform": "dbt",
+      "description": "Contains information about marketing promotions and campaigns",
+      "owners": [
+        {
+          "urn": "urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM",
+          "name": "Data Platform Team",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.EMP006",
+          "name": "Ian Chen",
+          "type": "__system__business_owner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "promotion_id",
+          "type": "NUMBER",
+          "description": "Unique identifier for the promotion"
+        },
+        {
+          "name": "promotion_name",
+          "type": "TEXT",
+          "description": "Name of the marketing promotion"
+        },
+        {
+          "name": "promotion_start_date",
+          "type": "TEXT",
+          "description": "Starting date of the promotion"
+        },
+        {
+          "name": "promotion_end_date",
+          "type": "TEXT",
+          "description": "Ending date of the promotion"
+        },
+        {
+          "name": "promotion_description",
+          "type": "TEXT",
+          "description": "Detailed description of the promotion"
+        },
+        {
+          "name": "promotion_cost",
+          "type": "FLOAT",
+          "description": "Budgeted cost of running the promotion"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "Order Total",
+        "Revenue by Customer Class"
+      ],
+      "tags": [
+        "No Sample Values"
+      ],
+      "domain": "Data Platform Team",
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_promotions_to_snowflake,b2fd91.default),b2fd91.import_table_promotions_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.regions,PROD)",
+      "name": "regions",
+      "platform": "dbt",
+      "description": "Reference table for regional information within countries",
+      "owners": [
+        {
+          "urn": "urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM",
+          "name": "Data Platform Team",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.EMP006",
+          "name": "Ian Chen",
+          "type": "__system__business_owner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "region_id",
+          "type": "NUMBER",
+          "description": "Unique identifier for the region"
+        },
+        {
+          "name": "region_name",
+          "type": "TEXT",
+          "description": "Name of the region (state, province, etc.)"
+        },
+        {
+          "name": "country_id",
+          "type": "NUMBER",
+          "description": "Foreign key to the countries table"
+        },
+        {
+          "name": "nls_language",
+          "type": "TEXT",
+          "description": "Default language code for the region"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "Order Total",
+        "Revenue by Customer Class"
+      ],
+      "tags": [],
+      "domain": "Data Platform Team",
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_regions_to_snowflake,b2fd91.default),b2fd91.import_table_regions_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.warehouses,PROD)",
+      "name": "warehouses",
+      "platform": "dbt",
+      "description": "Contains information about physical distribution centers",
+      "owners": [
+        {
+          "urn": "urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM",
+          "name": "Data Platform Team",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.EMP006",
+          "name": "Ian Chen",
+          "type": "__system__business_owner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "warehouse_id",
+          "type": "NUMBER",
+          "description": "Unique identifier for the warehouse"
+        },
+        {
+          "name": "warehouse_name",
+          "type": "TEXT",
+          "description": "Name of the warehouse location"
+        },
+        {
+          "name": "location_id",
+          "type": "NUMBER",
+          "description": "Reference to the physical location"
+        },
+        {
+          "name": "wh_geo_location",
+          "type": "TEXT",
+          "description": "Geographic coordinates of the warehouse"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "Order Total",
+        "Revenue by Customer Class"
+      ],
+      "tags": [],
+      "domain": "Data Platform Team",
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_warehouses_to_snowflake,b2fd91.default),b2fd91.import_table_warehouses_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:looker,b2fd91.order-entry-looker.view.order_details,PROD)",
+      "name": "order_details",
+      "platform": "looker",
+      "owners": [
+        {
+          "urn": "urn:li:corpuser:b2fd91.marty@example.com",
+          "name": "Fiona Green",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.EMP006",
+          "name": "Ian Chen",
+          "type": "__system__business_owner"
+        },
+        {
+          "urn": "urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM",
+          "name": "Data Platform Team",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.alex@example.com",
+          "name": "Andrea Garcia",
+          "type": "__system__technical_owner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "billing_address_line1",
+          "type": "string"
+        },
+        {
+          "name": "billing_address_line2",
+          "type": "string"
+        },
+        {
+          "name": "billing_country",
+          "type": "string"
+        },
+        {
+          "name": "billing_region",
+          "type": "string"
+        },
+        {
+          "name": "billing_town_city",
+          "type": "string"
+        },
+        {
+          "name": "billing_zipcode",
+          "type": "number"
+        },
+        {
+          "name": "category_id",
+          "type": "number"
+        },
+        {
+          "name": "category_name",
+          "type": "string"
+        },
+        {
+          "name": "condition",
+          "type": "string"
+        },
+        {
+          "name": "cost_of_delivery",
+          "type": "number"
+        },
+        {
+          "name": "cust_email",
+          "type": "string"
+        },
+        {
+          "name": "cust_first_name",
+          "type": "string"
+        },
+        {
+          "name": "cust_last_name",
+          "type": "string"
+        },
+        {
+          "name": "customer_class",
+          "type": "string"
+        },
+        {
+          "name": "customer_id",
+          "type": "number"
+        },
+        {
+          "name": "delivery_status",
+          "type": "string"
+        },
+        {
+          "name": "delivery_type",
+          "type": "string"
+        },
+        {
+          "name": "discount_amount",
+          "type": "number"
+        },
+        {
+          "name": "discount_percent",
+          "type": "number"
+        },
+        {
+          "name": "dispatch_date",
+          "type": "string"
+        },
+        {
+          "name": "estimated_delivery",
+          "type": "string"
+        },
+        {
+          "name": "gift_wrap",
+          "type": "string"
+        },
+        {
+          "name": "line_item_id",
+          "type": "number"
+        },
+        {
+          "name": "line_total",
+          "type": "number"
+        },
+        {
+          "name": "list_price",
+          "type": "number"
+        },
+        {
+          "name": "order_date",
+          "type": "string"
+        },
+        {
+          "name": "order_date_timestamp",
+          "type": "date_time"
+        },
+        {
+          "name": "order_id",
+          "type": "number"
+        },
+        {
+          "name": "order_mode",
+          "type": "string"
+        },
+        {
+          "name": "order_status",
+          "type": "number"
+        },
+        {
+          "name": "order_total",
+          "type": "number"
+        },
+        {
+          "name": "payment_method_code",
+          "type": "string"
+        },
+        {
+          "name": "phone_number",
+          "type": "string"
+        },
+        {
+          "name": "product_description",
+          "type": "string"
+        },
+        {
+          "name": "product_id",
+          "type": "number"
+        },
+        {
+          "name": "product_name",
+          "type": "string"
+        },
+        {
+          "name": "product_status",
+          "type": "string"
+        },
+        {
+          "name": "promotion_description",
+          "type": "string"
+        },
+        {
+          "name": "promotion_id",
+          "type": "number"
+        },
+        {
+          "name": "promotion_name",
+          "type": "string"
+        },
+        {
+          "name": "quantity",
+          "type": "number"
+        },
+        {
+          "name": "quantity_on_hand",
+          "type": "number"
+        },
+        {
+          "name": "return_date",
+          "type": "string"
+        },
+        {
+          "name": "return_status",
+          "type": "string"
+        },
+        {
+          "name": "shipping_address_line1",
+          "type": "string"
+        },
+        {
+          "name": "shipping_address_line2",
+          "type": "string"
+        },
+        {
+          "name": "shipping_country",
+          "type": "string"
+        },
+        {
+          "name": "shipping_region",
+          "type": "string"
+        },
+        {
+          "name": "shipping_town_city",
+          "type": "string"
+        },
+        {
+          "name": "shipping_zipcode",
+          "type": "number"
+        },
+        {
+          "name": "stock_status",
+          "type": "string"
+        },
+        {
+          "name": "unit_price",
+          "type": "number"
+        },
+        {
+          "name": "wait_till_complete_yn",
+          "type": "string"
+        },
+        {
+          "name": "warehouse_id",
+          "type": "number"
+        },
+        {
+          "name": "warehouse_name",
+          "type": "string"
+        },
+        {
+          "name": "updated",
+          "type": "time"
+        },
+        {
+          "name": "count",
+          "type": "count"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "domain": "Data Platform Team",
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:looker,b2fd91.order-entry.explore.order_details,PROD)",
+      "name": "Order Details",
+      "platform": "looker",
+      "owners": [
+        {
+          "urn": "urn:li:corpGroup:b2fd91.ORG_DATA_PLATFORM",
+          "name": "Data Platform Team",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpGroup:b2fd91.ORG_BACKEND_ENG",
+          "name": "Backend Engineering Team",
+          "type": "__system__data_steward"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.EMP006",
+          "name": "Ian Chen",
+          "type": "__system__business_owner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "order_details.billing_address_line1",
+          "type": "string"
+        },
+        {
+          "name": "order_details.billing_address_line2",
+          "type": "string"
+        },
+        {
+          "name": "order_details.billing_country",
+          "type": "string"
+        },
+        {
+          "name": "order_details.billing_region",
+          "type": "string"
+        },
+        {
+          "name": "order_details.billing_town_city",
+          "type": "string"
+        },
+        {
+          "name": "order_details.billing_zipcode",
+          "type": "number"
+        },
+        {
+          "name": "order_details.category_id",
+          "type": "number"
+        },
+        {
+          "name": "order_details.category_name",
+          "type": "string"
+        },
+        {
+          "name": "order_details.condition",
+          "type": "string"
+        },
+        {
+          "name": "order_details.cost_of_delivery",
+          "type": "number"
+        },
+        {
+          "name": "order_details.cust_email",
+          "type": "string"
+        },
+        {
+          "name": "order_details.cust_first_name",
+          "type": "string"
+        },
+        {
+          "name": "order_details.cust_last_name",
+          "type": "string"
+        },
+        {
+          "name": "order_details.customer_class",
+          "type": "string"
+        },
+        {
+          "name": "order_details.customer_id",
+          "type": "number"
+        },
+        {
+          "name": "order_details.delivery_status",
+          "type": "string"
+        },
+        {
+          "name": "order_details.delivery_type",
+          "type": "string"
+        },
+        {
+          "name": "order_details.discount_amount",
+          "type": "number"
+        },
+        {
+          "name": "order_details.discount_percent",
+          "type": "number"
+        },
+        {
+          "name": "order_details.dispatch_date",
+          "type": "string"
+        },
+        {
+          "name": "order_details.estimated_delivery",
+          "type": "string"
+        },
+        {
+          "name": "order_details.gift_wrap",
+          "type": "string"
+        },
+        {
+          "name": "order_details.line_item_id",
+          "type": "number"
+        },
+        {
+          "name": "order_details.line_total",
+          "type": "number"
+        },
+        {
+          "name": "order_details.list_price",
+          "type": "number"
+        },
+        {
+          "name": "order_details.order_date",
+          "type": "string"
+        },
+        {
+          "name": "order_details.order_date_timestamp",
+          "type": "date_time"
+        },
+        {
+          "name": "order_details.order_id",
+          "type": "number"
+        },
+        {
+          "name": "order_details.order_mode",
+          "type": "string"
+        },
+        {
+          "name": "order_details.order_status",
+          "type": "number"
+        },
+        {
+          "name": "order_details.order_total",
+          "type": "number"
+        },
+        {
+          "name": "order_details.payment_method_code",
+          "type": "string"
+        },
+        {
+          "name": "order_details.phone_number",
+          "type": "string"
+        },
+        {
+          "name": "order_details.product_description",
+          "type": "string"
+        },
+        {
+          "name": "order_details.product_id",
+          "type": "number"
+        },
+        {
+          "name": "order_details.product_name",
+          "type": "string"
+        },
+        {
+          "name": "order_details.product_status",
+          "type": "string"
+        },
+        {
+          "name": "order_details.promotion_description",
+          "type": "string"
+        },
+        {
+          "name": "order_details.promotion_id",
+          "type": "number"
+        },
+        {
+          "name": "order_details.promotion_name",
+          "type": "string"
+        },
+        {
+          "name": "order_details.quantity",
+          "type": "number"
+        },
+        {
+          "name": "order_details.quantity_on_hand",
+          "type": "number"
+        },
+        {
+          "name": "order_details.return_date",
+          "type": "string"
+        },
+        {
+          "name": "order_details.return_status",
+          "type": "string"
+        },
+        {
+          "name": "order_details.shipping_address_line1",
+          "type": "string"
+        },
+        {
+          "name": "order_details.shipping_address_line2",
+          "type": "string"
+        },
+        {
+          "name": "order_details.shipping_country",
+          "type": "string"
+        },
+        {
+          "name": "order_details.shipping_region",
+          "type": "string"
+        },
+        {
+          "name": "order_details.shipping_town_city",
+          "type": "string"
+        },
+        {
+          "name": "order_details.shipping_zipcode",
+          "type": "number"
+        },
+        {
+          "name": "order_details.stock_status",
+          "type": "string"
+        },
+        {
+          "name": "order_details.unit_price",
+          "type": "number"
+        },
+        {
+          "name": "order_details.updated_date",
+          "type": "date_date"
+        },
+        {
+          "name": "order_details.updated_month",
+          "type": "date_month"
+        },
+        {
+          "name": "order_details.updated_quarter",
+          "type": "date_quarter"
+        },
+        {
+          "name": "order_details.updated_raw",
+          "type": "date_raw"
+        },
+        {
+          "name": "order_details.updated_time",
+          "type": "date_time"
+        },
+        {
+          "name": "order_details.updated_week",
+          "type": "date_week"
+        },
+        {
+          "name": "order_details.updated_year",
+          "type": "date_year"
+        },
+        {
+          "name": "order_details.wait_till_complete_yn",
+          "type": "string"
+        },
+        {
+          "name": "order_details.warehouse_id",
+          "type": "number"
+        },
+        {
+          "name": "order_details.warehouse_name",
+          "type": "string"
+        },
+        {
+          "name": "order_details.count",
+          "type": "count"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "domain": "Data Platform Team",
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:looker,b2fd91.order-entry-looker.view.order_details,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,b2fd91.order_entry_db.order_entry.addresses,PROD)",
+      "name": "addresses",
+      "platform": "postgres",
+      "owners": [],
+      "fields": [
+        {
+          "name": "address_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "customer_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "date_created",
+          "type": "TEXT"
+        },
+        {
+          "name": "address_line1",
+          "type": "TEXT"
+        },
+        {
+          "name": "address_line2",
+          "type": "TEXT"
+        },
+        {
+          "name": "town_city",
+          "type": "TEXT"
+        },
+        {
+          "name": "country_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "zipcode",
+          "type": "BIGINT"
+        },
+        {
+          "name": "region_id",
+          "type": "BIGINT"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": []
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,b2fd91.order_entry_db.order_entry.countries,PROD)",
+      "name": "countries",
+      "platform": "postgres",
+      "owners": [],
+      "fields": [
+        {
+          "name": "country_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "country_name",
+          "type": "TEXT"
+        },
+        {
+          "name": "country_code",
+          "type": "TEXT"
+        },
+        {
+          "name": "nls_territory",
+          "type": "TEXT"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": []
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,b2fd91.order_entry_db.order_entry.customers,PROD)",
+      "name": "customers",
+      "platform": "postgres",
+      "owners": [],
+      "fields": [
+        {
+          "name": "customer_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "cust_first_name",
+          "type": "TEXT"
+        },
+        {
+          "name": "cust_last_name",
+          "type": "TEXT"
+        },
+        {
+          "name": "nls_language",
+          "type": "TEXT"
+        },
+        {
+          "name": "nls_territory",
+          "type": "TEXT"
+        },
+        {
+          "name": "credit_limit",
+          "type": "DOUBLE PRECISION"
+        },
+        {
+          "name": "cust_email",
+          "type": "TEXT"
+        },
+        {
+          "name": "account_mgr_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "customer_since",
+          "type": "TEXT"
+        },
+        {
+          "name": "customer_class",
+          "type": "TEXT"
+        },
+        {
+          "name": "suggestions",
+          "type": "TEXT"
+        },
+        {
+          "name": "dob",
+          "type": "TEXT"
+        },
+        {
+          "name": "mailshot",
+          "type": "BIGINT"
+        },
+        {
+          "name": "partner_mailshot",
+          "type": "BIGINT"
+        },
+        {
+          "name": "phone_number",
+          "type": "TEXT"
+        },
+        {
+          "name": "address_line1",
+          "type": "TEXT"
+        },
+        {
+          "name": "address_line2",
+          "type": "TEXT"
+        },
+        {
+          "name": "address_line3",
+          "type": "TEXT"
+        },
+        {
+          "name": "town_city",
+          "type": "TEXT"
+        },
+        {
+          "name": "country_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "zipcode",
+          "type": "BIGINT"
+        },
+        {
+          "name": "region_id",
+          "type": "BIGINT"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": []
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,b2fd91.order_entry_db.order_entry.inventories,PROD)",
+      "name": "inventories",
+      "platform": "postgres",
+      "owners": [],
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "warehouse_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "quantity_on_hand",
+          "type": "BIGINT"
+        },
+        {
+          "name": "restock_level",
+          "type": "BIGINT"
+        },
+        {
+          "name": "max_stock_level",
+          "type": "BIGINT"
+        },
+        {
+          "name": "reorder_quantity",
+          "type": "BIGINT"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": []
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+      "name": "order_items",
+      "platform": "postgres",
+      "owners": [],
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "line_item_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "product_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "unit_price",
+          "type": "DOUBLE PRECISION"
+        },
+        {
+          "name": "quantity",
+          "type": "BIGINT"
+        },
+        {
+          "name": "dispatch_date",
+          "type": "TEXT"
+        },
+        {
+          "name": "return_date",
+          "type": "TEXT"
+        },
+        {
+          "name": "gift_wrap",
+          "type": "TEXT"
+        },
+        {
+          "name": "condition",
+          "type": "TEXT"
+        },
+        {
+          "name": "supplier_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "estimated_delivery",
+          "type": "TEXT"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": []
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,b2fd91.order_entry_db.order_entry.orders,PROD)",
+      "name": "orders",
+      "platform": "postgres",
+      "owners": [],
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "order_date",
+          "type": "TEXT"
+        },
+        {
+          "name": "order_mode",
+          "type": "TEXT"
+        },
+        {
+          "name": "customer_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "order_status",
+          "type": "BIGINT"
+        },
+        {
+          "name": "order_total",
+          "type": "DOUBLE PRECISION"
+        },
+        {
+          "name": "sales_rep_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "promotion_id",
+          "type": "DOUBLE PRECISION"
+        },
+        {
+          "name": "warehouse_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "delivery_type",
+          "type": "TEXT"
+        },
+        {
+          "name": "cost_of_delivery",
+          "type": "DOUBLE PRECISION"
+        },
+        {
+          "name": "wait_till_complete_yn",
+          "type": "TEXT"
+        },
+        {
+          "name": "billing_address_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "delivery_address_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "payment_method_code",
+          "type": "TEXT"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "Order Total"
+      ],
+      "tags": [],
+      "upstreams": []
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,b2fd91.order_entry_db.order_entry.product_categories,PROD)",
+      "name": "product_categories",
+      "platform": "postgres",
+      "owners": [],
+      "fields": [
+        {
+          "name": "category_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "category_name",
+          "type": "TEXT"
+        },
+        {
+          "name": "category_description",
+          "type": "TEXT"
+        },
+        {
+          "name": "parent_category_id",
+          "type": "DOUBLE PRECISION"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": []
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,b2fd91.order_entry_db.order_entry.product_information,PROD)",
+      "name": "product_information",
+      "platform": "postgres",
+      "owners": [],
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "product_description",
+          "type": "TEXT"
+        },
+        {
+          "name": "warranty_period",
+          "type": "TEXT"
+        },
+        {
+          "name": "external_url",
+          "type": "TEXT"
+        },
+        {
+          "name": "other_details",
+          "type": "TEXT"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": []
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,b2fd91.order_entry_db.order_entry.products,PROD)",
+      "name": "products",
+      "platform": "postgres",
+      "owners": [],
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "product_name",
+          "type": "TEXT"
+        },
+        {
+          "name": "product_description",
+          "type": "TEXT"
+        },
+        {
+          "name": "category_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "weight_class",
+          "type": "BIGINT"
+        },
+        {
+          "name": "warranty_period",
+          "type": "TEXT"
+        },
+        {
+          "name": "supplier_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "product_status",
+          "type": "TEXT"
+        },
+        {
+          "name": "list_price",
+          "type": "DOUBLE PRECISION"
+        },
+        {
+          "name": "min_price",
+          "type": "DOUBLE PRECISION"
+        },
+        {
+          "name": "catalog_url",
+          "type": "TEXT"
+        },
+        {
+          "name": "date_added",
+          "type": "TEXT"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": []
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+      "name": "promotions",
+      "platform": "postgres",
+      "owners": [],
+      "fields": [
+        {
+          "name": "promotion_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "promotion_name",
+          "type": "TEXT"
+        },
+        {
+          "name": "promotion_start_date",
+          "type": "TEXT"
+        },
+        {
+          "name": "promotion_end_date",
+          "type": "TEXT"
+        },
+        {
+          "name": "promotion_description",
+          "type": "TEXT"
+        },
+        {
+          "name": "promotion_cost",
+          "type": "DOUBLE PRECISION"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": []
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,b2fd91.order_entry_db.order_entry.regions,PROD)",
+      "name": "regions",
+      "platform": "postgres",
+      "owners": [],
+      "fields": [
+        {
+          "name": "region_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "region_name",
+          "type": "TEXT"
+        },
+        {
+          "name": "country_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "nls_language",
+          "type": "TEXT"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": []
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:postgres,b2fd91.order_entry_db.order_entry.warehouses,PROD)",
+      "name": "warehouses",
+      "platform": "postgres",
+      "owners": [],
+      "fields": [
+        {
+          "name": "warehouse_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "warehouse_name",
+          "type": "TEXT"
+        },
+        {
+          "name": "location_id",
+          "type": "BIGINT"
+        },
+        {
+          "name": "wh_geo_location",
+          "type": "TEXT"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": []
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,b2fd91.datahub_order_entries.Customer_Analytics_Measures,PROD)",
+      "name": "Customer Analytics Measures",
+      "platform": "powerbi",
+      "owners": [],
+      "fields": [
+        {
+          "name": "Value",
+          "type": "String"
+        },
+        {
+          "name": "Customer LTV",
+          "type": "measure",
+          "description": "\nAVERAGEX(\n    VALUES('ORDER_DETAILS'[customer_id]),\n    CALCULATE(SUM('ORDER_DETAILS'[order_total]))\n)"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,b2fd91.datahub_order_entries.Essential_KPI_Measures,PROD)",
+      "name": "Essential KPI Measures",
+      "platform": "powerbi",
+      "owners": [],
+      "fields": [
+        {
+          "name": "Value",
+          "type": "String"
+        },
+        {
+          "name": "Total Revenue",
+          "type": "measure",
+          "description": "SUMX('ORDER_DETAILS', 'ORDER_DETAILS'[order_total])"
+        },
+        {
+          "name": "Total Orders",
+          "type": "measure",
+          "description": "DISTINCTCOUNT('ORDER_DETAILS'[order_id])"
+        },
+        {
+          "name": "Average Order Value",
+          "type": "measure",
+          "description": "DIVIDE([Total Revenue], [Total Orders], 0)"
+        },
+        {
+          "name": "Total Customers",
+          "type": "measure",
+          "description": "DISTINCTCOUNT('ORDER_DETAILS'[customer_id])"
+        },
+        {
+          "name": "Revenue Per Customer",
+          "type": "measure",
+          "description": "DIVIDE([Total Revenue], [Total Customers], 0)"
+        },
+        {
+          "name": "Total Products Sold",
+          "type": "measure",
+          "description": "SUM('ORDER_DETAILS'[quantity])"
+        },
+        {
+          "name": "YTD Revenue",
+          "type": "measure",
+          "description": "CALCULATE([Total Revenue], DATESYTD('ORDER_DETAILS'[order_date]))"
+        },
+        {
+          "name": "PY Revenue",
+          "type": "measure",
+          "description": "CALCULATE([Total Revenue], SAMEPERIODLASTYEAR('ORDER_DETAILS'[order_date]))"
+        },
+        {
+          "name": "YoY Growth",
+          "type": "measure",
+          "description": "DIVIDE([YTD Revenue] - [PY Revenue], [PY Revenue], 0)"
+        },
+        {
+          "name": "Fulfillment Rate",
+          "type": "measure",
+          "description": "DIVIDE(\n    CALCULATE([Total Orders], 'ORDER_DETAILS'[delivery_status] <> \"Not Shipped\"),\n    [Total Orders], \n    0\n)"
+        },
+        {
+          "name": "New Customers",
+          "type": "measure",
+          "description": "\nCALCULATE(\n    DISTINCTCOUNT('ORDER_DETAILS'[customer_id]),\n    FILTER(\n        'ORDER_DETAILS',\n        'ORDER_DETAILS'[order_date] = \n        CALCULATE(\n            MIN('ORDER_DETAILS'[order_date]),\n            ALLEXCEPT('ORDER_DETAILS', 'ORDER_DETAILS'[customer_id])\n        )\n    )\n)"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,b2fd91.datahub_order_entries.Geographic_Measures,PROD)",
+      "name": "Geographic Measures",
+      "platform": "powerbi",
+      "owners": [],
+      "fields": [
+        {
+          "name": "Value",
+          "type": "String"
+        },
+        {
+          "name": "Revenue by Country",
+          "type": "measure",
+          "description": "CALCULATE([Total Revenue], VALUES('ORDER_DETAILS'[shipping_country]))"
+        },
+        {
+          "name": "Domestic Sales",
+          "type": "measure",
+          "description": "CALCULATE([Total Revenue], 'ORDER_DETAILS'[shipping_country] = \"United States\")"
+        },
+        {
+          "name": "International Sales",
+          "type": "measure",
+          "description": "[Total Revenue] - [Domestic Sales]"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,b2fd91.datahub_order_entries.ORDER_DETAILS,PROD)",
+      "name": "ORDER_DETAILS",
+      "platform": "powerbi",
+      "owners": [
+        {
+          "urn": "urn:li:corpuser:b2fd91.kirk@example.com",
+          "name": "Karen Okonkwo",
+          "type": "__system__technical_owner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "ORDER_ID",
+          "type": "Double"
+        },
+        {
+          "name": "ORDER_DATE",
+          "type": "String"
+        },
+        {
+          "name": "ORDER_MODE",
+          "type": "String"
+        },
+        {
+          "name": "ORDER_STATUS",
+          "type": "Double"
+        },
+        {
+          "name": "ORDER_TOTAL",
+          "type": "Double"
+        },
+        {
+          "name": "COST_OF_DELIVERY",
+          "type": "Double"
+        },
+        {
+          "name": "DELIVERY_TYPE",
+          "type": "String"
+        },
+        {
+          "name": "WAIT_TILL_COMPLETE_YN",
+          "type": "String"
+        },
+        {
+          "name": "PAYMENT_METHOD_CODE",
+          "type": "String"
+        },
+        {
+          "name": "CUSTOMER_ID",
+          "type": "Double"
+        },
+        {
+          "name": "CUST_FIRST_NAME",
+          "type": "String"
+        },
+        {
+          "name": "CUST_LAST_NAME",
+          "type": "String"
+        },
+        {
+          "name": "CUST_EMAIL",
+          "type": "String"
+        },
+        {
+          "name": "PHONE_NUMBER",
+          "type": "String"
+        },
+        {
+          "name": "CUSTOMER_CLASS",
+          "type": "String"
+        },
+        {
+          "name": "BILLING_ADDRESS_LINE1",
+          "type": "String"
+        },
+        {
+          "name": "BILLING_ADDRESS_LINE2",
+          "type": "String"
+        },
+        {
+          "name": "BILLING_TOWN_CITY",
+          "type": "String"
+        },
+        {
+          "name": "BILLING_COUNTRY",
+          "type": "String"
+        },
+        {
+          "name": "BILLING_ZIPCODE",
+          "type": "Double"
+        },
+        {
+          "name": "BILLING_REGION",
+          "type": "String"
+        },
+        {
+          "name": "SHIPPING_ADDRESS_LINE1",
+          "type": "String"
+        },
+        {
+          "name": "SHIPPING_ADDRESS_LINE2",
+          "type": "String"
+        },
+        {
+          "name": "SHIPPING_TOWN_CITY",
+          "type": "String"
+        },
+        {
+          "name": "SHIPPING_COUNTRY",
+          "type": "String"
+        },
+        {
+          "name": "SHIPPING_ZIPCODE",
+          "type": "Double"
+        },
+        {
+          "name": "SHIPPING_REGION",
+          "type": "String"
+        },
+        {
+          "name": "WAREHOUSE_ID",
+          "type": "Double"
+        },
+        {
+          "name": "WAREHOUSE_NAME",
+          "type": "String"
+        },
+        {
+          "name": "PROMOTION_ID",
+          "type": "Double"
+        },
+        {
+          "name": "PROMOTION_NAME",
+          "type": "String"
+        },
+        {
+          "name": "PROMOTION_DESCRIPTION",
+          "type": "String"
+        },
+        {
+          "name": "LINE_ITEM_ID",
+          "type": "Double"
+        },
+        {
+          "name": "PRODUCT_ID",
+          "type": "Double"
+        },
+        {
+          "name": "PRODUCT_NAME",
+          "type": "String"
+        },
+        {
+          "name": "PRODUCT_DESCRIPTION",
+          "type": "String"
+        },
+        {
+          "name": "CATEGORY_ID",
+          "type": "Double"
+        },
+        {
+          "name": "CATEGORY_NAME",
+          "type": "String"
+        },
+        {
+          "name": "UNIT_PRICE",
+          "type": "Double"
+        },
+        {
+          "name": "QUANTITY",
+          "type": "Double"
+        },
+        {
+          "name": "LINE_TOTAL",
+          "type": "Double"
+        },
+        {
+          "name": "DISPATCH_DATE",
+          "type": "String"
+        },
+        {
+          "name": "RETURN_DATE",
+          "type": "String"
+        },
+        {
+          "name": "GIFT_WRAP",
+          "type": "String"
+        },
+        {
+          "name": "CONDITION",
+          "type": "String"
+        },
+        {
+          "name": "ESTIMATED_DELIVERY",
+          "type": "String"
+        },
+        {
+          "name": "LIST_PRICE",
+          "type": "Double"
+        },
+        {
+          "name": "PRODUCT_STATUS",
+          "type": "String"
+        },
+        {
+          "name": "QUANTITY_ON_HAND",
+          "type": "Double"
+        },
+        {
+          "name": "STOCK_STATUS",
+          "type": "String"
+        },
+        {
+          "name": "DISCOUNT_AMOUNT",
+          "type": "Double"
+        },
+        {
+          "name": "DISCOUNT_PERCENT",
+          "type": "Double"
+        },
+        {
+          "name": "DELIVERY_STATUS",
+          "type": "String"
+        },
+        {
+          "name": "RETURN_STATUS",
+          "type": "String"
+        },
+        {
+          "name": "UPDATED_AT",
+          "type": "DateTime"
+        },
+        {
+          "name": "Order Size Category",
+          "type": "String"
+        },
+        {
+          "name": "Quarter",
+          "type": "String"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,b2fd91.datahub_order_entries.Product_Perfromance_Measures,PROD)",
+      "name": "Product Perfromance Measures",
+      "platform": "powerbi",
+      "owners": [],
+      "fields": [
+        {
+          "name": "Value",
+          "type": "String"
+        },
+        {
+          "name": "Revenue by Category",
+          "type": "measure",
+          "description": "CALCULATE([Total Revenue], VALUES('ORDER_DETAILS'[category_name]))"
+        },
+        {
+          "name": "Top Selling Products",
+          "type": "measure",
+          "description": "CALCULATE(SUM('ORDER_DETAILS'[quantity]), VALUES('ORDER_DETAILS'[product_name]))"
+        },
+        {
+          "name": "Total Discount Amount",
+          "type": "measure",
+          "description": "SUM('ORDER_DETAILS'[discount_amount])"
+        },
+        {
+          "name": "Average Discount %",
+          "type": "measure",
+          "description": "AVERAGE('ORDER_DETAILS'[discount_percent])"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:powerbi,b2fd91.datahub_order_entries.Time_Inteligence_Measures,PROD)",
+      "name": "Time Inteligence Measures",
+      "platform": "powerbi",
+      "owners": [],
+      "fields": [
+        {
+          "name": "Value",
+          "type": "String"
+        },
+        {
+          "name": "Revenue by Month",
+          "type": "measure",
+          "description": "CALCULATE([Total Revenue], DATESMTD('ORDER_DETAILS'[order_date]))"
+        },
+        {
+          "name": "MoM Revenue Growth",
+          "type": "measure",
+          "description": "\nVAR CurrentMonth = [Total Revenue]\nVAR PreviousMonth1 = CALCULATE([Total Revenue], DATEADD('ORDER_DETAILS'[order_date], -1, MONTH))\nRETURN DIVIDE(CurrentMonth - PreviousMonth, PreviousMonth1, 0)"
+        },
+        {
+          "name": "Current Year Revenue",
+          "type": "measure",
+          "description": "[Total Revenue]"
+        },
+        {
+          "name": "Previous Year Revenue",
+          "type": "measure",
+          "description": "CALCULATE([Total Revenue], SAMEPERIODLASTYEAR('ORDER_DETAILS'[order_date]))"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:s3,b2fd91.demo-data-bucket/order_entry/addresses,PROD)",
+      "name": "addresses",
+      "platform": "s3",
+      "owners": [],
+      "fields": [
+        {
+          "name": "address_id",
+          "type": "int64"
+        },
+        {
+          "name": "customer_id",
+          "type": "int64"
+        },
+        {
+          "name": "date_created",
+          "type": "string"
+        },
+        {
+          "name": "address_line1",
+          "type": "string"
+        },
+        {
+          "name": "address_line2",
+          "type": "string"
+        },
+        {
+          "name": "town_city",
+          "type": "string"
+        },
+        {
+          "name": "country_id",
+          "type": "int64"
+        },
+        {
+          "name": "zipcode",
+          "type": "int64"
+        },
+        {
+          "name": "region_id",
+          "type": "int64"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.export_table_addresses_to_s3,b2fd91.default),b2fd91.export_table_addresses_to_s3)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:s3,b2fd91.demo-data-bucket/order_entry/countries,PROD)",
+      "name": "countries",
+      "platform": "s3",
+      "owners": [],
+      "fields": [
+        {
+          "name": "country_id",
+          "type": "int64"
+        },
+        {
+          "name": "country_name",
+          "type": "string"
+        },
+        {
+          "name": "country_code",
+          "type": "string"
+        },
+        {
+          "name": "nls_territory",
+          "type": "string"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.export_table_countries_to_s3,b2fd91.default),b2fd91.export_table_countries_to_s3)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:s3,b2fd91.demo-data-bucket/order_entry/customers,PROD)",
+      "name": "customers",
+      "platform": "s3",
+      "owners": [],
+      "fields": [
+        {
+          "name": "customer_id",
+          "type": "int64"
+        },
+        {
+          "name": "cust_first_name",
+          "type": "string"
+        },
+        {
+          "name": "cust_last_name",
+          "type": "string"
+        },
+        {
+          "name": "nls_language",
+          "type": "string"
+        },
+        {
+          "name": "nls_territory",
+          "type": "string"
+        },
+        {
+          "name": "credit_limit",
+          "type": "double"
+        },
+        {
+          "name": "cust_email",
+          "type": "string"
+        },
+        {
+          "name": "account_mgr_id",
+          "type": "int64"
+        },
+        {
+          "name": "customer_since",
+          "type": "string"
+        },
+        {
+          "name": "customer_class",
+          "type": "string"
+        },
+        {
+          "name": "suggestions",
+          "type": "string"
+        },
+        {
+          "name": "dob",
+          "type": "string"
+        },
+        {
+          "name": "mailshot",
+          "type": "int64"
+        },
+        {
+          "name": "partner_mailshot",
+          "type": "int64"
+        },
+        {
+          "name": "phone_number",
+          "type": "string"
+        },
+        {
+          "name": "address_line1",
+          "type": "string"
+        },
+        {
+          "name": "address_line2",
+          "type": "string"
+        },
+        {
+          "name": "address_line3",
+          "type": "string"
+        },
+        {
+          "name": "town_city",
+          "type": "string"
+        },
+        {
+          "name": "country_id",
+          "type": "int64"
+        },
+        {
+          "name": "zipcode",
+          "type": "int64"
+        },
+        {
+          "name": "region_id",
+          "type": "int64"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.export_table_customers_to_s3,b2fd91.default),b2fd91.export_table_customers_to_s3)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:s3,b2fd91.demo-data-bucket/order_entry/inventories,PROD)",
+      "name": "inventories",
+      "platform": "s3",
+      "owners": [],
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "int64"
+        },
+        {
+          "name": "warehouse_id",
+          "type": "int64"
+        },
+        {
+          "name": "quantity_on_hand",
+          "type": "int64"
+        },
+        {
+          "name": "restock_level",
+          "type": "int64"
+        },
+        {
+          "name": "max_stock_level",
+          "type": "int64"
+        },
+        {
+          "name": "reorder_quantity",
+          "type": "int64"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.export_table_inventories_to_s3,b2fd91.default),b2fd91.export_table_inventories_to_s3)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:s3,b2fd91.demo-data-bucket/order_entry/order_items,PROD)",
+      "name": "order_items",
+      "platform": "s3",
+      "owners": [],
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "int64"
+        },
+        {
+          "name": "line_item_id",
+          "type": "int64"
+        },
+        {
+          "name": "product_id",
+          "type": "int64"
+        },
+        {
+          "name": "unit_price",
+          "type": "double"
+        },
+        {
+          "name": "quantity",
+          "type": "int64"
+        },
+        {
+          "name": "dispatch_date",
+          "type": "string"
+        },
+        {
+          "name": "return_date",
+          "type": "string"
+        },
+        {
+          "name": "gift_wrap",
+          "type": "string"
+        },
+        {
+          "name": "condition",
+          "type": "string"
+        },
+        {
+          "name": "supplier_id",
+          "type": "int64"
+        },
+        {
+          "name": "estimated_delivery",
+          "type": "string"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.export_table_order_items_to_s3,b2fd91.default),b2fd91.export_table_order_items_to_s3)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:s3,b2fd91.demo-data-bucket/order_entry/orders,PROD)",
+      "name": "orders",
+      "platform": "s3",
+      "owners": [],
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "int64"
+        },
+        {
+          "name": "order_date",
+          "type": "string"
+        },
+        {
+          "name": "order_mode",
+          "type": "string"
+        },
+        {
+          "name": "customer_id",
+          "type": "int64"
+        },
+        {
+          "name": "order_status",
+          "type": "int64"
+        },
+        {
+          "name": "order_total",
+          "type": "double"
+        },
+        {
+          "name": "sales_rep_id",
+          "type": "int64"
+        },
+        {
+          "name": "promotion_id",
+          "type": "double"
+        },
+        {
+          "name": "warehouse_id",
+          "type": "int64"
+        },
+        {
+          "name": "delivery_type",
+          "type": "string"
+        },
+        {
+          "name": "cost_of_delivery",
+          "type": "double"
+        },
+        {
+          "name": "wait_till_complete_yn",
+          "type": "string"
+        },
+        {
+          "name": "billing_address_id",
+          "type": "int64"
+        },
+        {
+          "name": "delivery_address_id",
+          "type": "int64"
+        },
+        {
+          "name": "payment_method_code",
+          "type": "string"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "Order Total"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.export_table_orders_to_s3,b2fd91.default),b2fd91.export_table_orders_to_s3)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:s3,b2fd91.demo-data-bucket/order_entry/product_categories,PROD)",
+      "name": "product_categories",
+      "platform": "s3",
+      "owners": [],
+      "fields": [
+        {
+          "name": "category_id",
+          "type": "int64"
+        },
+        {
+          "name": "category_name",
+          "type": "string"
+        },
+        {
+          "name": "category_description",
+          "type": "string"
+        },
+        {
+          "name": "parent_category_id",
+          "type": "double"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.export_table_product_categories_to_s3,b2fd91.default),b2fd91.export_table_product_categories_to_s3)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:s3,b2fd91.demo-data-bucket/order_entry/product_information,PROD)",
+      "name": "product_information",
+      "platform": "s3",
+      "owners": [],
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "int64"
+        },
+        {
+          "name": "product_description",
+          "type": "string"
+        },
+        {
+          "name": "warranty_period",
+          "type": "string"
+        },
+        {
+          "name": "external_url",
+          "type": "string"
+        },
+        {
+          "name": "other_details",
+          "type": "string"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.export_table_product_information_to_s3,b2fd91.default),b2fd91.export_table_product_information_to_s3)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:s3,b2fd91.demo-data-bucket/order_entry/products,PROD)",
+      "name": "products",
+      "platform": "s3",
+      "owners": [],
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "int64"
+        },
+        {
+          "name": "product_name",
+          "type": "string"
+        },
+        {
+          "name": "product_description",
+          "type": "string"
+        },
+        {
+          "name": "category_id",
+          "type": "int64"
+        },
+        {
+          "name": "weight_class",
+          "type": "int64"
+        },
+        {
+          "name": "warranty_period",
+          "type": "string"
+        },
+        {
+          "name": "supplier_id",
+          "type": "int64"
+        },
+        {
+          "name": "product_status",
+          "type": "string"
+        },
+        {
+          "name": "list_price",
+          "type": "double"
+        },
+        {
+          "name": "min_price",
+          "type": "double"
+        },
+        {
+          "name": "catalog_url",
+          "type": "string"
+        },
+        {
+          "name": "date_added",
+          "type": "string"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.export_table_products_to_s3,b2fd91.default),b2fd91.export_table_products_to_s3)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:s3,b2fd91.demo-data-bucket/order_entry/promotions,PROD)",
+      "name": "promotions",
+      "platform": "s3",
+      "owners": [],
+      "fields": [
+        {
+          "name": "promotion_id",
+          "type": "int64"
+        },
+        {
+          "name": "promotion_name",
+          "type": "string"
+        },
+        {
+          "name": "promotion_start_date",
+          "type": "string"
+        },
+        {
+          "name": "promotion_end_date",
+          "type": "string"
+        },
+        {
+          "name": "promotion_description",
+          "type": "string"
+        },
+        {
+          "name": "promotion_cost",
+          "type": "double"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.export_table_promotions_to_s3,b2fd91.default),b2fd91.export_table_promotions_to_s3)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:s3,b2fd91.demo-data-bucket/order_entry/regions,PROD)",
+      "name": "regions",
+      "platform": "s3",
+      "owners": [],
+      "fields": [
+        {
+          "name": "region_id",
+          "type": "int64"
+        },
+        {
+          "name": "region_name",
+          "type": "string"
+        },
+        {
+          "name": "country_id",
+          "type": "int64"
+        },
+        {
+          "name": "nls_language",
+          "type": "string"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.export_table_regions_to_s3,b2fd91.default),b2fd91.export_table_regions_to_s3)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:s3,b2fd91.demo-data-bucket/order_entry/warehouses,PROD)",
+      "name": "warehouses",
+      "platform": "s3",
+      "owners": [],
+      "fields": [
+        {
+          "name": "warehouse_id",
+          "type": "int64"
+        },
+        {
+          "name": "warehouse_name",
+          "type": "string"
+        },
+        {
+          "name": "location_id",
+          "type": "int64"
+        },
+        {
+          "name": "wh_geo_location",
+          "type": "string"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.export_table_warehouses_to_s3,b2fd91.default),b2fd91.export_table_warehouses_to_s3)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details_replica,PROD)",
+      "name": "ORDER_DETAILS_REPLICA",
+      "platform": "snowflake",
+      "owners": [],
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "order_date",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "order_mode",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "order_status",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "order_total",
+          "type": "FLOAT"
+        },
+        {
+          "name": "cost_of_delivery",
+          "type": "FLOAT"
+        },
+        {
+          "name": "delivery_type",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "wait_till_complete_yn",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "payment_method_code",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "customer_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "cust_first_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "cust_last_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "cust_email",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "phone_number",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "customer_class",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "billing_address_line1",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "billing_address_line2",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "billing_town_city",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "billing_country",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "billing_zipcode",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "billing_region",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "shipping_address_line1",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "shipping_address_line2",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "shipping_town_city",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "shipping_country",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "shipping_zipcode",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "shipping_region",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "warehouse_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "warehouse_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "promotion_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "promotion_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "promotion_description",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "line_item_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "product_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "product_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "product_description",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "category_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "category_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "unit_price",
+          "type": "FLOAT"
+        },
+        {
+          "name": "quantity",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "line_total",
+          "type": "FLOAT"
+        },
+        {
+          "name": "dispatch_date",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "return_date",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "gift_wrap",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "condition",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "estimated_delivery",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "list_price",
+          "type": "FLOAT"
+        },
+        {
+          "name": "product_status",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "quantity_on_hand",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "stock_status",
+          "type": "VARCHAR(11)"
+        },
+        {
+          "name": "discount_amount",
+          "type": "FLOAT"
+        },
+        {
+          "name": "discount_percent",
+          "type": "FLOAT"
+        },
+        {
+          "name": "delivery_status",
+          "type": "VARCHAR(11)"
+        },
+        {
+          "name": "return_status",
+          "type": "VARCHAR(12)"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP_LTZ"
+        }
+      ],
+      "glossaryTerms": [],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+      "name": "ORDER_DETAILS",
+      "platform": "snowflake",
+      "owners": [
+        {
+          "urn": "urn:li:corpGroup:b2fd91.1e0398a3-113f-475e-b6fc-32ab72a634d2",
+          "name": "DataHub SE Team",
+          "type": "__system__technical_owner"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.brock1@example.com",
+          "name": "David Kim",
+          "type": "__system__data_steward"
+        },
+        {
+          "urn": "urn:li:corpuser:b2fd91.jonny1@example.com",
+          "name": "Julia Novak",
+          "type": "__system__data_steward"
+        }
+      ],
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "order_date",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "order_mode",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "order_status",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "order_total",
+          "type": "FLOAT"
+        },
+        {
+          "name": "cost_of_delivery",
+          "type": "FLOAT"
+        },
+        {
+          "name": "delivery_type",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "wait_till_complete_yn",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "payment_method_code",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "customer_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "cust_first_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "cust_last_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "cust_email",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "phone_number",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "customer_class",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "billing_address_line1",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "billing_address_line2",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "billing_town_city",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "billing_country",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "billing_zipcode",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "billing_region",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "shipping_address_line1",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "shipping_address_line2",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "shipping_town_city",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "shipping_country",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "shipping_zipcode",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "shipping_region",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "warehouse_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "warehouse_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "promotion_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "promotion_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "promotion_description",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "line_item_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "product_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "product_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "product_description",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "category_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "category_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "unit_price",
+          "type": "FLOAT"
+        },
+        {
+          "name": "quantity",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "line_total",
+          "type": "FLOAT"
+        },
+        {
+          "name": "dispatch_date",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "return_date",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "gift_wrap",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "condition",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "estimated_delivery",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "list_price",
+          "type": "FLOAT"
+        },
+        {
+          "name": "product_status",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "quantity_on_hand",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "stock_status",
+          "type": "VARCHAR(11)"
+        },
+        {
+          "name": "discount_amount",
+          "type": "FLOAT"
+        },
+        {
+          "name": "discount_percent",
+          "type": "FLOAT"
+        },
+        {
+          "name": "delivery_status",
+          "type": "VARCHAR(11)"
+        },
+        {
+          "name": "return_status",
+          "type": "VARCHAR(12)"
+        },
+        {
+          "name": "updated_at",
+          "type": "TIMESTAMP_LTZ"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "SOC2 Auditable",
+        "Order Total",
+        "Revenue by Customer Class"
+      ],
+      "tags": [
+        "💲 Large Table",
+        "📈 Most Queried"
+      ],
+      "domain": "Ecommerce Operations",
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.orders,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.product_categories,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.warehouses,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.inventories,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.regions,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.customers,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.countries,PROD)",
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.addresses,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+      "name": "ORDER_HISTORY",
+      "platform": "snowflake",
+      "owners": [],
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "customer_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "order_status",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "order_total",
+          "type": "FLOAT"
+        },
+        {
+          "name": "as_of_date",
+          "type": "DATE"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [
+        "💲 Large Table"
+      ],
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.addresses,PROD)",
+      "name": "ADDRESSES",
+      "platform": "snowflake",
+      "owners": [],
+      "fields": [
+        {
+          "name": "address_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "customer_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "date_created",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "address_line1",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "address_line2",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "town_city",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "country_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "zipcode",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "region_id",
+          "type": "NUMBER(38,0)"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [
+        "💲 Large Table"
+      ],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_addresses_to_snowflake,b2fd91.default),b2fd91.import_table_addresses_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.countries,PROD)",
+      "name": "COUNTRIES",
+      "platform": "snowflake",
+      "owners": [],
+      "fields": [
+        {
+          "name": "country_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "country_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "country_code",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "nls_territory",
+          "type": "VARCHAR(16777216)"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [
+        "💲 Large Table"
+      ],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_countries_to_snowflake,b2fd91.default),b2fd91.import_table_countries_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.customers,PROD)",
+      "name": "CUSTOMERS",
+      "platform": "snowflake",
+      "owners": [],
+      "fields": [
+        {
+          "name": "customer_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "cust_first_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "cust_last_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "nls_language",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "nls_territory",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "credit_limit",
+          "type": "FLOAT"
+        },
+        {
+          "name": "cust_email",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "account_mgr_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "customer_since",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "customer_class",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "suggestions",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "dob",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "mailshot",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "partner_mailshot",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "phone_number",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "address_line1",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "address_line2",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "address_line3",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "town_city",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "country_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "zipcode",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "region_id",
+          "type": "NUMBER(38,0)"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "SOC2 Auditable",
+        "Revenue by Customer Class",
+        "Order Total"
+      ],
+      "tags": [
+        "💲 Large Table",
+        "📈 Most Queried"
+      ],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_customers_to_snowflake,b2fd91.default),b2fd91.import_table_customers_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.inventories,PROD)",
+      "name": "INVENTORIES",
+      "platform": "snowflake",
+      "owners": [],
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "warehouse_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "quantity_on_hand",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "restock_level",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "max_stock_level",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "reorder_quantity",
+          "type": "NUMBER(38,0)"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [
+        "💲 Large Table"
+      ],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_inventories_to_snowflake,b2fd91.default),b2fd91.import_table_inventories_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.order_items,PROD)",
+      "name": "ORDER_ITEMS",
+      "platform": "snowflake",
+      "owners": [],
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "line_item_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "product_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "unit_price",
+          "type": "FLOAT"
+        },
+        {
+          "name": "quantity",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "dispatch_date",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "return_date",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "gift_wrap",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "condition",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "supplier_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "estimated_delivery",
+          "type": "VARCHAR(16777216)"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "Order Total",
+        "Revenue by Customer Class"
+      ],
+      "tags": [
+        "💲 Large Table"
+      ],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_order_items_to_snowflake,b2fd91.default),b2fd91.import_table_order_items_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.orders,PROD)",
+      "name": "ORDERS",
+      "platform": "snowflake",
+      "owners": [],
+      "fields": [
+        {
+          "name": "order_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "order_date",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "order_mode",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "customer_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "order_status",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "order_total",
+          "type": "FLOAT"
+        },
+        {
+          "name": "sales_rep_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "promotion_id",
+          "type": "FLOAT"
+        },
+        {
+          "name": "warehouse_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "delivery_type",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "cost_of_delivery",
+          "type": "FLOAT"
+        },
+        {
+          "name": "wait_till_complete_yn",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "billing_address_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "delivery_address_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "payment_method_code",
+          "type": "VARCHAR(16777216)"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "Order Total",
+        "Revenue by Customer Class"
+      ],
+      "tags": [
+        "💲 Large Table",
+        "📈 Most Queried"
+      ],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_orders_to_snowflake,b2fd91.default),b2fd91.import_table_orders_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.product_categories,PROD)",
+      "name": "PRODUCT_CATEGORIES",
+      "platform": "snowflake",
+      "owners": [],
+      "fields": [
+        {
+          "name": "category_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "category_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "category_description",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "parent_category_id",
+          "type": "FLOAT"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [
+        "💲 Large Table"
+      ],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_product_categories_to_snowflake,b2fd91.default),b2fd91.import_table_product_categories_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.products,PROD)",
+      "name": "PRODUCTS",
+      "platform": "snowflake",
+      "owners": [],
+      "fields": [
+        {
+          "name": "product_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "product_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "product_description",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "category_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "weight_class",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "warranty_period",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "supplier_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "product_status",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "list_price",
+          "type": "FLOAT"
+        },
+        {
+          "name": "min_price",
+          "type": "FLOAT"
+        },
+        {
+          "name": "catalog_url",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "date_added",
+          "type": "VARCHAR(16777216)"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [
+        "💲 Large Table",
+        "📈 Most Queried"
+      ],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_products_to_snowflake,b2fd91.default),b2fd91.import_table_products_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.promotions,PROD)",
+      "name": "PROMOTIONS",
+      "platform": "snowflake",
+      "owners": [],
+      "fields": [
+        {
+          "name": "promotion_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "promotion_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "promotion_start_date",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "promotion_end_date",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "promotion_description",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "promotion_cost",
+          "type": "FLOAT"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [
+        "💲 Large Table",
+        "No Sample Values"
+      ],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_promotions_to_snowflake,b2fd91.default),b2fd91.import_table_promotions_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.regions,PROD)",
+      "name": "REGIONS",
+      "platform": "snowflake",
+      "owners": [],
+      "fields": [
+        {
+          "name": "region_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "region_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "country_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "nls_language",
+          "type": "VARCHAR(16777216)"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [
+        "💲 Large Table"
+      ],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_regions_to_snowflake,b2fd91.default),b2fd91.import_table_regions_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.order_entry.warehouses,PROD)",
+      "name": "WAREHOUSES",
+      "platform": "snowflake",
+      "owners": [],
+      "fields": [
+        {
+          "name": "warehouse_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "warehouse_name",
+          "type": "VARCHAR(16777216)"
+        },
+        {
+          "name": "location_id",
+          "type": "NUMBER(38,0)"
+        },
+        {
+          "name": "wh_geo_location",
+          "type": "VARCHAR(16777216)"
+        }
+      ],
+      "glossaryTerms": [
+        "PII",
+        "Revenue by Customer Class",
+        "Order Total"
+      ],
+      "tags": [
+        "💲 Large Table"
+      ],
+      "upstreams": [
+        "urn:li:dataJob:(urn:li:dataFlow:(spark,b2fd91.import_table_warehouses_to_snowflake,b2fd91.default),b2fd91.import_table_warehouses_to_snowflake)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:tableau,b2fd91.37fcfb15-34ae-973a-5ae3-cf63691d48e3,PROD)",
+      "name": "Custom SQL Query",
+      "platform": "tableau",
+      "owners": [],
+      "fields": [
+        {
+          "name": "AVERAGE_ORDER_VALUE",
+          "type": "R8"
+        },
+        {
+          "name": "ORDER_MODE",
+          "type": "STR"
+        },
+        {
+          "name": "TOTAL_REVENUE",
+          "type": "R8"
+        },
+        {
+          "name": "ORDER_COUNT",
+          "type": "NUMERIC"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:tableau,b2fd91.4a3af1dd-fd0c-7077-d5fd-aa2fdf87cb23,PROD)",
+      "name": "Custom SQL Query",
+      "platform": "tableau",
+      "owners": [],
+      "fields": [
+        {
+          "name": "TOTAL_REVENUE",
+          "type": "R8"
+        },
+        {
+          "name": "CATEGORY_NAME",
+          "type": "STR"
+        },
+        {
+          "name": "AVERAGE_ORDER_VALUE",
+          "type": "R8"
+        },
+        {
+          "name": "ORDERS_COUNT",
+          "type": "NUMERIC"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:tableau,b2fd91.8bfe7483-1c9a-a0e1-ec84-57207dd37a15,PROD)",
+      "name": "Custom SQL Query",
+      "platform": "tableau",
+      "owners": [],
+      "fields": [
+        {
+          "name": "TOTAL_REVENUE",
+          "type": "R8"
+        },
+        {
+          "name": "ORDERS_WITH_PROMOTION",
+          "type": "NUMERIC"
+        },
+        {
+          "name": "AVERAGE_DISCOUNT_PERCENT",
+          "type": "R8"
+        },
+        {
+          "name": "AVERAGE_ORDER_VALUE",
+          "type": "R8"
+        },
+        {
+          "name": "PROMOTION_NAME",
+          "type": "STR"
+        }
+      ],
+      "glossaryTerms": [
+        "GDPR",
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:tableau,b2fd91.b980a8c5-28eb-119e-f6ca-4da32732e5be,PROD)",
+      "name": "Promotions",
+      "platform": "tableau",
+      "owners": [
+        {
+          "urn": "urn:li:corpuser:b2fd91.brock1@example.com",
+          "name": "David Kim",
+          "type": "__system__dataowner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "ORDERS_WITH_PROMOTION",
+          "type": "INTEGER"
+        },
+        {
+          "name": "AVERAGE_ORDER_VALUE",
+          "type": "REAL"
+        },
+        {
+          "name": "TOTAL_REVENUE",
+          "type": "REAL"
+        },
+        {
+          "name": "PROMOTION_NAME",
+          "type": "STRING"
+        },
+        {
+          "name": "Promotions",
+          "type": "TABLE"
+        },
+        {
+          "name": "AVERAGE_DISCOUNT_PERCENT",
+          "type": "REAL"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:tableau,b2fd91.8bfe7483-1c9a-a0e1-ec84-57207dd37a15,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:tableau,b2fd91.c067553a-127e-a871-14a0-5f32cb032c78,PROD)",
+      "name": "Order Mode",
+      "platform": "tableau",
+      "owners": [
+        {
+          "urn": "urn:li:corpuser:b2fd91.brock1@example.com",
+          "name": "David Kim",
+          "type": "__system__dataowner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "AVERAGE_ORDER_VALUE",
+          "type": "REAL"
+        },
+        {
+          "name": "TOTAL_REVENUE",
+          "type": "REAL"
+        },
+        {
+          "name": "ORDER_COUNT",
+          "type": "INTEGER"
+        },
+        {
+          "name": "Order Mode",
+          "type": "TABLE"
+        },
+        {
+          "name": "ORDER_MODE",
+          "type": "STRING"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:tableau,b2fd91.37fcfb15-34ae-973a-5ae3-cf63691d48e3,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:tableau,b2fd91.f32082e5-06b8-f46e-9047-4611fffe66b0,PROD)",
+      "name": "Custom SQL Query",
+      "platform": "tableau",
+      "owners": [],
+      "fields": [
+        {
+          "name": "TOTAL_SALES",
+          "type": "R8"
+        },
+        {
+          "name": "ORDER_DATE",
+          "type": "STR"
+        },
+        {
+          "name": "ORDER_COUNT",
+          "type": "NUMERIC"
+        },
+        {
+          "name": "CATEGORY_NAME",
+          "type": "STR"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:tableau,b2fd91.f8fb6a0b-7be6-690b-cc45-3c6e0fd2bcde,PROD)",
+      "name": "Orders By Day",
+      "platform": "tableau",
+      "owners": [
+        {
+          "urn": "urn:li:corpuser:b2fd91.brock1@example.com",
+          "name": "David Kim",
+          "type": "__system__dataowner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "ORDER_COUNT",
+          "type": "INTEGER"
+        },
+        {
+          "name": "TOTAL_SALES",
+          "type": "REAL"
+        },
+        {
+          "name": "ORDER_DATE",
+          "type": "DATETIME"
+        },
+        {
+          "name": "Orders By Day And Category",
+          "type": "TABLE"
+        },
+        {
+          "name": "CATEGORY_NAME",
+          "type": "STRING"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:tableau,b2fd91.f32082e5-06b8-f46e-9047-4611fffe66b0,PROD)"
+      ]
+    },
+    {
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:tableau,b2fd91.fadbf744-48be-0929-a47c-5786327a3343,PROD)",
+      "name": "Top Product Category",
+      "platform": "tableau",
+      "owners": [
+        {
+          "urn": "urn:li:corpuser:b2fd91.brock1@example.com",
+          "name": "David Kim",
+          "type": "__system__dataowner"
+        }
+      ],
+      "fields": [
+        {
+          "name": "ORDERS_COUNT",
+          "type": "INTEGER"
+        },
+        {
+          "name": "Top Product Categories",
+          "type": "TABLE"
+        },
+        {
+          "name": "TOTAL_REVENUE",
+          "type": "REAL"
+        },
+        {
+          "name": "Category Name",
+          "type": "STRING"
+        },
+        {
+          "name": "AVERAGE_ORDER_VALUE",
+          "type": "REAL"
+        }
+      ],
+      "glossaryTerms": [
+        "PII"
+      ],
+      "tags": [],
+      "upstreams": [
+        "urn:li:dataset:(urn:li:dataPlatform:tableau,b2fd91.4a3af1dd-fd0c-7077-d5fd-aa2fdf87cb23,PROD)"
+      ]
+    }
+  ],
+  "sha256": "e450c56be0fb2b0e638e3508c9ba01b3d01bb6d4174ffcbbab021a15cac1274d"
+}
