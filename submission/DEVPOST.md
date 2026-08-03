@@ -77,8 +77,14 @@ all through the identical agent loop:
 
 | Suite | With DataHub | **Warehouse schema only** | No tools |
 | --- | --- | --- | --- |
-| our seeded catalog | **19/20** | 9/20 | 5/20 |
+| our seeded catalog, live, 3 passes | **18.0 ± 1.7/20** | 8.7 ± 0.6/20 | 3.0 ± 1.0/20 |
 | DataHub's `showcase-ecommerce` | **20/20** | 4/20 | 3/20 |
+
+The first row is three independent passes against a live DataHub, not one draw
+from a fixture. The number that settles it is not the difference in means: the
+grounded arm's *worst* pass scored 16/20 and the schema arm's *best* scored 9/20,
+so across every pass the ranges never touch. Thirteen of the sixty (case × arm)
+combinations were not unanimous, and the scorecard names each one.
 
 The middle arm is the interesting one: the same agent connected to the warehouse
 the way an engineer connects without a catalog — `information_schema`, table and
@@ -206,9 +212,10 @@ Building this turned up work worth sending upstream. All of it is filed.
 - The full loop closes: knowledge is captured *from* the catalog, written
   *into* the catalog, and invalidated *by* the catalog.
 - A measured, reproducible answer to "does DataHub grounding matter?", with the
-  arm that isolates metadata from tooling. 19/20 / 9/20 / 5/20 on our catalog,
-  **20/20 / 4/20 / 3/20 on DataHub's own**, scored
-  deterministically, auditable by hand, re-verified by CI on every push.
+  arm that isolates metadata from tooling. 18.0 ± 1.7 / 8.7 ± 0.6 / 3.0 ± 1.0
+  over three live passes on our catalog, **20/20 / 4/20 / 3/20 on DataHub's
+  own**, scored deterministically, auditable by hand, re-verified by CI on every
+  push — with the spread published, not just the mean.
 - The decay engine held up against real breaking changes on a catalog we didn't
   build, and its findings land in DataHub's own Incidents and tags rather than
   stopping at a document.
