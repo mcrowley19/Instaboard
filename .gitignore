@@ -47,3 +47,9 @@ data/replay/*
 
 # Eval resume cache (regenerated locally)
 evals/results/cache.json
+
+# Local secrets. `.env.example` is committed and must stay that way, so this is
+# deliberately not the `.env*` glob the Vercel CLI writes here.
+.env
+.env.local
+.vercel
