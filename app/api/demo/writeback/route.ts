@@ -258,9 +258,22 @@ async function repair(runbook: Handoff, urns: string[], started: number) {
   const recorded = withBaseline(runbook, baseline ?? live);
   const report = diffAgainstCatalog(recorded, live);
 
-  const resolved = await resolveIncidentsFor(recorded, urns);
-  const retraction = await retractStaleTags(recorded, urns);
+  // Order and guard both matter, and both are taken from `lib/sweep.ts` rather
+  // than reinvented here.
+  //
+  // Structured state goes first, so `retractStaleTags` reads *this* run's
+  // "validated" out of the status property instead of the previous run's
+  // "stale" and declines to retract its own repair.
+  //
+  // And retraction only happens on a clean report. Taking the tag down while the
+  // runbook is still stale for some *other* reason — pre-existing drift on one of
+  // these datasets, which the benchmark has hit before — would retract a warning
+  // that is still earned. Repair is allowed to clear what it caused, not to
+  // declare everything fine.
   const structured = await writeStructuredState(recorded, report);
+  const clean = report.severity === "ok" && structured.attempted;
+  const resolved = clean ? await resolveIncidentsFor(recorded, urns) : [];
+  const retraction = clean ? await retractStaleTags(recorded, urns) : null;
   const readBack = await readEverythingBack(recorded, urns);
 
   return {
@@ -272,13 +285,15 @@ async function repair(runbook: Handoff, urns: string[], started: number) {
     verdict: report.verdict,
     severity: report.severity,
     findings: report.findings.map((f) => ({ kind: f.kind, detail: f.detail, severity: f.severity, urn: f.urn })),
+    /* False when the runbook did not come back clean, so nothing was retracted. */
+    retractionEarned: clean,
     retracted: {
       incidents: resolved,
-      untagged: retraction.untagged,
+      untagged: retraction?.untagged ?? [],
       /* Datasets that kept the tag because another runbook is still stale on them. */
-      kept: retraction.kept,
+      kept: retraction?.kept ?? [],
       assertions: structured.assertions,
-      errors: [...retraction.errors, ...structured.errors],
+      errors: [...(retraction?.errors ?? []), ...structured.errors],
     },
     readBack,
     links: urns.map((urn) => ({ urn, url: datasetLink(urn) })),

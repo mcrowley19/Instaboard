@@ -53,6 +53,7 @@ interface LoopResult {
     assertions: { urn: string; datasetUrn: string; result: string }[];
     errors: string[];
   };
+  retractionEarned?: boolean;
   retracted?: {
     incidents: { urn: string; datasetUrn: string }[];
     untagged: string[];
@@ -212,6 +213,12 @@ export default function WriteBackPlayground() {
                 <b>
                   {result.retracted.assertions.filter((a) => a.result === "SUCCESS").length} assertion back to passing
                 </b>
+                {result.retractionEarned === false && (
+                  <span className="lp-decay-remedy">
+                    Nothing was retracted: the runbook did not come back clean, so something other than the injected
+                    drift is still wrong. Repair clears what it caused, not everything.
+                  </span>
+                )}
                 {result.retracted.kept.length > 0 && (
                   <span className="lp-decay-remedy">
                     {result.retracted.kept.length} dataset kept the tag — another runbook is still stale on it, and
