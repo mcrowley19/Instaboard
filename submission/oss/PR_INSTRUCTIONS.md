@@ -8,7 +8,8 @@ rows, which are written and ready to go up.
 | `datahub-onboarding` skill | [datahub-skills#79](https://github.com/datahub-project/datahub-skills/pull/79) | open |
 | ↳ follow-up commit: validation write-back and correction steps | [same PR](https://github.com/datahub-project/datahub-skills/pull/79#issuecomment-5159658074) | pushed |
 | ↳ second follow-up: three-state verdict, coverage, and retraction on repair | see 1b below | ready to push |
-| Documents cannot be read back by URN over MCP | `issues/07-documents-cannot-be-read-back-by-urn.md` | ready to file |
+| Documents cannot be read back by URN over MCP | `issues/07-documents-cannot-be-read-back-by-urn.md` | **root-caused and fixed** — [PR #178](https://github.com/acryldata/mcp-server-datahub/pull/178) |
+| `get_entities` stops returning on a large catalog, with no client-side timeout | `issues/08-mcp-tool-calls-stop-returning-on-a-large-catalog.md` | [mcp-server-datahub#179](https://github.com/acryldata/mcp-server-datahub/issues/179) |
 | No MCP tool returns usage statistics | [mcp-server-datahub#171](https://github.com/acryldata/mcp-server-datahub/issues/171) | open |
 | Incidents are unreadable over MCP | [mcp-server-datahub#172](https://github.com/acryldata/mcp-server-datahub/issues/172) | open |
 | `anyOf` union schemas get 422'd by providers | [mcp-server-datahub#173](https://github.com/acryldata/mcp-server-datahub/issues/173) | open |
