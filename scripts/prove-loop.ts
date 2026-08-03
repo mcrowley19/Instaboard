@@ -362,7 +362,16 @@ async function waitForCatalogToSettle(): Promise<void> {
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 10_000));
     const current = await read();
-    if (current.present === urns.length && current.fingerprint === previous.fingerprint) return;
+    /*
+     * Present is not the same as usable. A dataset whose key aspect has been
+     * written but whose schema has not still answers `exists: true`, and a
+     * catalog full of those is stable, complete-looking and worth nothing to a
+     * proof whose every claim is about columns and owners — CI captured exactly
+     * that and reported "3 entities snapshotted, 0 resolved" without the wait
+     * ever noticing. So the bar is a schema on every dataset the runbook reads,
+     * which is the least the claims below need in order to mean anything.
+     */
+    if (current.described === urns.length && current.fingerprint === previous.fingerprint) return;
     if (!announced) {
       say("    the catalog is still settling after ingest; waiting for it to hold still…");
       announced = true;
