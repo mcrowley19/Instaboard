@@ -69,8 +69,24 @@ const syntheticUrn = (i: number) =>
   `urn:li:dataset:(urn:li:dataPlatform:snowflake,${NAMESPACE}.generated.table_${i},PROD)`;
 
 interface Measurement {
-  /** Datasets in the catalog when this row was measured. */
+  /**
+   * Datasets in the catalog when this row was measured: the ones that were
+   * already there plus every synthetic one written so far.
+   *
+   * Deliberately not "what search reports". The sweep reads entities **by URN**,
+   * which hits the entity store directly, so a dataset is in the catalog the
+   * moment the write returns whether or not OpenSearch has caught up. Gating on
+   * the search count measured the indexer and mislabelled the row: on this
+   * hardware DataHub indexes roughly one dataset a second, so a 10,000-dataset
+   * catalog is fully readable long before it is fully searchable.
+   */
   catalogDatasets: number;
+  /**
+   * What search *could* see at measure time, reported separately and never used
+   * as the catalog size. The gap between the two columns is indexing lag, which
+   * is worth seeing rather than waiting out.
+   */
+  searchVisible: number;
   /** Runbooks swept, and the distinct entities they reference. */
   runbooks: number;
   entitiesReferenced: number;
@@ -140,18 +156,34 @@ async function ingest(from: number, to: number, batchSize = 250): Promise<void> 
   }
 }
 
-/** Hard-delete exactly what we created — by URN, one at a time, nothing wildcarded. */
-async function teardown(count: number): Promise<number> {
+/**
+ * Hard-delete exactly what we created — by URN, nothing wildcarded, so this can
+ * only ever remove datasets this run wrote. Ten at a time, because ten thousand
+ * sequential round trips is a quarter of an hour of a teardown nobody is
+ * measuring.
+ */
+async function teardown(count: number, concurrency = 10): Promise<number> {
   let deleted = 0;
-  for (let i = 0; i < count; i++) {
-    const res = await fetch(`${GMS()}/openapi/v3/entity/dataset/${encodeURIComponent(syntheticUrn(i))}`, {
-      method: "DELETE",
-      headers: authHeaders(),
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (res.ok) deleted++;
-    if (i % 250 === 0) process.stdout.write(".");
-  }
+  let cursor = 0;
+  await Promise.all(
+    Array.from({ length: concurrency }, async () => {
+      while (cursor < count) {
+        const i = cursor++;
+        try {
+          const res = await fetch(`${GMS()}/openapi/v3/entity/dataset/${encodeURIComponent(syntheticUrn(i))}`, {
+            method: "DELETE",
+            headers: authHeaders(),
+            signal: AbortSignal.timeout(30_000),
+          });
+          if (res.ok) deleted++;
+        } catch {
+          // Counted as not-deleted. The caller prints deleted/total, so a
+          // partial teardown is visible rather than silently assumed complete.
+        }
+        if (i % 500 === 0) process.stdout.write(".");
+      }
+    })
+  );
   return deleted;
 }
 
@@ -162,21 +194,27 @@ async function datasetCount(): Promise<number> {
   return res.data?.searchAcrossEntities?.total ?? -1;
 }
 
-/** Wait for search to reflect what was just written, or the count lies. */
-async function settle(expected: number, timeoutMs = 180_000): Promise<number> {
+/**
+ * Give the search index a bounded chance to catch up, then carry on regardless.
+ *
+ * Not a correctness gate — the sweep never searches, so it does not need one —
+ * but a fully-lagged index would make the `searchVisible` column meaningless, and
+ * blocking until it caught up would make the run take hours for a number nothing
+ * depends on.
+ */
+async function settle(expected: number, timeoutMs = 60_000): Promise<number> {
   const deadline = Date.now() + timeoutMs;
-  let last = -1;
-  while (Date.now() < deadline) {
-    last = await datasetCount();
-    if (last >= expected) return last;
+  let last = await datasetCount();
+  while (Date.now() < deadline && last < expected) {
     await new Promise((r) => setTimeout(r, 3_000));
+    last = await datasetCount();
   }
   return last;
 }
 
 /* ── Measuring ────────────────────────────────────────────────────────── */
 
-async function measure(): Promise<Measurement> {
+async function measure(catalogDatasets: number): Promise<Measurement> {
   const runbooks = listHandoffs();
   const entities = new Set(runbooks.flatMap((h) => h.steps.map((s) => s.urn).filter(Boolean)));
 
@@ -188,7 +226,8 @@ async function measure(): Promise<Measurement> {
   const catalogReads = Object.values(toolCallCounts).reduce((a, b) => a + b, 0);
 
   return {
-    catalogDatasets: await datasetCount(),
+    catalogDatasets,
+    searchVisible: await datasetCount(),
     runbooks: result.checked,
     entitiesReferenced: entities.size,
     sweepMs,
@@ -258,9 +297,12 @@ function scorecard(result: ScaleResult): string {
     "## Method",
     "",
     `Synthetic datasets are written to GMS's OpenAPI batch endpoint under a dedicated`,
-    "`instaboard_scale` namespace, four columns each. After each ingest the run waits for",
-    "DataHub's search index to report the new total, because measuring against a catalog that",
-    "has not finished indexing measures the indexer. The sweep is then the real",
+    "`instaboard_scale` namespace, four columns each. The catalog-size column counts what was",
+    "written, not what search reports: the sweep reads entities **by URN**, straight out of the",
+    "entity store, so a dataset is readable the moment the write returns. On this hardware",
+    "DataHub's search index absorbs roughly one dataset a second, so a 10,000-dataset catalog is",
+    "fully readable long before it is fully searchable — waiting for the index would have measured",
+    "the indexer. The sweep is then the real",
     "`sweepRunbooks` — the same function `npm run validate` and `npm run prove` call, writing",
     "the same incidents, tags, assertions and structured properties — over the real stored",
     "runbooks. Afterwards every synthetic URN is hard-deleted individually and the teardown is",
@@ -327,13 +369,14 @@ async function main() {
 
   // Baseline first: the catalog as it stands, before anything is added.
   console.log("  measuring the catalog as it is…");
-  measurements.push(await measure());
+  const startingDatasets = await datasetCount();
+  measurements.push(await measure(startingDatasets));
   console.log(
     `    ${measurements[0].catalogDatasets.toLocaleString()} datasets · ` +
       `${(measurements[0].sweepMs / 1000).toFixed(1)}s · ${measurements[0].catalogReads} catalog reads`
   );
 
-  const baselineDatasets = measurements[0].catalogDatasets;
+  const baselineDatasets = startingDatasets;
   let ingested = 0;
   try {
     for (const size of sizes.sort((a, b) => a - b)) {
@@ -343,9 +386,9 @@ async function main() {
       // Total we expect once the index catches up: the catalog we started with,
       // plus every synthetic dataset written so far.
       const settled = await settle(baselineDatasets + ingested);
-      console.log(` indexed (${settled.toLocaleString()} datasets)`);
+      console.log(` written (${settled.toLocaleString()} of them searchable so far)`);
 
-      const m = await measure();
+      const m = await measure(baselineDatasets + ingested);
       measurements.push(m);
       console.log(
         `    ${m.catalogDatasets.toLocaleString()} datasets · ${(m.sweepMs / 1000).toFixed(1)}s · ` +

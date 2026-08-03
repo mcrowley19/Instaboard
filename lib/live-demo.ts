@@ -84,14 +84,31 @@ export async function liveDemoAvailable(): Promise<boolean> {
   return available;
 }
 
-function gmsHost(): string {
-  const raw = process.env.DATAHUB_GMS_URL || "";
-  try {
-    const url = new URL(raw);
-    return `${url.protocol}//${url.host}`;
-  } catch {
-    return raw;
-  }
+/**
+ * Which catalog to name in the response, without handing out a write endpoint.
+ *
+ * Saying where a number came from is the whole point of this receipt, and for a
+ * deployment sitting next to DataHub the GMS host is the honest answer: it is
+ * not reachable from outside the box anyway.
+ *
+ * It stops being the honest answer the moment GMS *is* reachable. A DataHub
+ * quickstart has no authentication, so publishing its URL publishes the ability
+ * to write to it — and a serverless deployment can only work if GMS is exposed.
+ * So when a frontend URL is configured, that is what gets named: it is where a
+ * human goes to verify the claim, it is behind DataHub's own login, and it
+ * identifies the catalog just as precisely.
+ */
+function catalogLabel(): string {
+  const host = (raw: string) => {
+    try {
+      const url = new URL(raw);
+      return `${url.protocol}//${url.host}`;
+    } catch {
+      return raw;
+    }
+  };
+  const frontend = process.env.DATAHUB_FRONTEND_URL;
+  return frontend ? host(frontend) : host(process.env.DATAHUB_GMS_URL || "");
 }
 
 async function datahubVersion(): Promise<string | undefined> {
@@ -208,7 +225,7 @@ export async function revalidateLive(mutationIds: string[]): Promise<LiveDemoRes
     runbook,
     applied,
     live: {
-      gms: gmsHost(),
+      gms: catalogLabel(),
       datahubVersion: await datahubVersion(),
       readAt,
       readMs,

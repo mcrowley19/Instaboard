@@ -210,8 +210,15 @@ export async function mcpStatus(): Promise<{
       toolCount: tools.length,
       ...(demoActive() && !overGraphQL ? { demo: true } : {}),
       ...(state.fallbackDemo ? { fallback: true } : {}),
+      // The frontend URL where one is set, not the GMS endpoint — see
+      // `catalogLabel` in lib/live-demo.ts. A reachable GMS with no auth is a
+      // write endpoint, and this response is public.
       ...(overGraphQL
-        ? { graphql: true, catalog: process.env.DATAHUB_GMS_URL || "http://localhost:8080" }
+        ? {
+            graphql: true,
+            catalog:
+              process.env.DATAHUB_FRONTEND_URL || process.env.DATAHUB_GMS_URL || "http://localhost:8080",
+          }
         : {}),
     };
   } catch (err) {
