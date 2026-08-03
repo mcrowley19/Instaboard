@@ -106,6 +106,20 @@ function normalize(value: unknown): unknown {
  */
 function normalizeReceipts(receipts: unknown): unknown {
   const out = normalize(receipts) as Record<string, unknown>;
+
+  /*
+   * The first check records how DataHub came to be there — "GMS answering at
+   * …" on a machine where it was already up, "started via `datahub docker
+   * quickstart`" on a runner that had to boot it. Both mean DataHub is up,
+   * which is what the check asserts and what has to reproduce. Comparing the
+   * sentence instead compares the environment, and would make it impossible for
+   * a CI run and a laptop run to ever agree.
+   */
+  const checks = out.checks as { phase?: string; what?: string; detail?: string }[] | undefined;
+  for (const check of checks ?? []) {
+    if (check.phase === "datahub" && check.what === "DataHub is up") check.detail = "<how DataHub got here>";
+  }
+
   const readBack = out.tagReadBack as Record<string, Record<string, unknown>> | undefined;
   if (!readBack) return out;
 
