@@ -62,14 +62,29 @@ const VOLATILE_KEYS = new Set(["startedAt", "finishedAt", "gms"]);
  */
 const MASKS: [RegExp, string][] = [
   [/\b\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})\b/g, "<timestamp>"],
+  // Bare dates too. Structured property values carry a human-readable
+  // "(checked 2026-08-02)", so without this the build fails every time the day
+  // rolls over, which trains everyone to ignore it.
+  [/\b\d{4}-\d{2}-\d{2}\b/g, "<date>"],
   [/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "<uuid>"],
   [/urn:li:assertion:instaboard-[0-9a-f]+/g, "urn:li:assertion:instaboard-<hash>"],
 ];
+
+/** The tags this tool applies. Everything else on a dataset belongs to someone else. */
+const OWN_TAGS = ["urn:li:tag:StaleRunbook", "urn:li:tag:UnvalidatedRunbookStep"];
 
 function mask(value: string): string {
   return MASKS.reduce((acc, [pattern, replacement]) => acc.replace(pattern, replacement), value);
 }
 
+/**
+ * `tagReadBack` records every tag DataHub returned on a dataset, which is the
+ * right thing to record and the wrong thing to compare verbatim. Whether some
+ * other tag exists on `mrr_monthly` is a fact about the catalog the run happened
+ * to use, not about whether the loop still works, and DataHub does not promise
+ * an order either. What has to reproduce is our own tags: on while the runbook
+ * is broken, off once it is repaired. That is what gets compared.
+ */
 function normalize(value: unknown): unknown {
   if (typeof value === "string") return mask(value);
   if (Array.isArray(value)) return value.map(normalize);
@@ -82,6 +97,30 @@ function normalize(value: unknown): unknown {
     return out;
   }
   return value;
+}
+
+/**
+ * `tagReadBack` is `{ tagsWhileBroken: { <datasetUrn>: [tagUrn, …] }, … }`, so
+ * the rewrite has to reach two levels down rather than ride along on the generic
+ * walk.
+ */
+function normalizeReceipts(receipts: unknown): unknown {
+  const out = normalize(receipts) as Record<string, unknown>;
+  const readBack = out.tagReadBack as Record<string, Record<string, unknown>> | undefined;
+  if (!readBack) return out;
+
+  for (const phase of Object.keys(readBack)) {
+    const byDataset = readBack[phase];
+    if (!byDataset || typeof byDataset !== "object") continue;
+    for (const datasetUrn of Object.keys(byDataset)) {
+      const urns = byDataset[datasetUrn];
+      if (!Array.isArray(urns)) continue;
+      byDataset[datasetUrn] = urns
+        .filter((urn): urn is string => typeof urn === "string" && OWN_TAGS.includes(urn))
+        .sort();
+    }
+  }
+  return out;
 }
 
 /* ── Diffing ──────────────────────────────────────────────────────────── */
@@ -164,7 +203,7 @@ try {
   process.exit(2);
 }
 
-const differences = diff(normalize(readBaseline()), normalize(fresh));
+const differences = diff(normalizeReceipts(readBaseline()), normalizeReceipts(fresh));
 
 const freshSummary = (fresh as { summary?: { passed?: number; total?: number } }).summary;
 const passed = freshSummary?.passed ?? 0;

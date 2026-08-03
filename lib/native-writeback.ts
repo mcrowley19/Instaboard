@@ -86,18 +86,53 @@ const TAG_DEFINITIONS = {
   },
 } as const;
 
+const TAG_READY_TIMEOUT_MS = 30_000;
+
+/**
+ * Whether the tag is really there, which is not the same as whether the URN
+ * resolves. A tag that has been deleted still comes back from `tag(urn:)` with
+ * its URN and `properties: null`, and applying that one fails validation exactly
+ * as a tag that never existed does — so the name is what gets asked for.
+ */
+async function tagExists(tagUrn: string): Promise<boolean> {
+  const existing = await datahubGraphQL<{ tag: { urn: string; properties: { name: string } | null } | null }>(
+    `query($urn: String!) { tag(urn: $urn) { urn properties { name } } }`,
+    { urn: tagUrn }
+  );
+  return Boolean(existing.data?.tag?.properties?.name);
+}
+
 /**
  * Ensure a tag exists before applying it. DataHub will happily attach a tag URN
  * that has no tag entity behind it, which renders in the UI as a bare URN with no
  * description, which is no use to whoever finds it.
+ *
+ * Creating it is not the same as being able to use it. `createTag` returns as
+ * soon as the write is accepted, but the validator behind `add_tags` rejects a
+ * label whose entity it cannot see yet — "Failed to validate label with urn
+ * urn:li:tag:StaleRunbook. Urn does not exist." — so on a catalog that has never
+ * carried this tag, creating it and immediately applying it loses the race and
+ * every tag in the run silently fails to land.
+ *
+ * That is invisible on a catalog anyone has run this against before, because
+ * there the tag already exists and the query above short-circuits. It shows up
+ * on the first run against a fresh DataHub and nowhere else, which is where CI
+ * found it. So: read it back, as everything else here does, rather than trusting
+ * the write.
  */
 async function ensureTag(tagUrn: keyof typeof TAG_DEFINITIONS): Promise<void> {
-  const existing = await datahubGraphQL<{ tag: { urn: string } | null }>(
-    `query($urn: String!) { tag(urn: $urn) { urn } }`,
-    { urn: tagUrn }
-  );
-  if (existing.data?.tag?.urn) return;
+  if (await tagExists(tagUrn)) return;
+
   await datahubGraphQL(CREATE_TAG, { input: TAG_DEFINITIONS[tagUrn] });
+
+  const deadline = Date.now() + TAG_READY_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    if (await tagExists(tagUrn)) return;
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  // Fall through rather than throw: the caller's write will fail on its own and
+  // be reported as a failed check, which is more useful than an exception that
+  // takes the rest of the sweep down with it.
 }
 
 /* ── Incidents ────────────────────────────────────────────────────────── */

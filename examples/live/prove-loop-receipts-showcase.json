@@ -1,6 +1,6 @@
 {
-  "startedAt": "2026-08-02T23:56:19.707Z",
-  "finishedAt": "2026-08-02T23:58:09.652Z",
+  "startedAt": "2026-08-03T10:03:34.420Z",
+  "finishedAt": "2026-08-03T10:06:15.534Z",
   "gms": "http://localhost:8080",
   "catalog": "showcase-ecommerce, the demo datapack DataHub publishes (1,065 entities)",
   "catalogProfile": "showcase",
@@ -135,7 +135,7 @@
       "phase": "write-back",
       "what": "a drift note is in the catalog",
       "passed": true,
-      "detail": "urn:li:document:shared-aa96e907-e20c-4f77-9f20-9b73db133cf6"
+      "detail": "urn:li:document:shared-0fd55877-4889-4176-a89e-fa29afb46351"
     },
     {
       "phase": "write-back",
@@ -450,7 +450,7 @@
           "remedy": "Current owners: Data Platform Team, Ian Chen."
         }
       ],
-      "documentUrn": "urn:li:document:shared-aa96e907-e20c-4f77-9f20-9b73db133cf6",
+      "documentUrn": "urn:li:document:shared-0fd55877-4889-4176-a89e-fa29afb46351",
       "assertions": [
         {
           "urn": "urn:li:assertion:instaboard-0a02391ab278999326f7",
@@ -471,21 +471,21 @@
       "structuredProperties": [
         {
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
-          "status": "prove-weekly-order-revenue: stale (checked 2026-08-02)",
+          "status": "prove-weekly-order-revenue: stale (checked 2026-08-03)",
           "driftValues": 1,
           "pins": 9,
           "coverage": "prove-weekly-order-revenue: 0/2 steps validated, catalog gaps: health"
         },
         {
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
-          "status": "prove-weekly-order-revenue: stale (checked 2026-08-02)",
+          "status": "prove-weekly-order-revenue: stale (checked 2026-08-03)",
           "driftValues": 1,
           "pins": 6,
           "coverage": "prove-weekly-order-revenue: 0/1 steps validated, catalog gaps: ownership, health"
         },
         {
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
-          "status": "prove-weekly-order-revenue: validated (checked 2026-08-02)",
+          "status": "prove-weekly-order-revenue: validated (checked 2026-08-03)",
           "driftValues": 1,
           "pins": 4,
           "coverage": "prove-weekly-order-revenue: 0/1 steps validated, catalog gaps: health"
@@ -493,7 +493,7 @@
       ],
       "incidents": [
         {
-          "urn": "urn:li:incident:a3fb68d7-96ac-4244-a257-fa0f28523774",
+          "urn": "urn:li:incident:de52ebe5-e091-4608-89f1-36115bf03615",
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
           "reused": false,
           "assignees": [
@@ -502,7 +502,7 @@
           ]
         },
         {
-          "urn": "urn:li:incident:7a5eb27f-484e-4081-a06a-bb8dc6e4090c",
+          "urn": "urn:li:incident:fd675ac1-82a0-4c09-8c1a-ed5b9196e185",
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
           "reused": false,
           "assignees": []
@@ -653,15 +653,15 @@
         ],
         "kept": [],
         "errors": [],
-        "at": "2026-08-02T23:58:03.466Z"
+        "at": "2026-08-03T10:06:08.041Z"
       },
       "resolvedIncidents": [
         {
-          "urn": "urn:li:incident:a3fb68d7-96ac-4244-a257-fa0f28523774",
+          "urn": "urn:li:incident:de52ebe5-e091-4608-89f1-36115bf03615",
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
         },
         {
-          "urn": "urn:li:incident:7a5eb27f-484e-4081-a06a-bb8dc6e4090c",
+          "urn": "urn:li:incident:fd675ac1-82a0-4c09-8c1a-ed5b9196e185",
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)"
         }
       ]
@@ -672,25 +672,32 @@
       "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)": [
         "urn:li:tag:b2fd91.__default_large_table",
         "urn:li:tag:b2fd91.__default_high_queries",
+        "urn:li:tag:UnvalidatedRunbookStep",
         "urn:li:tag:StaleRunbook"
       ],
       "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)": [
         "urn:li:tag:b2fd91.__default_large_table",
+        "urn:li:tag:UnvalidatedRunbookStep",
         "urn:li:tag:StaleRunbook"
       ],
       "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)": [
+        "urn:li:tag:UnvalidatedRunbookStep",
         "urn:li:tag:StaleRunbook"
       ]
     },
     "tagsAfterRestore": {
       "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)": [
         "urn:li:tag:b2fd91.__default_large_table",
-        "urn:li:tag:b2fd91.__default_high_queries"
+        "urn:li:tag:b2fd91.__default_high_queries",
+        "urn:li:tag:UnvalidatedRunbookStep"
       ],
       "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)": [
-        "urn:li:tag:b2fd91.__default_large_table"
+        "urn:li:tag:b2fd91.__default_large_table",
+        "urn:li:tag:UnvalidatedRunbookStep"
       ],
-      "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)": []
+      "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)": [
+        "urn:li:tag:UnvalidatedRunbookStep"
+      ]
     }
   }
 }

@@ -56,7 +56,12 @@ beforeEach(() => {
     const reply = (data: unknown) => new Response(JSON.stringify({ data }), { status: 200 });
 
     if (body.query.includes("__typename")) return reply({ __typename: "Query" });
-    if (body.query.trim().startsWith("query($urn: String!) { tag")) return reply({ tag: { urn: "t" } });
+    // A real tag read carries its properties. `ensureTag` asks for the name
+    // rather than the URN, because a deleted tag still returns its URN with
+    // `properties: null` and applying that one fails exactly as a tag that never
+    // existed does.
+    if (body.query.trim().startsWith("query($urn: String!) { tag"))
+      return reply({ tag: { urn: "t", properties: { name: "Stale Runbook" } } });
     if (body.query.includes("createTag")) return reply({ createTag: "t" });
     if (body.query.includes("incidents(state: ACTIVE")) {
       return reply({ dataset: { incidents: { incidents: openIncidents } } });
@@ -195,6 +200,37 @@ describe("writeBackNative", () => {
     const input = named("updateIncident")[0].variables.input as { assigneeUrns: string[] };
     expect(input.assigneeUrns).toEqual(["urn:li:corpuser:sarah.chen"]);
   });
+
+  /*
+   * Found by CI on the first run against a DataHub that had never carried this
+   * tag, where the whole write-back scored 28/39 while a laptop that had run it
+   * before scored 39/39. `createTag` returns as soon as the write is accepted,
+   * and the validator behind `add_tags` rejects a label whose entity it cannot
+   * see yet — so the tag has to be read back before it is applied, exactly as
+   * every other write here is.
+   */
+  it("waits for a tag it just created to be readable before applying it", async () => {
+    let tagReadCount = 0;
+    const realFetch = globalThis.fetch;
+    vi.stubGlobal("fetch", async (url: string, init: { body: string }) => {
+      const body = JSON.parse(init.body) as Call;
+      if (body.query.trim().startsWith("query($urn: String!) { tag")) {
+        calls.push(body);
+        tagReadCount += 1;
+        // Absent, then created but not yet visible, then readable.
+        const tag = tagReadCount >= 3 ? { urn: "t", properties: { name: "Stale Runbook" } } : null;
+        return new Response(JSON.stringify({ data: { tag } }), { status: 200 });
+      }
+      return realFetch(url, init as RequestInit);
+    });
+
+    await writeBackNative(handoff, report, "urn:li:document:note", live);
+
+    // Created once, and not applied until a read came back with the tag really there.
+    expect(named("createTag")).toHaveLength(1);
+    expect(tagReadCount).toBeGreaterThanOrEqual(3);
+    expect(mcpCalls.some((c) => c.name === "add_tags")).toBe(true);
+  }, 20_000);
 
   it("raises nothing for a runbook that only warns", async () => {
     const receipt = await writeBackNative(handoff, { ...report, severity: "warning", findings: [] }, undefined, live);

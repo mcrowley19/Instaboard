@@ -306,6 +306,65 @@ async function ensureDataHub(): Promise<boolean> {
 
 /* ── Phase 2: the sample catalog ──────────────────────────────────────── */
 
+/**
+ * Wait until the catalog stops moving before recording a baseline against it.
+ *
+ * A fixed sleep after ingest is enough for the datasets to resolve, and not
+ * enough for everything hanging off them. Assertion *results* arrive through
+ * Kafka after the assertions themselves, so on a cold machine the capture can
+ * land in the window where `payment_health_daily` has its assertions but not
+ * their outcomes. The runbook then records "0 failing assertions" as the state
+ * of the world, the results turn up moments later, and the very next validation
+ * reports drift that nobody caused — which is exactly what CI saw on its first
+ * fresh run, and what a warm laptop never sees because the results settled days
+ * ago.
+ *
+ * Rather than raise the sleep and hope, read the entities the runbook actually
+ * depends on until two consecutive reads agree. The fingerprint is the same one
+ * every claim is pinned to, so "the catalog has stopped moving" is being decided
+ * by the same function that later decides "the catalog has moved".
+ */
+async function waitForCatalogToSettle(): Promise<void> {
+  const urns = [...new Set(runbook().steps.map((s) => s.urn).filter((u): u is string => Boolean(u)))];
+  if (urns.length === 0) return;
+
+  /*
+   * "Settled" has to mean present *and* unchanging. An entity that has not been
+   * indexed yet reads as `exists: false`, and two consecutive reads of a catalog
+   * that has not arrived agree with each other perfectly — so a naive
+   * fingerprint comparison would declare the emptiest possible catalog stable
+   * and capture a runbook with no claims against it. That is the showcase
+   * failure: 9 claims where a settled catalog gives 19, and a rename that could
+   * not be "caught" because nothing had recorded the column in the first place.
+   */
+  const read = async () => {
+    const snapshots = await Promise.all(urns.map((urn) => snapshotEntity(urn)));
+    return {
+      allPresent: snapshots.every((s) => s.exists),
+      fingerprint: snapshots.map((s) => `${s.urn}@${s.version?.entity ?? "none"}`).join("|"),
+      described: snapshots.filter((s) => s.fields.length > 0).length,
+    };
+  };
+
+  const deadline = Date.now() + 6 * 60_000;
+  let previous = await read();
+  let announced = false;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 10_000));
+    const current = await read();
+    if (current.allPresent && current.fingerprint === previous.fingerprint) return;
+    if (!announced) {
+      say("    the catalog is still settling after ingest; waiting for it to hold still…");
+      announced = true;
+    }
+    previous = current;
+  }
+  say(
+    `    the catalog never held still (${previous.described}/${urns.length} entities carry a schema) — ` +
+      `capturing anyway, and the checks below will say what that cost.`
+  );
+}
+
 async function ingestCatalog(): Promise<boolean> {
   const step = CATALOG.ingest();
   if (!skipSeed && step) {
@@ -331,6 +390,8 @@ async function ingestCatalog(): Promise<boolean> {
     // Search and health are eventually consistent behind GMS.
     await new Promise((r) => setTimeout(r, 15_000));
   }
+
+  await waitForCatalogToSettle();
 
   const found = await datahubGraphQL<{ dataset: { name: string } | null }>(
     `query($urn: String!) { dataset(urn: $urn) { name } }`,
