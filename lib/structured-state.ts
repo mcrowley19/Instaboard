@@ -178,20 +178,35 @@ const REPORT_RESULT = `
   }
 `;
 
-const READ_ASSERTION = `query($urn: String!) { assertion(urn: $urn) { urn } }`;
+const READ_DATASET_ASSERTIONS = `
+  query($urn: String!) {
+    dataset(urn: $urn) { assertions(start: 0, count: 100) { assertions { urn } } }
+  }
+`;
 
 /**
- * Wait for an assertion that was just upserted to become readable.
+ * Wait for a just-upserted assertion to be attached to its dataset.
  *
- * Cheaper and more honest than reporting into the void and retrying on the
- * error: ask whether the thing exists before writing against it.
+ * The obvious readiness check — does `assertion(urn:)` resolve — is the wrong
+ * one, and passing it is exactly how this stayed broken through a fix. GMS
+ * answers for the assertion entity almost immediately; what lags is the
+ * relationship to the dataset, and the error says so in as many words: "does not
+ * exist **or is not associated with any entity**". So ask the question the
+ * failure is actually about — does the dataset list this assertion yet.
  */
-async function waitForAssertion(urn: string, timeoutMs = 60_000): Promise<boolean> {
+async function waitForAssertionOnDataset(
+  assertionUrn: string,
+  datasetUrn: string,
+  timeoutMs = 90_000
+): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const res = await datahubGraphQL<{ assertion: { urn: string } | null }>(READ_ASSERTION, { urn });
-    if (res.data?.assertion?.urn) return true;
-    await new Promise((r) => setTimeout(r, 2_000));
+    const res = await datahubGraphQL<{
+      dataset: { assertions: { assertions: { urn: string }[] } | null } | null;
+    }>(READ_DATASET_ASSERTIONS, { urn: datasetUrn });
+    const attached = res.data?.dataset?.assertions?.assertions ?? [];
+    if (attached.some((a) => a.urn === assertionUrn)) return true;
+    await new Promise((r) => setTimeout(r, 3_000));
   }
   return false;
 }
@@ -214,10 +229,11 @@ async function waitForAssertion(urn: string, timeoutMs = 60_000): Promise<boolea
  */
 async function reportResultWithRetry(
   urn: string,
+  datasetUrn: string,
   result: Record<string, unknown>,
   attempts = 6
 ): Promise<{ ok: boolean; error?: string }> {
-  await waitForAssertion(urn);
+  await waitForAssertionOnDataset(urn, datasetUrn);
 
   let last = "no attempt made";
   for (let i = 0; i < attempts; i++) {
@@ -363,7 +379,7 @@ export async function writeStructuredState(handoff: Handoff, report: DecayReport
         );
       } else {
         const type = stale ? "FAILURE" : "SUCCESS";
-        const reported = await reportResultWithRetry(upserted.data.upsertCustomAssertion.urn, {
+        const reported = await reportResultWithRetry(upserted.data.upsertCustomAssertion.urn, datasetUrn, {
           type,
           timestampMillis: Date.parse(report.checkedAt),
           properties: resultProperties(handoff, report, datasetUrn, findings),

@@ -55,10 +55,13 @@ beforeEach(() => {
     if (body.query.includes("upsertCustomAssertion")) {
       return reply({ upsertCustomAssertion: { urn: (body.variables.urn as string) ?? "urn:li:assertion:x" } });
     }
-    // A result is only reported once the assertion reads back, so the fake
-    // catalog has to be able to answer for one it was just asked to create.
-    if (body.query.includes("assertion(urn:")) {
-      return reply({ assertion: { urn: (body.variables.urn as string) ?? "urn:li:assertion:x" } });
+    // A result is only reported once the dataset lists the assertion, so the
+    // fake catalog has to be able to answer for one it was just asked to
+    // create. It reports every assertion as attached.
+    if (body.query.includes("assertions(start:")) {
+      return reply({
+        dataset: { assertions: { assertions: [{ urn: assertionUrnFor("monthly-close", URN) }] } },
+      });
     }
     if (body.query.includes("reportAssertionResult")) return reply({ reportAssertionResult: true });
     if (body.query.includes("upsertStructuredProperties")) return reply({ upsertStructuredProperties: { properties: [] } });
@@ -199,17 +202,18 @@ describe("writeStructuredState", () => {
    * succeeded. Invisible on a machine that has run this before, because the URN
    * is a hash of (runbook, dataset) and the assertion is already there.
    */
-  it("waits for a newly created assertion to be readable before reporting against it", async () => {
+  it("waits for a new assertion to be attached to its dataset before reporting against it", async () => {
     let reads = 0;
     const realFetch = globalThis.fetch;
     vi.stubGlobal("fetch", async (url: string, init: { body: string }) => {
       const body = JSON.parse(init.body) as Call;
-      if (body.query.includes("assertion(urn:")) {
+      if (body.query.includes("assertions(start:")) {
         calls.push(body);
         reads += 1;
-        // Not there, not there, then there — the window CI hit.
-        const assertion = reads >= 3 ? { urn: (body.variables.urn as string) ?? "urn:li:assertion:x" } : null;
-        return new Response(JSON.stringify({ data: { assertion } }), { status: 200 });
+        // The window CI hit: the assertion entity exists immediately, but the
+        // dataset does not list it yet, and that is what the run event needs.
+        const assertions = reads >= 3 ? [{ urn: assertionUrnFor("monthly-close", URN) }] : [];
+        return new Response(JSON.stringify({ data: { dataset: { assertions: { assertions } } } }), { status: 200 });
       }
       return realFetch(url, init as RequestInit);
     });
