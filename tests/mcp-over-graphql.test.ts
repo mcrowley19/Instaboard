@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { callToolOverGraphQL, resetEntityReadCache } from "../lib/mcp-over-graphql";
+import { callToolOverGraphQL } from "../lib/mcp-over-graphql";
 
 /**
  * The GraphQL shim exists so the loop can run where a stdio subprocess cannot —
@@ -28,10 +28,6 @@ const OTHER = "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr
 beforeEach(() => {
   sent = [];
   response = {};
-  // Entity reads are reused for a couple of seconds to collapse the duplicate
-  // get_entities/get_dataset_health pair. Left alone, that carries one case's
-  // fixture into the next and the suite passes on stale answers.
-  resetEntityReadCache();
 });
 
 describe("tools it does not implement", () => {
