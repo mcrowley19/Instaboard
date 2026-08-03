@@ -88,6 +88,18 @@ What it would take: a provider that can complete a 3–10 call tool loop without
 dropping responses. The cases, the catalog dump, the prompt and the harness are
 all here and frozen, so scoring it is one command for anyone who has one.
 
+**Since then, two of the three obstacles are gone.** The dropped responses were
+being treated as terminal; they are now retried, along with the empty-message
+variant of the same failure, so a multi-call arm is no longer punished for being
+the one that makes multiple calls (`lib/providers.ts`). And a per-day rate limit,
+which arrives as the same 429 as a per-minute one, was being retried until every
+remaining case recorded an error — producing a scorecard of near-zeros that reads
+as a model failing rather than a quota resetting. That is now detected as
+terminal and the run stops with its cache intact.
+
+What is left is the third: a request budget large enough to finish, on a catalog
+holding showcase and nothing else. See *Running it* below.
+
 Two things the attempt did establish, which are worth having:
 
 - **The catalog has to be showcase-only.** Run against a DataHub also holding
@@ -107,8 +119,35 @@ DATAHUB_GMS_URL=http://localhost:8080 datahub datapack load showcase-ecommerce
 
 npx tsx evals/holdout/dump-catalog.ts        # regenerate the dump (optional)
 npx tsx evals/holdout/author.ts --validate-only
-npm run eval -- --live --suite=holdout
+npm run eval -- --live --runs=3 --suite=holdout
 ```
+
+### The catalog has to be showcase-only, and that is not a flag
+
+This is the practical obstacle, and it is worth knowing before you start rather
+than after a wasted run. The questions were written from a showcase-only dump, so
+with Northbeam also loaded the agent answers them from Northbeam — "there is no
+dataset named `order_details`" — and the score measures the collision instead of
+the catalog.
+
+The two packs **share platforms**: Northbeam seeds `snowflake` and `postgres`,
+and showcase uses both as well. So there is no platform filter, domain or
+DataHub View that separates them for an agent that searches the whole catalog.
+Isolating them means removing Northbeam's datasets by URN and putting them back
+afterwards with `npm run seed`.
+
+That matters if the same instance is doing anything else. It is the same catalog
+the hosted write-back demo reads — `demoRunbook()` names three Northbeam
+snowflake datasets — so a holdout run and a live demo cannot share one DataHub.
+Either run the holdout on a second instance, or accept that the demo is down for
+the length of the run.
+
+**Budget it in requests, not minutes.** 18 cases × 3 arms is 54 agent runs and
+several hundred model calls; on a free tier metered per day that is most of a
+day's allowance for a single pass, and `--runs=3` triples it. The harness caches
+per (model, catalog, arm, case, run) and stops cleanly on a daily cap rather than
+burning the remaining cases on retries, so a capped run resumes the next day
+instead of restarting.
 
 `npm run eval:verify` re-scores the committed answers for this suite along with
 the other two, so the published number stays reproducible from raw answers
