@@ -60,7 +60,8 @@ calls a model.
 
 | Claim | Proof | Re-derive it |
 | --- | --- | --- |
-| 20-case onboarding benchmark, three arms, scored deterministically with no LLM judge. Northbeam: 19/20 grounded vs 9/20 warehouse-schema-only vs 5/20 no tools. | [`evals/results/scorecard.md`](evals/results/scorecard.md) · raw answers in `evals/results/latest.json` | **offline** `npm run eval:verify` |
+| 20-case onboarding benchmark, three arms, scored deterministically with no LLM judge. Northbeam, **live DataHub, three passes per case**: 18.0 ± 1.7 grounded vs 8.7 ± 0.6 warehouse-schema-only vs 3.0 ± 1.0 no tools. | [`evals/results/scorecard.md`](evals/results/scorecard.md) · raw answers for all nine passes in `evals/results/latest.json` | **offline** `npm run eval:verify` |
+| The arms are separated, not merely different on average: grounded's worst pass (16/20) beat the schema arm's best (9/20) and the control's best (4/20). Thirteen of sixty (case × arm) combinations were not unanimous and every one is named. | [`evals/results/scorecard.md`](evals/results/scorecard.md) § *Is the gap bigger than the noise?* | **offline** `npm run eval:verify` |
 | The same on DataHub's own catalog: 20/20 vs 4/20 vs 3/20. | [`evals/results/showcase-scorecard.md`](evals/results/showcase-scorecard.md) · `showcase-latest.json` | **offline** `npm run eval:verify` |
 | The published scores are reproducible from the committed raw answers, not re-run and re-reported. | CI re-scores both suites on every push | **offline** `npm run eval:verify` |
 | Full transcripts for the hallucination and health-trap cases, all arms side by side. | [`evals/results/transcripts/`](evals/results/transcripts/) | **live** `npm run eval:transcripts` |
@@ -101,5 +102,7 @@ calls a model.
 
 The README's [*What we haven't proven*](README.md#what-we-havent-proven) section
 is part of this document's job, not separate from it. The short version: one
-machine, one DataHub version, one operator, one model, one run per benchmark case,
-no semantic-drift detection, and no permissions model on the write-back.
+machine, one DataHub version, one operator, **one model** (three passes per case
+on it, but still one model — the provider's free-tier daily cap stopped the
+second), the `showcase` suite still at one pass, no semantic-drift detection, and
+no permissions model on the write-back.

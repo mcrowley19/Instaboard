@@ -391,23 +391,35 @@ So a column called `date`, `plan` or `status` can match a sentence that is not
 about it, and a column reached through `SELECT *` or an alias is invisible. The
 first produces a spurious claim; the second produces a missing one.
 
-**Rename detection is string similarity, and the weakest rule we ship.** It scores
-candidates at `0.75 × token overlap + 0.25 × edit distance`, treats "every content
-word survived" as a strong signal, proposes above 0.55, and refuses when the top
-two are within 0.1 of each other. A coincidentally similar name would be proposed
-just as readily as a real rename, and a genuine rename to something unrelated
-(`net_amount_usd` → `settled_value`) will not be found at all — it lands in the
-"needs a person" list, which is the right failure but still a miss. That case is
-planted in the benchmark on every run so the number reflects it. The human
-reviewing the diff is the actual check here, not the score.
+**Rename detection is two weak signals, and it is still the weakest rule we
+ship.** First the names: `0.75 × token overlap + 0.25 × edit distance`, treating
+"every content word survived" as strong, proposing above 0.55, refusing when the
+top two are within 0.1 of each other. A coincidentally similar name would be
+proposed just as readily as a real rename.
 
-This rule has been wrong twice in ways we only found by running it against
+When the names say nothing, the shape of the change is asked instead: exactly one
+column left, exactly one arrived, and it arrived at the index the old one
+occupied. `ALTER TABLE RENAME COLUMN` preserves ordinal position and `ADD COLUMN`
+appends, so a column appearing *in place of* another is evidence about the
+operation performed rather than about what anyone named the result. Two
+departures, two arrivals, an append, or a drop with no arrival all decline. It is
+`medium` confidence always, and the rationale says what it does not know: which
+column replaced it, not that the two mean the same thing. A drop and an unrelated
+addition that happened to land in the same slot would fool it.
+
+The human reviewing the diff is the actual check here, not the score.
+
+This rule has been wrong three times, every one found by running it against
 something we didn't hand-pick. The original weighting scored
 `cost_of_delivery` → `delivery_cost_usd` at 0.49 and missed it on DataHub's own
 datapack, because edit distance punishes reordering far harder than a reader
 would. Then the drift benchmark caught `plan` → `plan_v2` at 0.52: one surviving
 token out of two is a 0.5 overlap however obvious the pair looks, so the rule was
-declining on every short column name. Both are fixed. Assume there are more.
+declining on every short column name. Then the benchmark's adversarial plant,
+`product_status` → `settled_value`, which no name-based matcher can solve and
+which we had written off as unsolvable — it was unsolvable *by string matching*,
+and we had confused the two. All three are fixed and the adversarial case is
+still planted on every run. Assume there are more.
 
 **Drafted runbooks are a starting point, not knowledge.** Everything a draft
 contains is derived from catalog evidence, and the reason a step exists is not in
@@ -420,26 +432,55 @@ The labelling is deliberate and load-bearing.
 people whose display names share a substring could be confused. We have not hit it
 on a real catalog; a large org with common surnames would.
 
-**Benchmark numbers are one model, one run per case.** All of it is
-`nvidia/nemotron-3-ultra-550b-a55b:free`. We have not measured variance across
-re-runs or across models, and the scores would move with either. Cases are cached
-so a run can resume, which means a published score may have been assembled across
-sessions — always on that one model, never mixed. Six showcase cases hit free-tier
-HTTP failures on the first pass and were retried until they returned an answer;
-that is retrying transport, not retrying until we liked the result, but it is a
-retry policy and you should know it exists.
+**Benchmark numbers are one model.** All of it is
+`nvidia/nemotron-3-ultra-550b-a55b:free`. The `northbeam` suite is now three
+independent passes against a live catalog, so variance *across re-runs* is
+measured and published — mean, standard deviation, full range, and every case
+whose outcome was not unanimous. Variance **across models** is not: the second
+model in a three-model run hit the provider's 1,000/day free-model cap partway
+through, and a capped run produces near-zeros that look like a model failing.
+Rather than publish that, the run was stopped and the cap is now detected as
+terminal instead of retried. The cache holds every completed pass, so
+`--models=…` resumes after the reset. `showcase` is still one pass.
+
+A frontier model is untested and unaffordable here, and it is the most likely
+thing to compress this gap: a stronger model answers more of these from
+parametric knowledge alone, which lifts the control arm. Read the delta as
+measured on this model, not as a constant.
+
+Cases are cached so a run can resume, which means a published score may have been
+assembled across sessions — always on one model and one catalog, never mixed;
+the cache key carries model, catalog mode, arm, case and run index precisely so
+that cannot happen silently. It could before: the key was
+`(model, arm, case)`, so a `--live` run and a fixture run of the same suite
+shared entries. Six showcase cases hit free-tier HTTP failures on the first pass
+and were retried until they returned an answer; that is retrying transport, not
+retrying until we liked the result, but it is a retry policy and you should know
+it exists.
 
 **Scale is untested.** The largest catalog we have run against is roughly 1,150
 entities. The sweep is serial per runbook and does one entity read per URN. We
 make no claim about a catalog with 100,000 entities, and the structured-property
 merge reads before it writes, which would get expensive.
 
-**DataHub is not the source of truth for a runbook's text — it can't be.** The
-body is written with `save_document` and cannot be read back: `get_entities` on a
-document URN returns the URN and nothing else. So the runbook lives in local
-storage and DataHub holds the shared copy, and the two can diverge with nothing to
-detect it. Every claim, pin and verdict comes from the catalog; the prose does not.
-[Filed, with the probe.](submission/oss/issues/07-documents-cannot-be-read-back-by-urn.md)
+**DataHub was not the source of truth for a runbook's text — now it can be.**
+`get_entities` on a document URN returns the URN and nothing else, so the body
+lived in local storage and DataHub held a copy nobody could verify. That turned
+out not to be a DataHub limitation at all: GMS returns
+`Document.info.contents.text` in full over GraphQL, on the same server, in the
+same query. The MCP server strips the entire `... on Document` selection because
+it is `#[NEWER_GMS]`-tagged and those fields are enabled only for DataHub Cloud.
+So documents are read back over GraphQL, the way incidents already were, and
+every document write now carries a round-trip receipt — written digest, read
+digest, and whether they agree. A body DataHub will not serve is recorded as a
+failed read, never as an empty document.
+[The original probe](submission/oss/issues/07-documents-cannot-be-read-back-by-urn.md)
+and [the upstream fix](https://github.com/acryldata/mcp-server-datahub/pull/178),
+with a regression test.
+
+What is still true: the local copy remains the working store, and the receipt is
+what tells you the two agree rather than an architecture that makes divergence
+impossible.
 
 **The write-back has no permissions model.** It uses whatever token you configure.
 There is no RBAC awareness, no notion of who triggered a sweep, and no guard
