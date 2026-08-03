@@ -458,10 +458,38 @@ and were retried until they returned an answer; that is retrying transport, not
 retrying until we liked the result, but it is a retry policy and you should know
 it exists.
 
-**Scale is untested.** The largest catalog we have run against is roughly 1,150
-entities. The sweep is serial per runbook and does one entity read per URN. We
-make no claim about a catalog with 100,000 entities, and the structured-property
-merge reads before it writes, which would get expensive.
+**Scale is measured on one axis and not the other.** `npm run bench:scale` grows
+a real DataHub to N datasets, sweeps it, and tears the synthetics down again. Run
+against 91, 1,091 and 5,091 datasets — a 56× range — the sweep made **the same
+number of catalog reads at every size** (25 over GraphQL, 27 over MCP; the two
+transports ask one health question differently) and spent **zero LLM tokens**,
+which the benchmark earns rather than asserts by refusing to start if
+`LLM_API_KEY` is set. That is the load-bearing claim, and it is exact: the sweep
+reads the entities the runbooks name, so its cost is a property of how many
+runbooks you have, not of how big your catalog is.
+
+**The timing column is not committed, and we would rather say so than publish
+it.** Wall-clock proved noisier than the effect: the identical sweep over the
+identical 91-dataset catalog measured 50.1s and 107.1s minutes apart. Repeats
+brought that under control, but the benchmark's own load did not — after ~40,000
+document writes and deletes in an afternoon, per-entity reads on this laptop
+degraded from ~1s to 12.5s and stayed there across a GMS restart. Numbers taken
+in that state measure a tired OpenSearch, not this tool, so there is no
+`scale-scorecard.md` committed. `npm run bench:scale:verify` reports the absence
+rather than failing. The harness is here; a clean box would take twenty minutes
+to produce the table.
+
+**A 10,000-dataset sweep has not completed.** At that size, `mcp-server-datahub`
+stopped responding entirely — a `get_entities` call that GraphQL answered in 4.5s
+hung past 295s with both the subprocess and DataHub idle at 0% CPU. Nothing in
+this repo bounded that wait, so an unattended nightly sweep would have hung
+indefinitely instead of failing; `callDataHubTool` now carries a 120s deadline
+because of it. Whether the hang is load, catalog size, or something else in that
+client is not established.
+
+**And 100,000 is still a guess.** The sweep is serial per runbook, and the
+structured-property merge reads before it writes, which would get expensive.
+Nothing above extrapolates there.
 
 **DataHub was not the source of truth for a runbook's text — now it can be.**
 `get_entities` on a document URN returns the URN and nothing else, so the body
