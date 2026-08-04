@@ -78,7 +78,7 @@ const keep = args.includes("--keep");
 const verify = args.includes("--verify");
 const maxPerKind = Number(args.find((a) => a.startsWith("--per-kind="))?.split("=")[1] || 6);
 const decoyCount = Number(args.find((a) => a.startsWith("--decoys="))?.split("=")[1] || 6);
-const controlCount = Number(args.find((a) => a.startsWith("--controls="))?.split("=")[1] || 3);
+const controlCount = Number(args.find((a) => a.startsWith("--controls="))?.split("=")[1] || 4);
 
 const OUT = path.join(process.cwd(), "examples", "live", "drift-benchmark.json");
 const SCORECARD = path.join(process.cwd(), "evals", "results", "drift-scorecard.md");
@@ -114,7 +114,7 @@ function matches(drift: PlannedDrift, finding: DecayFinding): boolean {
   if (drift.expect && finding.kind !== drift.expect) return false;
   // Column drift has to name the column, or it is a different finding that
   // happens to be on the same entity.
-  if (drift.kind === "column-dropped" || drift.kind === "column-renamed") {
+  if (drift.kind === "column-dropped" || drift.kind === "column-renamed" || drift.kind === "column-meaning-changed") {
     return finding.detail.includes(drift.subject);
   }
   return true;
@@ -135,8 +135,14 @@ function missReason(drift: PlannedDrift): string {
     case "column-dropped":
     case "column-renamed":
       return (
-        `the step's dependency on \`${drift.subject}\` is detected by word-boundary matching its prose and SQL, ` +
-        `so a column reached through \`SELECT *\` or an alias is invisible to it`
+        `the step's dependency on \`${drift.subject}\` is read from its SQL syntax tree, with a word-boundary ` +
+        `fallback for statements the parser cannot read — a column reached through \`SELECT *\` or an alias is ` +
+        `still invisible`
+      );
+    case "column-meaning-changed":
+      return (
+        `the semantic check compares the measurement terms in \`${drift.subject}\`'s description, so a ` +
+        `redefinition phrased without touching any of them reads as a rewording`
       );
     case "deprecated":
       return "the step's entity was already deprecated at record time, so there was no transition to see";
@@ -241,8 +247,10 @@ async function main() {
 
   /* ── 3. Plant ────────────────────────────────────────────────────────── */
   const plans = [
-    ...planDrifts(runbooks, live, decoyCandidates, { maxPerKind, decoys: decoyCount }),
-    ...planControls(runbooks, live, controlCount),
+    ...(() => {
+      const drifts = planDrifts(runbooks, live, decoyCandidates, { maxPerKind, decoys: decoyCount });
+      return [...drifts, ...planControls(runbooks, live, controlCount, drifts)];
+    })(),
   ];
   const real = plans.filter((p) => !p.decoy);
   const decoys = plans.filter((p) => p.decoy && !p.control);

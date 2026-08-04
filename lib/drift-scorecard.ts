@@ -72,7 +72,7 @@ export function driftTable(r: BenchmarkResult): string {
     ["Planted drifts detected", `**${r.detection.detected}/${r.detection.plantedTotal}** across ${kinds} kinds`],
     [
       "Controls that stayed quiet",
-      `**${r.negatives.controlsQuiet}/${r.negatives.controlsPlanted}** — column added, description edited, owner appended`,
+      `**${r.negatives.controlsQuiet}/${r.negatives.controlsPlanted}** — column added, description edited, column description reworded, owner appended`,
     ],
     ["Decoys that stayed quiet", `**${r.negatives.decoysQuiet}/${r.negatives.decoysPlanted}**`],
     ["Unexplained findings", `**${r.detection.falsePositives}**`],

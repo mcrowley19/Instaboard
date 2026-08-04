@@ -54,6 +54,8 @@ calls a model.
 | The published table matches the run it came from. Editing either one fails the build. | [`tests/drift-scorecard.test.ts`](tests/drift-scorecard.test.ts) | **offline** `npm run bench:verify` · `npm test` |
 | The benchmark contains a case the tool cannot solve, planted deliberately, with its structural reason. | `corrections.misses` and `planted[].hardCase` in the benchmark JSON | **offline** `npm run bench:verify` |
 | Ground truth for column drift is derived independently of the engine's own matcher. | [`lib/drift-injection.ts`](lib/drift-injection.ts) → `groundTruthColumns` · [`tests/drift-injection.test.ts`](tests/drift-injection.test.ts) | **offline** `npm test` |
+| The semantic case is planted and scored: a referenced column's documented meaning changes while the column keeps loading, and a reworded description with the same measurement terms is planted beside it as a control that must stay silent. | `column-meaning-changed` and `column-description-clarified` in [`examples/live/drift-benchmark.json`](examples/live/drift-benchmark.json) · [`tests/semantic-drift.test.ts`](tests/semantic-drift.test.ts) | **live** `npm run bench:drift` · **offline** `npm test` |
+| SQL dependencies come from the query's syntax tree, and a column named in a string literal is not a dependency. | [`lib/sql-refs.ts`](lib/sql-refs.ts) · [`tests/sql-refs.test.ts`](tests/sql-refs.test.ts) | **offline** `npm test` |
 | Every planted change is reversible, and the restore is verified. | `restored` in the benchmark JSON | **live** `npm run bench:drift` |
 
 ## Does the catalog help?

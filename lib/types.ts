@@ -136,6 +136,13 @@ export interface EntitySnapshot {
   name?: string;
   exists: boolean;
   fields: string[];
+  /**
+   * Per-column documentation at capture time, keyed by field path. What the
+   * semantic-drift check compares: a column that still exists but whose
+   * documented meaning moved is the failure mode a schema diff cannot see.
+   * Deliberately outside the fingerprint — see `aspectFacts`.
+   */
+  fieldMeta?: Record<string, { description?: string }>;
   owners: string[];
   /** Owner URNs specifically — needed to assign a DataHub incident to a person. */
   ownerUrns?: string[];
@@ -217,7 +224,8 @@ export type DecayKind =
   | "deprecated"
   | "new-incident"
   | "failing-assertion"
-  | "owner-changed";
+  | "owner-changed"
+  | "semantic-drift";
 
 export interface DecayFinding {
   stepIndex: number;

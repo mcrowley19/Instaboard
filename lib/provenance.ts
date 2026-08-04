@@ -27,6 +27,7 @@
  */
 
 import { createHash } from "node:crypto";
+import { sqlColumnRefs } from "./sql-refs";
 import type {
   AspectName,
   ClaimPin,
@@ -93,14 +94,24 @@ export function pin(snapshot: EntitySnapshot, aspect: AspectName): ClaimPin {
 /**
  * Does this step's prose or SQL actually depend on the given identifier?
  *
- * Word-boundary matched, because a runbook that says "check the amount" must not
- * be read as depending on a column called `amount_usd`, and dropping
- * `net_amount_usd` must not be read as breaking a step that only mentions
- * `net_amount_usd_v2`.
+ * Prose is word-boundary matched, because a runbook that says "check the
+ * amount" must not be read as depending on a column called `amount_usd`, and
+ * dropping `net_amount_usd` must not be read as breaking a step that only
+ * mentions `net_amount_usd_v2`.
+ *
+ * SQL is parsed. A column named inside a string literal or a comment is not a
+ * dependency, and only the syntax tree knows the difference. When the parser
+ * cannot read the statement, or the statement selects `*`, the word match
+ * takes over — over-reporting a dependency is recoverable noise, silently
+ * dropping one is a missed break.
  */
 export function stepReferences(step: Pick<HandoffStep, "instruction" | "why"> & Partial<HandoffStep>, token: string): boolean {
-  const haystack = [step.instruction, step.why, step.sql ?? "", step.tips ?? ""].join(" ");
-  return new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(haystack);
+  const word = new RegExp(`\\b${token.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i");
+  if (word.test([step.instruction, step.why, step.tips ?? ""].join(" "))) return true;
+  if (!step.sql) return false;
+  const refs = sqlColumnRefs(step.sql);
+  if (refs && refs.complete) return refs.columns.includes(token.toLowerCase());
+  return word.test(step.sql);
 }
 
 /** Owner display names the step tells the successor to go and talk to. */

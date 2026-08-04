@@ -1,5 +1,5 @@
 {
-  "at": "2026-08-03T15:23:48.980Z",
+  "at": "2026-08-04T18:56:52.600Z",
   "catalog": "http://localhost:8080",
   "runbooks": [
     {
@@ -29,7 +29,7 @@
     }
   ],
   "method": "Known drifts planted through DataHub's own write APIs across every stored runbook, mixed with decoys (changes to things no runbook reads) and controls (additive changes to things runbooks do read: a column added, a description rewritten, a second owner appointed). Both classes must produce nothing. Ground truth for column drift comes from tokenising each step's SQL, not from the engine's own reference matcher. One rename is planted to a name sharing no tokens with the original, so no name-based matcher can solve it and one that appeared to would be matching noise; it is solvable only from the shape of the change — one column left, one arrived, in the same slot — and is proposed at lower confidence for that reason. Findings that pre-date the injection are excluded from the false-positive count. The engine is told nothing about any of it.",
-  "baselineFindings": 1,
+  "baselineFindings": 0,
   "planted": [
     {
       "id": "decoy:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD):billing_address_line2",
@@ -81,18 +81,18 @@
       "expect": "newly-deprecated"
     },
     {
-      "id": "column-dropped:urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD):revenue_date",
-      "kind": "column-dropped",
+      "id": "column-meaning-changed:urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD):revenue_date",
+      "kind": "column-meaning-changed",
       "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
       "subject": "revenue_date",
       "decoy": false,
-      "expect": "column-missing"
+      "expect": "semantic-drift"
     },
     {
-      "id": "column-renamed:urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD):plan",
-      "kind": "column-renamed",
+      "id": "column-dropped:urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD):mrr_usd",
+      "kind": "column-dropped",
       "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
-      "subject": "plan",
+      "subject": "mrr_usd",
       "decoy": false,
       "expect": "column-missing"
     },
@@ -147,6 +147,15 @@
       "expect": null
     },
     {
+      "id": "control:column-description-clarified:urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD):list_price",
+      "kind": "column-description-clarified",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+      "subject": "list_price",
+      "decoy": true,
+      "control": true,
+      "expect": null
+    },
+    {
       "id": "control:owner-added:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
       "kind": "owner-added",
       "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
@@ -173,7 +182,7 @@
       "recall": 1
     },
     "column-renamed": {
-      "truePositives": 2,
+      "truePositives": 1,
       "falseNegatives": 0,
       "recall": 1
     },
@@ -181,13 +190,18 @@
       "truePositives": 2,
       "falseNegatives": 0,
       "recall": 1
+    },
+    "column-meaning-changed": {
+      "truePositives": 1,
+      "falseNegatives": 0,
+      "recall": 1
     }
   },
   "negatives": {
     "decoysPlanted": 6,
     "decoysQuiet": 6,
-    "controlsPlanted": 3,
-    "controlsQuiet": 3,
+    "controlsPlanted": 4,
+    "controlsQuiet": 4,
     "detail": [
       {
         "id": "decoy:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD):billing_address_line2",
@@ -254,6 +268,14 @@
         "findings": []
       },
       {
+        "id": "control:column-description-clarified:urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD):list_price",
+        "kind": "column-description-clarified",
+        "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+        "control": true,
+        "quiet": true,
+        "findings": []
+      },
+      {
         "id": "control:owner-added:urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
         "kind": "owner-added",
         "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
@@ -264,11 +286,11 @@
     ]
   },
   "corrections": {
-    "eligible": 2,
-    "proposed": 2,
+    "eligible": 1,
+    "proposed": 1,
     "misses": []
   },
   "falsePositives": [],
   "falseNegatives": [],
-  "restored": "15/15"
+  "restored": "16/16"
 }

@@ -285,11 +285,27 @@ export async function snapshotEntity(urn: string): Promise<EntitySnapshot> {
   const note = collect(parsed, "deprecation")
     .map((d) => (d && typeof d === "object" ? (d as Record<string, unknown>).note : undefined))
     .find((n): n is string => typeof n === "string" && n.trim().length > 0);
+  // Per-field documentation, for the semantic-drift check. The `fields` arrays
+  // in the payload hold `{fieldPath, description, …}` objects; anything else
+  // shaped differently is simply skipped.
+  const fieldMeta: Record<string, { description?: string }> = {};
+  for (const group of collect(parsed, "fields")) {
+    for (const field of Array.isArray(group) ? group : []) {
+      if (!field || typeof field !== "object") continue;
+      const f = field as Record<string, unknown>;
+      if (typeof f.fieldPath !== "string") continue;
+      fieldMeta[f.fieldPath] = {
+        ...(typeof f.description === "string" && f.description.trim() ? { description: f.description.trim() } : {}),
+      };
+    }
+  }
+
   const snapshot: EntitySnapshot = {
     ...base,
     exists: true,
     name: names[0],
     fields: [...new Set(flatStrings(collect(parsed, "fieldPath")))],
+    ...(Object.keys(fieldMeta).length ? { fieldMeta } : {}),
     owners: owners.identities,
     ownerUrns: owners.urns,
     deprecated: collect(parsed, "deprecated").some((d) => d === true || (d && typeof d === "object")),
@@ -373,6 +389,28 @@ export async function detectDecayWithState(
  * back a real report. Nothing about the verdict is special-cased for that path,
  * which is the only way a demo is worth showing.
  */
+/**
+ * The measurement terms in a column description, canonicalised: numbers,
+ * currency and unit words, inclusion/exclusion words, time grain, aggregation
+ * words. Two descriptions with the same profile are saying the same thing
+ * about what the number *is*, however differently they phrase it; a profile
+ * change means the measurement itself was redefined. Deterministic and
+ * documented, in place of an LLM's opinion about whether two sentences mean
+ * the same thing.
+ *
+ * Returns null when there is no description to profile, which callers treat
+ * as "cannot compare" rather than "unchanged".
+ */
+export function measurementProfile(description?: string): string | null {
+  if (!description || !description.trim()) return null;
+  const matches = description
+    .toLowerCase()
+    .match(
+      /\b\d+(?:\.\d+)?\b|\b(?:cents?|dollars?|usd|eur|gbp|gross|net|pre|post|exclud\w*|includ\w*|refunds?|fees?|tax\w*|daily|weekly|monthly|quarterly|annual\w*|hourly|percent\w*|ratio|rate|average|median|sum|count|cumulative|rolling|distinct)\b/g
+    );
+  return [...new Set(matches ?? [])].sort().join("|");
+}
+
 export function diffAgainstCatalog(handoff: Handoff, live: Record<string, EntitySnapshot>): DecayReport {
   const findings: DecayFinding[] = [];
   const recorded = handoff.snapshots ?? {};
@@ -427,6 +465,43 @@ export function diffAgainstCatalog(handoff: Handoff, live: Record<string, Entity
           kind: "column-missing",
           detail: `Column \`${field}\` is referenced by this step but no longer exists on ${now.name ?? step.urn}.`,
           remedy: `Check whether ${field} was renamed, and update this step's SQL and instructions.`,
+        });
+      }
+    }
+
+    /*
+     * Semantic drift: the column is still there and still loads, but what the
+     * catalog says it *means* has moved. This is the failure mode a schema
+     * diff cannot see — a runbook can sit at every claim holding and still be
+     * wrong. What is deterministically checkable is the documented meaning:
+     * when the measurement terms in a referenced column's description change
+     * (units, currency, inclusion words, time grain, numbers), somebody
+     * changed what the number is, and the step reading it needs a person. A
+     * rewording that keeps the same measurement terms stays silent — the
+     * benchmark plants exactly that as a control.
+     */
+    if (then?.exists && then.fieldMeta && now.fieldMeta) {
+      for (const field of then.fields.filter((f) => now.fields.includes(f))) {
+        if (!stepReferences(step, field)) continue;
+        const before = then.fieldMeta[field]?.description;
+        const after = now.fieldMeta[field]?.description;
+        const beforeProfile = measurementProfile(before);
+        const afterProfile = measurementProfile(after);
+        // null means "no description to compare", and that is a coverage gap,
+        // never a finding. An empty profile is a real answer: no measurement
+        // terms — so "" → "cents" is drift and "" → "" is not.
+        if (beforeProfile === null || afterProfile === null || beforeProfile === afterProfile) continue;
+        findings.push({
+          ...where,
+          ...claimRef(i, "column-exists", field),
+          severity: "warning",
+          kind: "semantic-drift",
+          detail:
+            `Column \`${field}\` on ${now.name ?? step.urn} still exists, but its documented meaning moved: ` +
+            `"${before}" → "${after}".`,
+          remedy:
+            "The numbers this step reads may not mean what they meant when it was written. Check with the owner " +
+            "whether the change is a redefinition or a re-documentation before trusting the step's output.",
         });
       }
     }

@@ -500,6 +500,22 @@ export function proposeFix(
             "editing; the table needs looking at before anyone follows this step.",
         });
         break;
+
+      case "semantic-drift":
+        // The column is still there; what moved is what the catalog says it
+        // means. No mechanical edit to the step can settle whether that is a
+        // real redefinition or a re-documentation of the same number.
+        unresolved.push({
+          ...where,
+          kind: finding.kind,
+          detail: finding.detail,
+          needsHuman:
+            "The measurement terms in this column's description changed. If the number was redefined, the " +
+            "step's instructions and any thresholds in them need rewriting by someone who knows the new " +
+            "definition; if only the wording changed, the runbook is fine as it stands. The column's owner " +
+            "is the person who knows which it is.",
+        });
+        break;
     }
   }
 

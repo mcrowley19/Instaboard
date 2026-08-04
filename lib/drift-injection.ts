@@ -27,7 +27,13 @@ import { readAspect, writeAspect } from "./gms-aspects";
 import { callDataHubTool } from "./mcp";
 import type { DecayKind, EntitySnapshot, Handoff } from "./types";
 
-export type DriftKind = "column-dropped" | "column-renamed" | "deprecated" | "owner-removed";
+export type DriftKind =
+  | "column-dropped"
+  | "column-renamed"
+  | "deprecated"
+  | "owner-removed"
+  /** The column stays; its documented meaning moves. The semantic-drift case. */
+  | "column-meaning-changed";
 
 /**
  * Changes that are real, land on datasets runbooks actually read, and leave every
@@ -45,7 +51,7 @@ export type DriftKind = "column-dropped" | "column-renamed" | "deprecated" | "ow
  * (datahub#18817), so the benchmark could not put the catalog back. Everything
  * here is reversible, and that constraint is worth more than the extra control.
  */
-export type ControlKind = "column-added" | "description-edited" | "owner-added";
+export type ControlKind = "column-added" | "description-edited" | "owner-added" | "column-description-clarified";
 
 export type PlantKind = DriftKind | ControlKind;
 
@@ -162,6 +168,7 @@ export function planDrifts(
     "column-renamed": 0,
     deprecated: 0,
     "owner-removed": 0,
+    "column-meaning-changed": 0,
   };
   // One change per dataset: two drifts on one entity make attribution ambiguous.
   const claimed = new Set<string>();
@@ -218,7 +225,13 @@ export function planDrifts(
    * planted, so the benchmark reported perfect scores for two kinds and said
    * nothing at all about the other two.
    */
-  const ROTATION: DriftKind[] = ["column-dropped", "column-renamed", "deprecated", "owner-removed"];
+  const ROTATION: DriftKind[] = [
+    "column-dropped",
+    "column-renamed",
+    "deprecated",
+    "owner-removed",
+    "column-meaning-changed",
+  ];
   let rotation = 0;
 
   /** Everything that could be broken on this step, by kind. */
@@ -230,11 +243,15 @@ export function planDrifts(
       const parts = username.split(/[._@]/).filter((p) => p.length > 2);
       return parts.length > 0 && parts.every((p) => haystack.includes(p));
     });
+    // A meaning change needs a described column: the check compares documented
+    // meaning, and a column nobody documented is a coverage gap, not a case.
+    const described = columns.find((c) => snapshot.fieldMeta?.[c]?.description);
     return {
       ...(columns.length ? { "column-dropped": columns[0] } : {}),
       ...(columns.length ? { "column-renamed": columns[columns.length - 1] } : {}),
       ...(snapshot.deprecated ? {} : { deprecated: snapshot.urn }),
       ...(named ? { "owner-removed": named } : {}),
+      ...(described ? { "column-meaning-changed": described } : {}),
     };
   }
 
@@ -243,6 +260,7 @@ export function planDrifts(
     "column-renamed": "column-missing",
     deprecated: "newly-deprecated",
     "owner-removed": "owner-changed",
+    "column-meaning-changed": "semantic-drift",
   };
 
   for (const runbook of runbooks) {
@@ -311,6 +329,8 @@ export function planDrifts(
               ? `Remove ${subject} from ${snapshot.name ?? step.urn}, whom step ${stepIndex + 1} of "${runbook.title}" names.`
               : chosen === "column-renamed"
               ? `Rename \`${subject}\` → \`${renameTo}\` on ${snapshot.name ?? step.urn}, which step ${stepIndex + 1} of "${runbook.title}" selects.`
+              : chosen === "column-meaning-changed"
+              ? `Change what \`${subject}\` on ${snapshot.name ?? step.urn} is documented to mean — step ${stepIndex + 1} of "${runbook.title}" reads it, the column keeps loading, and only the measurement terms in its description move.`
               : `Drop \`${subject}\` on ${snapshot.name ?? step.urn}, which step ${stepIndex + 1} of "${runbook.title}" selects.`,
       });
     });
@@ -368,7 +388,9 @@ export const CONTROL_COLUMN = "instaboard_control_added_col";
 export function planControls(
   runbooks: Handoff[],
   live: Record<string, EntitySnapshot>,
-  count = 3
+  count = 4,
+  /** Drift plans already made, so a control never rewrites a field a drift owns. */
+  taken: PlannedDrift[] = []
 ): PlannedDrift[] {
   const plans: PlannedDrift[] = [];
   const usable = Object.values(live).filter((s) => s.exists && s.fields.length > 1);
@@ -411,9 +433,45 @@ export function planControls(
       `Must produce nothing.`,
   });
 
-  /* 3. A second owner joins. The ownership aspect moves, and the person the
+  /* 3. A referenced column's description is reworded without touching its
+        measurement terms. The mirror of the `column-meaning-changed` drift, and
+        the control that keeps the semantic check honest: documentation churn on
+        a column people read must stay silent. */
+  const claimedFields = new Set(taken.map((d) => `${d.urn}|${d.subject}`));
+  const clarify = (() => {
+    for (const runbook of runbooks) {
+      for (const step of runbook.steps) {
+        if (!step.urn) continue;
+        const snapshot = live[step.urn];
+        if (!snapshot?.exists) continue;
+        for (const column of groundTruthColumns(step, snapshot)) {
+          if (!snapshot.fieldMeta?.[column]?.description) continue;
+          if (claimedFields.has(`${step.urn}|${column}`)) continue;
+          return { snapshot, column };
+        }
+      }
+    }
+    return null;
+  })();
+  if (clarify) {
+    plans.push({
+      id: `control:column-description-clarified:${clarify.snapshot.urn}:${clarify.column}`,
+      kind: "column-description-clarified",
+      urn: clarify.snapshot.urn,
+      subject: clarify.column,
+      expect: null,
+      decoy: true,
+      control: true,
+      undo: { aspect: "schemaMetadata" },
+      detail:
+        `Reword the description of \`${clarify.column}\` on ${clarify.snapshot.name ?? clarify.snapshot.urn}, a ` +
+        `column a runbook step reads, without changing its measurement terms. Must produce nothing.`,
+    });
+  }
+
+  /* 4. A second owner joins. The ownership aspect moves, and the person the
         runbook names is still there — so the owner claim must still hold. This is
-        the sharpest of the three: it is one field away from real owner drift. */
+        the sharpest of the set: it is one field away from real owner drift. */
   const owners = [...new Set(Object.values(live).flatMap((s) => s.ownerUrns ?? []))].filter((u) =>
     u.startsWith("urn:li:corpuser:")
   );
@@ -508,6 +566,51 @@ export async function injectDrift(drift: PlannedDrift): Promise<boolean> {
       return true;
     }
 
+    /*
+     * The semantic pair. The drift rewrites a referenced column's description
+     * so its measurement terms change — the column keeps loading and every
+     * schema claim keeps holding, which is exactly the drift a schema diff
+     * cannot see. The control rewrites a referenced column's description
+     * *without* touching its measurement terms, because documentation churn on
+     * columns people read is constant and a detector that reports it is one
+     * nobody keeps switched on.
+     */
+    case "column-meaning-changed": {
+      const schema = await readAspect(drift.urn, "schemaMetadata");
+      if (!schema) return false;
+      const fields = (schema.fields ?? []) as SchemaField[];
+      const field = fields.find((f) => f.fieldPath === drift.subject);
+      if (!field) return false;
+      drift.undo.previousDescription = (field.description as string | undefined) ?? null;
+      await writeAspect(drift.urn, "schemaMetadata", {
+        ...schema,
+        fields: fields.map((f) =>
+          f.fieldPath === drift.subject
+            ? { ...f, description: `${field.description ?? ""} Restated in cents at the FY close; prior periods were reported net of fees.`.trim() }
+            : f
+        ),
+      });
+      return true;
+    }
+
+    case "column-description-clarified": {
+      const schema = await readAspect(drift.urn, "schemaMetadata");
+      if (!schema) return false;
+      const fields = (schema.fields ?? []) as SchemaField[];
+      const field = fields.find((f) => f.fieldPath === drift.subject);
+      if (!field) return false;
+      drift.undo.previousDescription = (field.description as string | undefined) ?? null;
+      await writeAspect(drift.urn, "schemaMetadata", {
+        ...schema,
+        fields: fields.map((f) =>
+          f.fieldPath === drift.subject
+            ? { ...f, description: `${field.description ?? ""} (Wording clarified by the docs pass; the measure itself is untouched.)`.trim() }
+            : f
+        ),
+      });
+      return true;
+    }
+
     case "owner-added": {
       const result = await callDataHubTool("add_owners", {
         owner_urns: [drift.subject],
@@ -582,6 +685,25 @@ export async function revertDrift(drift: PlannedDrift): Promise<boolean> {
       await writeAspect(drift.urn, "editableDatasetProperties", {
         ...props,
         description: typeof previous === "string" ? previous : "",
+      });
+      return true;
+    }
+
+    case "column-meaning-changed":
+    case "column-description-clarified": {
+      const schema = await readAspect(drift.urn, "schemaMetadata");
+      if (!schema) return false;
+      const fields = (schema.fields ?? []) as SchemaField[];
+      if (!fields.some((f) => f.fieldPath === drift.subject)) return false;
+      const previous = drift.undo.previousDescription;
+      await writeAspect(drift.urn, "schemaMetadata", {
+        ...schema,
+        fields: fields.map((f) => {
+          if (f.fieldPath !== drift.subject) return f;
+          if (typeof previous === "string") return { ...f, description: previous };
+          const { description: _dropped, ...rest } = f;
+          return rest;
+        }),
       });
       return true;
     }

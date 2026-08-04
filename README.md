@@ -372,21 +372,24 @@ negative, validates blind and then scores two axes separately.
 <!-- drift-table:start -->
 | | Result |
 | --- | --- |
-| Planted drifts detected | **6/6** across 3 kinds |
-| Controls that stayed quiet | **3/3** — column added, description edited, owner appended |
+| Planted drifts detected | **6/6** across 4 kinds |
+| Controls that stayed quiet | **4/4** — column added, description edited, column description reworded, owner appended |
 | Decoys that stayed quiet | **6/6** |
 | Unexplained findings | **0** |
 | Detection precision · recall · F1 | **100.0% · 100.0% · 100.0%** |
-| Corrections derived for detected renames | **2/2** |
-| Catalog changes restored afterwards | 15/15 |
+| Corrections derived for detected renames | **1/1** |
+| Catalog changes restored afterwards | 16/16 |
 <!-- drift-table:end -->
 
-**The miss.** `product_status` → `settled_value` came back as a missing column
-with no correction derived for it. The rename rule scores token overlap and edit
-distance, and the new name shares nothing with the old, so the rule declines and
-the finding goes on the human list. We plant that case deliberately on every run,
-because a benchmark whose cases were all chosen after the rule was written
-measures the rule against itself.
+**The hard case.** `product_status` → `settled_value` is planted on every run
+precisely because the name carries no signal: token overlap and edit distance
+both score near zero, and a matcher that connected the two on their names would
+be matching noise. Detection reports the column missing either way. The
+correction comes from the structural rule instead, one column gone and one
+arrived in the same slot, and is proposed at `medium` confidence with a
+rationale that says which column replaced it while refusing to claim the two
+mean the same thing. The case stays planted because a benchmark whose cases
+were all chosen after the rule was written measures the rule against itself.
 
 The two axes get scored separately because they fail in different ways. Spotting
 the drift is a schema-and-health diff, and it holds up. Guessing what a column
@@ -507,14 +510,15 @@ last push". It has never run on DataHub Cloud, on any other DataHub version,
 or under a second operator.
 
 **The drift benchmark is small, and doesn't cover every kind.** Six planted
-drifts, six decoys and three controls will catch a broken detector. Putting a
+drifts, six decoys and four controls will catch a broken detector. Putting a
 confidence interval on 100% takes a great deal more than that. The last run
-covered three of the four drift kinds. No `owner-removed` drift got planted,
-because the planner only plants one when a step names an owner whose username
-tokens show up in its prose, and none of the stored runbooks happened to qualify.
-So the proof loop is what covers the owner path, twice, on both catalogs. A
-fourth control, an assertion added that passes, is missing for the reason given
-above. Both numbers come from one run on one catalog family, so neither is a
+covered four of the five drift kinds, the planted semantic case among them. No
+`owner-removed` drift got planted, because the planner only plants one when a
+step names an owner whose username tokens show up in its prose, and none of the
+stored runbooks happened to qualify. So the proof loop is what covers the owner
+path, twice, on both catalogs. A control for an assertion added that passes is
+missing for the reason given above. Both numbers come from one run on one
+catalog family, so neither is a
 distribution.
 
 **Coverage is measured per dimension.** A step counts as validated when the
@@ -524,21 +528,29 @@ monitored, and a step whose real dependency is what a column *means* counts as
 covered as long as the column still exists. Coverage tells you the catalog could
 answer, and stays silent on whether the answer was worth much.
 
-**The decay engine checks five kinds of claim and misses the worst kind.** It
-catches an entity that vanished, a referenced column that vanished, a table
-deprecated since recording, health that has turned red, and an owner who moved
-on. What it can't see is **semantic drift**, where a column still exists and
-still loads but now means something different, because an upstream filter changed
-or the units moved from cents to dollars. That is the most dangerous form of
-staleness going and we detect none of it, so a runbook can sit at 19/19 claims
-holding and still be wrong.
+**The decay engine covers semantic drift only as far as the catalog documents
+it.** It catches an entity that vanished, a referenced column that vanished, a
+table deprecated since recording, health that has turned red, and an owner who
+moved on. **Semantic drift**, where a column still exists and still loads but
+now means something different, is checked through the column's documentation:
+when the measurement terms in a referenced column's description change (units,
+currency, inclusion and exclusion words, time grain, numbers), a
+`semantic-drift` warning names the column and quotes its meaning before and
+after. The benchmark plants one such change, beside a reworded description with
+the same measurement terms that must stay silent. The dangerous remainder is
+the redefinition nobody documents: an upstream filter change that leaves the
+description untouched produces nothing, and a runbook can still sit at 19/19
+claims holding while being wrong in exactly that way. The comparison also needs
+the description as it stood at record time, so only runbooks recorded since
+column documentation entered the snapshot can be checked at all.
 
-**Columns are found by matching text.** A step "depends on" a column when the
-column's name turns up, word-boundary matched, in its prose or its SQL. So a
-column called `date`, `plan` or `status` can match a sentence that has nothing to
-do with it, and a column reached through `SELECT *` or an alias is invisible. The
-first case produces a claim that shouldn't be there, and the second loses one
-that should.
+**Columns in SQL are read from the query's syntax tree; prose is still matched
+as text.** A column named inside a string literal or a SQL comment no longer
+counts as a dependency, and the parser reaches into subqueries. Its edges are
+real: a statement it cannot read, and any `SELECT *`, falls back to the word
+matcher, so a column reached through `*` or an alias stays invisible. Prose is
+matched word for word, which is where a column called `date`, `plan` or
+`status` can still collide with a sentence that has nothing to do with it.
 
 **Rename detection runs on two weak signals and is still the weakest rule we
 ship.** The first signal is the names: `0.75 × token overlap + 0.25 × edit
