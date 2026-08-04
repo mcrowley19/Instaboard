@@ -48,6 +48,9 @@ The last run passed 39 of 39, on both catalogs.**
 ```bash
 npm run prove                        # the catalog this repo seeds
 npm run prove -- --catalog=showcase  # DataHub's own showcase-ecommerce datapack
+npm run prove:repair                 # the correction, executed: real consumer SQL
+                                     # breaks under the rename and comes back
+                                     # byte-identical once repaired
 ```
 
 ```
@@ -196,6 +199,17 @@ diff carrying the evidence behind each edit. `--apply` accepts it into the
 runbook store and `--pr` opens a pull request.
 [Worked example](examples/proposals/monthly-revenue-close.md).
 
+`npm run prove:repair` proves the correction by executing it. Real consumer SQL
+from [`examples/consumer/`](examples/consumer/) first runs green against a small
+warehouse whose schema is read out of the live catalog. After the drill renames
+the column in DataHub, the readers fail with the missing column named in the
+error. The approved correction is then applied to the workspace copy and every
+query runs again. Passing requires each repaired query to return the exact
+result hash it produced before the break. A wrong substitution would move the
+hash, since the warehouse takes the rename as `ALTER TABLE … RENAME COLUMN` and
+a rename cannot move the data underneath. Receipts land in
+[`examples/live/prove-repair-receipts.json`](examples/live/prove-repair-receipts.json).
+
 ### Or click through it without installing anything
 
 The hosted demo at [instaboard-mu.vercel.app](https://instaboard-mu.vercel.app)
@@ -314,6 +328,14 @@ evidence behind every edit and an explicit list of what it refused to guess at.
 
 Nothing gets applied automatically, because a document whose whole value is that
 a colleague vouched for it shouldn't be rewritten by a cron job.
+
+**6. Prove the repair.** `npm run prove:repair` executes the approved correction
+against real consumer SQL and passes only when every repaired query reproduces
+its baseline result hash. The write-back from step 4 comes off in the same run:
+the assertion returns to passing, the tag is retracted, and the incidents the
+drill raised are resolved, with each of those facts read back out of GMS. The
+receipt binds a plan hash over the approved edits to per-file artifact hashes
+and to the catalog's own schema fingerprints at baseline, broken and restored.
 
 `npm run validate` runs steps 3 to 5 over every stored runbook and exits non-zero
 on a broken one, so you can hang it off cron or use it as a CI gate.
@@ -796,7 +818,8 @@ behaviours run underneath all of them:
 | Script | Purpose |
 | --- | --- |
 | `npm run prove` | **the whole loop end to end, 39 assertions** (`-- --catalog=showcase` for DataHub's datapack) |
-| `npm run prove:verify` | check the receipts that run just wrote against the committed ones; CI runs this |
+| `npm run prove:repair` | **the executed repair**: consumer SQL breaks under a live catalog rename and comes back byte-identical (`-- --catalog=showcase` works here too) |
+| `npm run prove:verify` | check the receipts that run just wrote against the committed ones; CI runs this (`--repair` for the repair receipts) |
 | `npm run draft` | draft runbooks from catalog evidence, no recording needed (`--query=`, `--urn=`, `--save`) |
 | `npm run bench:drift` | plant known drift, decoys and controls; score detection and correction |
 | `npm run bench:verify` | re-derive the published drift table from the committed run; CI runs this |
@@ -869,11 +892,13 @@ lib/            mcp.ts (MCP client) · agent.ts (loop) · decay.ts (validation)
 evals/          benchmark.ts + benchmark-showcase.ts (20 cases each) · suites.ts
                 score.ts · run.ts · verify.ts · transcripts.ts · results/
 extension/      Chrome side panel · entity-from-url.js (the detection contract)
-scripts/        prove-loop.ts (the one-command proof) · drift-benchmark.ts
+scripts/        prove-loop.ts (the one-command proof) · prove-repair.ts (the
+                executed repair) · drift-benchmark.ts
                 draft-runbooks.ts · seed_datahub.py · showcase-drill.ts
                 validate-runbooks.ts · propose-fixes.ts · export-examples.ts
                 capture-replay.ts · live-receipts.ts
 examples/       runbooks/ (five real ones + validation reports) · drafts/ · proposals/
+                consumer/ (the SQL the repair drill breaks and fixes)
                 live/ (dated receipts from live runs, both catalogs)
 submission/oss/ the upstream skill PR, the friction reports, the entity-detection package
 tests/          vitest suite (229 tests)

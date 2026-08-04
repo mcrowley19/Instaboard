@@ -73,6 +73,16 @@ calls a model.
 | Corrections are derived from the catalog, emitted as a reviewable diff, and never applied automatically. | [`examples/proposals/monthly-revenue-close.md`](examples/proposals/monthly-revenue-close.md) · `validations.after.proposal` in the receipts | **live** `npm run propose` |
 | What cannot be derived is listed as needing a person rather than guessed. | `unresolved` in the proposal · [`tests/remediate.test.ts`](tests/remediate.test.ts) | **offline** `npm test` |
 
+## The repair, executed
+
+| Claim | Proof | Re-derive it |
+| --- | --- | --- |
+| The approved correction is executed against real consumer SQL, and every repaired query reproduces its baseline result hash byte for byte. | [`examples/live/prove-repair-receipts.json`](examples/live/prove-repair-receipts.json) → `hashes.artifacts.results` · [`examples/consumer/`](examples/consumer/) | **live** `npm run prove:repair` |
+| The break is real: the column is renamed through DataHub's schemaMetadata API, only that entity's schema fingerprint moves, and the readers fail naming the missing column while a control file stays green with an unchanged hash. | the `break` and `red` checks in the repair receipts | **live** `npm run prove:repair` |
+| What was applied is exactly what was approved: a plan hash covers the approved edit set, only edits the detector could derive with evidence ride it, and findings it refused to guess at never do. | `approval.planHash` and the `approve`/`repair` checks in the repair receipts | **offline** `npx vitest run tests/prove-repair-receipts.test.ts` |
+| The write-back comes off in the same run: assertion back to passing, tag retracted, incidents resolved, each read back from GMS. | `writeback` in the repair receipts | **live** `npm run prove:repair` |
+| The committed repair receipts are what a fresh run produces, on both catalogs, checked in CI. | [`.github/workflows/prove.yml`](.github/workflows/prove.yml) | **live** `npm run prove:repair && npm run prove:verify -- --repair` |
+
 ## The hosted demo
 
 | Claim | Proof | Re-derive it |

@@ -90,6 +90,20 @@ jobs:
         # timestamps are masked; nothing else is.
         run: npm run prove:verify -- --catalog=${{ matrix.catalog }}
 
+      - name: Prove the executed repair on the same catalog
+        # Detection is the loop's first half; this is the second. Real consumer
+        # SQL runs green, the column rename breaks it, the approved correction
+        # is applied, and the repaired queries return byte-identical result
+        # hashes to their baseline. The catalog was seeded and restored by the
+        # loop above, so the seed is skipped.
+        run: npm run prove:repair -- --catalog=${{ matrix.catalog }} --skip-seed
+
+      - name: Re-run the repair receipt assertions against what this run just produced
+        run: npx vitest run tests/prove-repair-receipts.test.ts
+
+      - name: Fail if the fresh repair run and the committed repair receipts disagree
+        run: npm run prove:verify -- --catalog=${{ matrix.catalog }} --repair
+
       - name: Keep the receipts this run produced
         if: always()
         uses: actions/upload-artifact@v4
@@ -97,6 +111,7 @@ jobs:
           name: prove-receipts-${{ matrix.catalog }}
           path: |
             examples/live/prove-loop-receipts*.json
+            examples/live/prove-repair-receipts*.json
             proposals/
           if-no-files-found: warn
 

@@ -1,0 +1,640 @@
+{
+  "startedAt": "2026-08-04T17:27:23.654Z",
+  "finishedAt": "2026-08-04T17:31:52.571Z",
+  "gms": "http://localhost:8080",
+  "catalog": "the sample catalog this repo seeds with scripts/seed_datahub.py",
+  "catalogProfile": "northbeam",
+  "method": "Consumer SQL from examples/consumer was executed against a SQLite warehouse whose schema is read from the live catalog at baseline and whose rows are deterministic by (table, row, column position). The rename was then made in both places at once, the way it happens in production: ALTER TABLE RENAME COLUMN in the warehouse, the same rename through DataHub's schemaMetadata API in the catalog. The readers failed; the detector's proposed correction was approved and applied to the workspace; the queries went green with result hashes identical to the baseline. A rename physically cannot move warehouse data, so hash equality is what a correct repair looks like and a wrong substitution cannot fake it.",
+  "breakingChanges": [
+    {
+      "kind": "column-renamed",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+      "detail": "Renamed fct_revenue.net_amount_usd to net_revenue_usd — a column the runbook's SQL selects."
+    }
+  ],
+  "checks": [
+    {
+      "phase": "datahub",
+      "what": "DataHub is up",
+      "passed": true,
+      "detail": "GMS answering at http://localhost:8080"
+    },
+    {
+      "phase": "ingest",
+      "what": "northbeam catalog is in the catalog",
+      "passed": true,
+      "detail": "fct_revenue resolves in DataHub"
+    },
+    {
+      "phase": "baseline",
+      "what": "every catalog entity carries a recomputable version hash",
+      "passed": true,
+      "detail": "payment_health_daily@dd3723f5adec, fct_revenue@ab36daad91f3, mrr_monthly@c05ace3f0aaa"
+    },
+    {
+      "phase": "baseline",
+      "what": "the workspace has consumers of the target column, and a control that avoids it",
+      "passed": true,
+      "detail": "3 files: monthly_net_revenue.sql, refund_drag.sql read net_amount_usd; control: payment_health_window.sql"
+    },
+    {
+      "phase": "baseline",
+      "what": "every consumer query runs green against the baseline catalog schema",
+      "passed": true,
+      "detail": "monthly_net_revenue.sql: 9 rows, 433573db4371; payment_health_window.sql: 6 rows, 1b31b191dd17; refund_drag.sql: 1 rows, 2a3dc3c1444f"
+    },
+    {
+      "phase": "baseline",
+      "what": "the runbook validates clean before anything is broken",
+      "passed": true,
+      "detail": "1 runbook checked, 0 drifted"
+    },
+    {
+      "phase": "break",
+      "what": "the rename went through DataHub's own write API",
+      "passed": true,
+      "detail": "Renamed fct_revenue.net_amount_usd to net_revenue_usd — a column the runbook's SQL selects."
+    },
+    {
+      "phase": "break",
+      "what": "only the renamed entity's schema fingerprint moved",
+      "passed": true,
+      "detail": "payment_health_daily schema@dd40a83770de, fct_revenue schema@8551f6767c22 (moved), mrr_monthly schema@b3adc4e2ad41"
+    },
+    {
+      "phase": "red",
+      "what": "every consumer of the renamed column fails",
+      "passed": true,
+      "detail": "monthly_net_revenue.sql: no such column: net_amount_usd; refund_drag.sql: no such column: net_amount_usd"
+    },
+    {
+      "phase": "red",
+      "what": "the failure names the missing column",
+      "passed": true,
+      "detail": "no such column: net_amount_usd; no such column: net_amount_usd"
+    },
+    {
+      "phase": "red",
+      "what": "the control keeps running with an identical result hash",
+      "passed": true,
+      "detail": "payment_health_window.sql: 1b31b191dd17"
+    },
+    {
+      "phase": "detect",
+      "what": "the sweep reports the runbook broken and writes back to DataHub",
+      "passed": true,
+      "detail": "severity broken, 1 dataset(s) tagged, 1 incident(s) raised"
+    },
+    {
+      "phase": "detect",
+      "what": "the Stale Runbook tag reads back off the dataset in DataHub",
+      "passed": true,
+      "detail": "fct_revenue"
+    },
+    {
+      "phase": "detect",
+      "what": "the proposal derives the rename correction from the catalog",
+      "passed": true,
+      "detail": "net_amount_usd→net_revenue_usd (medium)"
+    },
+    {
+      "phase": "approve",
+      "what": "the approved plan holds derivable edits only, and every unresolved finding stays out",
+      "passed": true,
+      "detail": "1 edit(s) approved (medium), 0 withheld, 0 unresolved left for a person"
+    },
+    {
+      "phase": "repair",
+      "what": "what was applied is exactly what was approved",
+      "passed": true,
+      "detail": "plan bd0d8633c5bd7c28"
+    },
+    {
+      "phase": "repair",
+      "what": "the repair touches the affected consumers and leaves the control alone",
+      "passed": true,
+      "detail": "monthly_net_revenue.sql: 2 replacement(s); payment_health_window.sql: untouched; refund_drag.sql: 3 replacement(s)"
+    },
+    {
+      "phase": "repair",
+      "what": "every consumer query is green again against the changed catalog",
+      "passed": true,
+      "detail": "monthly_net_revenue.sql: ok; payment_health_window.sql: ok; refund_drag.sql: ok"
+    },
+    {
+      "phase": "repair",
+      "what": "every repaired query returns a byte-identical result hash to its baseline",
+      "passed": true,
+      "detail": "monthly_net_revenue.sql: 433573db4371 vs 433573db4371; refund_drag.sql: 2a3dc3c1444f vs 2a3dc3c1444f"
+    },
+    {
+      "phase": "repair",
+      "what": "the control's file and result are untouched end to end",
+      "passed": true,
+      "detail": "payment_health_window.sql: 1b31b191dd17"
+    },
+    {
+      "phase": "repair",
+      "what": "the repaired runbook validates clean against the changed catalog",
+      "passed": true,
+      "detail": "severity ok, 15/16 claims hold"
+    },
+    {
+      "phase": "repair",
+      "what": "the runbook's assertion is back to passing in DataHub",
+      "passed": true,
+      "detail": "a1306fa23998=SUCCESS, 97b752e0b2ce=SUCCESS, 1b4acb4707a6=SUCCESS"
+    },
+    {
+      "phase": "repair",
+      "what": "the sweep closes the incidents it opened",
+      "passed": true,
+      "detail": "1 incident(s) resolved by the sweep"
+    },
+    {
+      "phase": "repair",
+      "what": "the Stale Runbook tag is retracted, read back from GMS",
+      "passed": true,
+      "detail": "1/1 cleared"
+    },
+    {
+      "phase": "restore",
+      "what": "every catalog fingerprint is back to its baseline value",
+      "passed": true,
+      "detail": "payment_health_daily@dd3723f5adec, fct_revenue@ab36daad91f3, mrr_monthly@c05ace3f0aaa"
+    }
+  ],
+  "summary": {
+    "total": 25,
+    "passed": 25,
+    "failed": 0
+  },
+  "consumer": {
+    "source": "examples/consumer/northbeam",
+    "workspace": "data/consumer-workspace/northbeam",
+    "green": {
+      "tables": [
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+          "table": "payment_health_daily",
+          "columns": [
+            "attempts",
+            "date",
+            "provider",
+            "success_rate"
+          ],
+          "rows": 38
+        },
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "table": "fct_revenue",
+          "columns": [
+            "gross_amount_usd",
+            "is_recurring",
+            "customer_id",
+            "net_amount_usd",
+            "order_id",
+            "revenue_date",
+            "revenue_id"
+          ],
+          "rows": 36
+        },
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "table": "mrr_monthly",
+          "columns": [
+            "arr_usd",
+            "mrr_usd",
+            "month",
+            "net_new_mrr_usd",
+            "plan"
+          ],
+          "rows": 38
+        }
+      ],
+      "queries": [
+        {
+          "file": "monthly_net_revenue.sql",
+          "sqlHash": "456667d0813cdc63f7e89688e437607efb111b011a9bf71098a8b20b632b53dd",
+          "ok": true,
+          "columns": [
+            "month",
+            "net_revenue",
+            "payments"
+          ],
+          "rowCount": 9,
+          "resultHash": "433573db4371a2d38a55cb49b0ab7d6517f3bd99d8c675677d04c7ddb192ff6a"
+        },
+        {
+          "file": "payment_health_window.sql",
+          "sqlHash": "61cb28ee8b2263d12ab513891527985dfaa8adba4bbbbb3fe905b53c4ad8600e",
+          "ok": true,
+          "columns": [
+            "provider",
+            "avg_success_rate",
+            "days_observed"
+          ],
+          "rowCount": 6,
+          "resultHash": "1b31b191dd17bc14b3cd9724b8b5ebd31973be80dfaedb6210a805e091637d4a"
+        },
+        {
+          "file": "refund_drag.sql",
+          "sqlHash": "4a7e9954b3abd6a7d0409f5cb10947ccc1332de95d61a67bf723b2f7e88ff31a",
+          "ok": true,
+          "columns": [
+            "refund_drag_usd",
+            "net_share"
+          ],
+          "rowCount": 1,
+          "resultHash": "2a3dc3c1444f3ddea1d3062de307e7c9b6dd1148bb8c04054ce2972ab078ee48"
+        }
+      ],
+      "allGreen": true
+    },
+    "red": {
+      "tables": [
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+          "table": "payment_health_daily",
+          "columns": [
+            "attempts",
+            "date",
+            "provider",
+            "success_rate"
+          ],
+          "rows": 38
+        },
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "table": "fct_revenue",
+          "columns": [
+            "gross_amount_usd",
+            "is_recurring",
+            "customer_id",
+            "net_revenue_usd",
+            "order_id",
+            "revenue_date",
+            "revenue_id"
+          ],
+          "rows": 36
+        },
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "table": "mrr_monthly",
+          "columns": [
+            "arr_usd",
+            "mrr_usd",
+            "month",
+            "net_new_mrr_usd",
+            "plan"
+          ],
+          "rows": 38
+        }
+      ],
+      "queries": [
+        {
+          "file": "monthly_net_revenue.sql",
+          "sqlHash": "456667d0813cdc63f7e89688e437607efb111b011a9bf71098a8b20b632b53dd",
+          "ok": false,
+          "error": "no such column: net_amount_usd",
+          "columns": [],
+          "rowCount": 0
+        },
+        {
+          "file": "payment_health_window.sql",
+          "sqlHash": "61cb28ee8b2263d12ab513891527985dfaa8adba4bbbbb3fe905b53c4ad8600e",
+          "ok": true,
+          "columns": [
+            "provider",
+            "avg_success_rate",
+            "days_observed"
+          ],
+          "rowCount": 6,
+          "resultHash": "1b31b191dd17bc14b3cd9724b8b5ebd31973be80dfaedb6210a805e091637d4a"
+        },
+        {
+          "file": "refund_drag.sql",
+          "sqlHash": "4a7e9954b3abd6a7d0409f5cb10947ccc1332de95d61a67bf723b2f7e88ff31a",
+          "ok": false,
+          "error": "no such column: net_amount_usd",
+          "columns": [],
+          "rowCount": 0
+        }
+      ],
+      "allGreen": false
+    },
+    "repaired": {
+      "tables": [
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+          "table": "payment_health_daily",
+          "columns": [
+            "attempts",
+            "date",
+            "provider",
+            "success_rate"
+          ],
+          "rows": 38
+        },
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+          "table": "fct_revenue",
+          "columns": [
+            "gross_amount_usd",
+            "is_recurring",
+            "customer_id",
+            "net_revenue_usd",
+            "order_id",
+            "revenue_date",
+            "revenue_id"
+          ],
+          "rows": 36
+        },
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+          "table": "mrr_monthly",
+          "columns": [
+            "arr_usd",
+            "mrr_usd",
+            "month",
+            "net_new_mrr_usd",
+            "plan"
+          ],
+          "rows": 38
+        }
+      ],
+      "queries": [
+        {
+          "file": "monthly_net_revenue.sql",
+          "sqlHash": "f7339040405bb4d00e26c74625c72fb2f7d1fcacceb8a279b9ba066d9ea7d26e",
+          "ok": true,
+          "columns": [
+            "month",
+            "net_revenue",
+            "payments"
+          ],
+          "rowCount": 9,
+          "resultHash": "433573db4371a2d38a55cb49b0ab7d6517f3bd99d8c675677d04c7ddb192ff6a"
+        },
+        {
+          "file": "payment_health_window.sql",
+          "sqlHash": "61cb28ee8b2263d12ab513891527985dfaa8adba4bbbbb3fe905b53c4ad8600e",
+          "ok": true,
+          "columns": [
+            "provider",
+            "avg_success_rate",
+            "days_observed"
+          ],
+          "rowCount": 6,
+          "resultHash": "1b31b191dd17bc14b3cd9724b8b5ebd31973be80dfaedb6210a805e091637d4a"
+        },
+        {
+          "file": "refund_drag.sql",
+          "sqlHash": "5cd3edc324bb78d3759ece99d60eff7eb6a1ba2b411da71a91fe96d65276596a",
+          "ok": true,
+          "columns": [
+            "refund_drag_usd",
+            "net_share"
+          ],
+          "rowCount": 1,
+          "resultHash": "2a3dc3c1444f3ddea1d3062de307e7c9b6dd1148bb8c04054ce2972ab078ee48"
+        }
+      ],
+      "allGreen": true
+    }
+  },
+  "proposal": {
+    "edits": [
+      {
+        "stepIndex": 1,
+        "stepTitle": "Pull net revenue for the month",
+        "kind": "column-rename",
+        "from": "net_amount_usd",
+        "to": "net_revenue_usd",
+        "rationale": "`net_revenue_usd` on fct_revenue: it is on the entity now, was not when this runbook was recorded, and is the closest match to `net_amount_usd` (0.65).",
+        "confidence": "medium",
+        "claimId": "column-exists:c1d447df18e7",
+        "occurrences": 3
+      }
+    ],
+    "unresolved": [],
+    "reviewers": [
+      "Priya Patel",
+      "Mike Rodriguez"
+    ]
+  },
+  "approval": {
+    "mode": "operator",
+    "note": "Approved by the operator running the drill, who reads the same rationale a PR reviewer would. Outside the drill the edit set rides a pull request (npm run propose -- --pr) and merging it is the approval. Findings the detector could not derive an edit for are in `unresolved` and are never applied.",
+    "approvedBy": "michael",
+    "at": "2026-08-04T17:30:22.024Z",
+    "planHash": "bd0d8633c5bd7c284fd6b945b18f08bc90f3d83697b9611b62e8e3484121712f",
+    "applied": [
+      {
+        "kind": "column-rename",
+        "from": "net_amount_usd",
+        "to": "net_revenue_usd",
+        "confidence": "medium"
+      }
+    ],
+    "withheld": []
+  },
+  "repairs": [
+    {
+      "file": "monthly_net_revenue.sql",
+      "hashBefore": "456667d0813cdc63f7e89688e437607efb111b011a9bf71098a8b20b632b53dd",
+      "hashAfter": "f7339040405bb4d00e26c74625c72fb2f7d1fcacceb8a279b9ba066d9ea7d26e",
+      "replacements": 2,
+      "changed": true
+    },
+    {
+      "file": "payment_health_window.sql",
+      "hashBefore": "61cb28ee8b2263d12ab513891527985dfaa8adba4bbbbb3fe905b53c4ad8600e",
+      "hashAfter": "61cb28ee8b2263d12ab513891527985dfaa8adba4bbbbb3fe905b53c4ad8600e",
+      "replacements": 0,
+      "changed": false
+    },
+    {
+      "file": "refund_drag.sql",
+      "hashBefore": "4a7e9954b3abd6a7d0409f5cb10947ccc1332de95d61a67bf723b2f7e88ff31a",
+      "hashAfter": "5cd3edc324bb78d3759ece99d60eff7eb6a1ba2b411da71a91fe96d65276596a",
+      "replacements": 3,
+      "changed": true
+    }
+  ],
+  "diff": "--- monthly_net_revenue.sql (before)\n+++ monthly_net_revenue.sql (repaired)\n@@ -1,8 +1,8 @@\n -- Finance close pack: net revenue by month, off the revenue fact.\n--- Reads analytics.marts.fct_revenue — net_amount_usd is the column the\n+-- Reads analytics.marts.fct_revenue — net_revenue_usd is the column the\n -- repair drill renames out from under this query.\n SELECT strftime('%Y-%m', revenue_date) AS month,\n-       ROUND(SUM(net_amount_usd), 2) AS net_revenue,\n+       ROUND(SUM(net_revenue_usd), 2) AS net_revenue,\n        COUNT(*) AS payments\n FROM fct_revenue\n GROUP BY 1\n\n--- refund_drag.sql (before)\n+++ refund_drag.sql (repaired)\n@@ -1,6 +1,6 @@\n -- Refund drag: what refunds cost against gross, and the net share that survives.\n--- Reads analytics.marts.fct_revenue on both gross_amount_usd and net_amount_usd.\n-SELECT ROUND(SUM(gross_amount_usd) - SUM(net_amount_usd), 2) AS refund_drag_usd,\n-       ROUND(SUM(net_amount_usd) / SUM(gross_amount_usd), 4) AS net_share\n+-- Reads analytics.marts.fct_revenue on both gross_amount_usd and net_revenue_usd.\n+SELECT ROUND(SUM(gross_amount_usd) - SUM(net_revenue_usd), 2) AS refund_drag_usd,\n+       ROUND(SUM(net_revenue_usd) / SUM(gross_amount_usd), 4) AS net_share\n FROM fct_revenue;\n \n",
+  "hashes": {
+    "plan": "bd0d8633c5bd7c284fd6b945b18f08bc90f3d83697b9611b62e8e3484121712f",
+    "catalog": {
+      "baseline": {
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)": {
+          "entity": "dd3723f5adec",
+          "aspects": {
+            "schema": "dd40a83770de",
+            "ownership": "154f6d214d44",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "b3b7361fb1ae"
+          }
+        },
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)": {
+          "entity": "ab36daad91f3",
+          "aspects": {
+            "schema": "89280579c9b0",
+            "ownership": "8e5f9dd13d08",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "6f3f70fb7154"
+          }
+        },
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)": {
+          "entity": "c05ace3f0aaa",
+          "aspects": {
+            "schema": "b3adc4e2ad41",
+            "ownership": "154f6d214d44",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "6f3f70fb7154"
+          }
+        }
+      },
+      "broken": {
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)": {
+          "entity": "dd3723f5adec",
+          "aspects": {
+            "schema": "dd40a83770de",
+            "ownership": "154f6d214d44",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "b3b7361fb1ae"
+          }
+        },
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)": {
+          "entity": "2b7cce37d800",
+          "aspects": {
+            "schema": "8551f6767c22",
+            "ownership": "8e5f9dd13d08",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "6f3f70fb7154"
+          }
+        },
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)": {
+          "entity": "c05ace3f0aaa",
+          "aspects": {
+            "schema": "b3adc4e2ad41",
+            "ownership": "154f6d214d44",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "6f3f70fb7154"
+          }
+        }
+      },
+      "restored": {
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)": {
+          "entity": "dd3723f5adec",
+          "aspects": {
+            "schema": "dd40a83770de",
+            "ownership": "154f6d214d44",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "b3b7361fb1ae"
+          }
+        },
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)": {
+          "entity": "ab36daad91f3",
+          "aspects": {
+            "schema": "89280579c9b0",
+            "ownership": "8e5f9dd13d08",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "6f3f70fb7154"
+          }
+        },
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)": {
+          "entity": "c05ace3f0aaa",
+          "aspects": {
+            "schema": "b3adc4e2ad41",
+            "ownership": "154f6d214d44",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "6f3f70fb7154"
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "files": {
+        "monthly_net_revenue.sql": {
+          "before": "456667d0813cdc63f7e89688e437607efb111b011a9bf71098a8b20b632b53dd",
+          "after": "f7339040405bb4d00e26c74625c72fb2f7d1fcacceb8a279b9ba066d9ea7d26e"
+        },
+        "payment_health_window.sql": {
+          "before": "61cb28ee8b2263d12ab513891527985dfaa8adba4bbbbb3fe905b53c4ad8600e",
+          "after": "61cb28ee8b2263d12ab513891527985dfaa8adba4bbbbb3fe905b53c4ad8600e"
+        },
+        "refund_drag.sql": {
+          "before": "4a7e9954b3abd6a7d0409f5cb10947ccc1332de95d61a67bf723b2f7e88ff31a",
+          "after": "5cd3edc324bb78d3759ece99d60eff7eb6a1ba2b411da71a91fe96d65276596a"
+        }
+      },
+      "results": {
+        "monthly_net_revenue.sql": {
+          "green": "433573db4371a2d38a55cb49b0ab7d6517f3bd99d8c675677d04c7ddb192ff6a",
+          "red": null,
+          "repaired": "433573db4371a2d38a55cb49b0ab7d6517f3bd99d8c675677d04c7ddb192ff6a"
+        },
+        "payment_health_window.sql": {
+          "green": "1b31b191dd17bc14b3cd9724b8b5ebd31973be80dfaedb6210a805e091637d4a",
+          "red": "1b31b191dd17bc14b3cd9724b8b5ebd31973be80dfaedb6210a805e091637d4a",
+          "repaired": "1b31b191dd17bc14b3cd9724b8b5ebd31973be80dfaedb6210a805e091637d4a"
+        },
+        "refund_drag.sql": {
+          "green": "2a3dc3c1444f3ddea1d3062de307e7c9b6dd1148bb8c04054ce2972ab078ee48",
+          "red": null,
+          "repaired": "2a3dc3c1444f3ddea1d3062de307e7c9b6dd1148bb8c04054ce2972ab078ee48"
+        }
+      }
+    }
+  },
+  "writeback": {
+    "tagsWhileBroken": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)": [
+        "urn:li:tag:Tier1",
+        "urn:li:tag:Finance",
+        "urn:li:tag:StaleRunbook"
+      ]
+    },
+    "tagsAfterRepair": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)": [
+        "urn:li:tag:Tier1",
+        "urn:li:tag:Finance"
+      ]
+    },
+    "incidentsRaised": [
+      {
+        "urn": "urn:li:incident:8ca399c2-cd19-4aad-bc59-7d3f56c5ecd8",
+        "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+        "reused": false,
+        "assignees": [
+          "urn:li:corpuser:priya.patel",
+          "urn:li:corpuser:mike.rodriguez"
+        ]
+      }
+    ],
+    "incidentsResolved": [
+      {
+        "urn": "urn:li:incident:8ca399c2-cd19-4aad-bc59-7d3f56c5ecd8",
+        "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)"
+      }
+    ],
+    "assertionAfterRepair": [
+      {
+        "urn": "urn:li:assertion:instaboard-f80ab7b3a1306fa23998",
+        "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
+        "result": "SUCCESS"
+      },
+      {
+        "urn": "urn:li:assertion:instaboard-55e12c2097b752e0b2ce",
+        "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+        "result": "SUCCESS"
+      },
+      {
+        "urn": "urn:li:assertion:instaboard-e9dc08241b4acb4707a6",
+        "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
+        "result": "SUCCESS"
+      }
+    ]
+  }
+}

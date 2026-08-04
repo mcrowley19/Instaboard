@@ -1,0 +1,811 @@
+{
+  "startedAt": "2026-08-04T17:32:02.261Z",
+  "finishedAt": "2026-08-04T17:37:00.294Z",
+  "gms": "http://localhost:8080",
+  "catalog": "showcase-ecommerce, the demo datapack DataHub publishes (1,065 entities)",
+  "catalogProfile": "showcase",
+  "method": "Consumer SQL from examples/consumer was executed against a SQLite warehouse whose schema is read from the live catalog at baseline and whose rows are deterministic by (table, row, column position). The rename was then made in both places at once, the way it happens in production: ALTER TABLE RENAME COLUMN in the warehouse, the same rename through DataHub's schemaMetadata API in the catalog. The readers failed; the detector's proposed correction was approved and applied to the workspace; the queries went green with result hashes identical to the baseline. A rename physically cannot move warehouse data, so hash equality is what a correct repair looks like and a wrong substitution cannot fake it.",
+  "breakingChanges": [
+    {
+      "kind": "column-renamed",
+      "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+      "detail": "Renamed order_details.cost_of_delivery to delivery_cost_usd — a column the runbook's SQL selects."
+    }
+  ],
+  "checks": [
+    {
+      "phase": "datahub",
+      "what": "DataHub is up",
+      "passed": true,
+      "detail": "GMS answering at http://localhost:8080"
+    },
+    {
+      "phase": "ingest",
+      "what": "showcase catalog is in the catalog",
+      "passed": true,
+      "detail": "order_details resolves in DataHub"
+    },
+    {
+      "phase": "baseline",
+      "what": "every catalog entity carries a recomputable version hash",
+      "passed": true,
+      "detail": "order_details@214214e38bf6, order_history@574d60e4d127, products@722cfaee9b5f"
+    },
+    {
+      "phase": "baseline",
+      "what": "the workspace has consumers of the target column, and a control that avoids it",
+      "passed": true,
+      "detail": "3 files: delivery_cost_share.sql, revenue_net_of_delivery.sql read cost_of_delivery; control: order_status_mix.sql"
+    },
+    {
+      "phase": "baseline",
+      "what": "every consumer query runs green against the baseline catalog schema",
+      "passed": true,
+      "detail": "delivery_cost_share.sql: 1 rows, d04b529b188e; order_status_mix.sql: 6 rows, 8e0ab45e5e07; revenue_net_of_delivery.sql: 6 rows, adfdd7d65a4f"
+    },
+    {
+      "phase": "baseline",
+      "what": "the runbook validates clean before anything is broken",
+      "passed": true,
+      "detail": "1 runbook checked, 0 drifted"
+    },
+    {
+      "phase": "break",
+      "what": "the rename went through DataHub's own write API",
+      "passed": true,
+      "detail": "Renamed order_details.cost_of_delivery to delivery_cost_usd — a column the runbook's SQL selects."
+    },
+    {
+      "phase": "break",
+      "what": "only the renamed entity's schema fingerprint moved",
+      "passed": true,
+      "detail": "order_details schema@8aad033b1680 (moved), order_history schema@4f728ef0ad52, products schema@fce7ae62b628"
+    },
+    {
+      "phase": "red",
+      "what": "every consumer of the renamed column fails",
+      "passed": true,
+      "detail": "delivery_cost_share.sql: no such column: cost_of_delivery; revenue_net_of_delivery.sql: no such column: cost_of_delivery"
+    },
+    {
+      "phase": "red",
+      "what": "the failure names the missing column",
+      "passed": true,
+      "detail": "no such column: cost_of_delivery; no such column: cost_of_delivery"
+    },
+    {
+      "phase": "red",
+      "what": "the control keeps running with an identical result hash",
+      "passed": true,
+      "detail": "order_status_mix.sql: 8e0ab45e5e07"
+    },
+    {
+      "phase": "detect",
+      "what": "the sweep reports the runbook broken and writes back to DataHub",
+      "passed": true,
+      "detail": "severity broken, 1 dataset(s) tagged, 1 incident(s) raised"
+    },
+    {
+      "phase": "detect",
+      "what": "the Stale Runbook tag reads back off the dataset in DataHub",
+      "passed": true,
+      "detail": "order_details"
+    },
+    {
+      "phase": "detect",
+      "what": "the proposal derives the rename correction from the catalog",
+      "passed": true,
+      "detail": "cost_of_delivery→delivery_cost_usd (medium)"
+    },
+    {
+      "phase": "approve",
+      "what": "the approved plan holds derivable edits only, and every unresolved finding stays out",
+      "passed": true,
+      "detail": "1 edit(s) approved (medium), 0 withheld, 0 unresolved left for a person"
+    },
+    {
+      "phase": "repair",
+      "what": "what was applied is exactly what was approved",
+      "passed": true,
+      "detail": "plan ef655a1eba420d34"
+    },
+    {
+      "phase": "repair",
+      "what": "the repair touches the affected consumers and leaves the control alone",
+      "passed": true,
+      "detail": "delivery_cost_share.sql: 2 replacement(s); order_status_mix.sql: untouched; revenue_net_of_delivery.sql: 3 replacement(s)"
+    },
+    {
+      "phase": "repair",
+      "what": "every consumer query is green again against the changed catalog",
+      "passed": true,
+      "detail": "delivery_cost_share.sql: ok; order_status_mix.sql: ok; revenue_net_of_delivery.sql: ok"
+    },
+    {
+      "phase": "repair",
+      "what": "every repaired query returns a byte-identical result hash to its baseline",
+      "passed": true,
+      "detail": "delivery_cost_share.sql: d04b529b188e vs d04b529b188e; revenue_net_of_delivery.sql: adfdd7d65a4f vs adfdd7d65a4f"
+    },
+    {
+      "phase": "repair",
+      "what": "the control's file and result are untouched end to end",
+      "passed": true,
+      "detail": "order_status_mix.sql: 8e0ab45e5e07"
+    },
+    {
+      "phase": "repair",
+      "what": "the repaired runbook validates clean against the changed catalog",
+      "passed": true,
+      "detail": "severity ok, 14/18 claims hold"
+    },
+    {
+      "phase": "repair",
+      "what": "the runbook's assertion is back to passing in DataHub",
+      "passed": true,
+      "detail": "b278999326f7=SUCCESS, b72ffd0598d4=SUCCESS, ee42329c3599=SUCCESS"
+    },
+    {
+      "phase": "repair",
+      "what": "the sweep closes the incidents it opened",
+      "passed": true,
+      "detail": "1 incident(s) resolved by the sweep"
+    },
+    {
+      "phase": "repair",
+      "what": "the Stale Runbook tag is retracted, read back from GMS",
+      "passed": true,
+      "detail": "1/1 cleared"
+    },
+    {
+      "phase": "restore",
+      "what": "every catalog fingerprint is back to its baseline value",
+      "passed": true,
+      "detail": "order_details@214214e38bf6, order_history@574d60e4d127, products@722cfaee9b5f"
+    }
+  ],
+  "summary": {
+    "total": 25,
+    "passed": 25,
+    "failed": 0
+  },
+  "consumer": {
+    "source": "examples/consumer/showcase",
+    "workspace": "data/consumer-workspace/showcase",
+    "green": {
+      "tables": [
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "table": "order_details",
+          "columns": [
+            "cust_email",
+            "phone_number",
+            "billing_address_line1",
+            "billing_address_line2",
+            "billing_country",
+            "billing_region",
+            "billing_town_city",
+            "billing_zipcode",
+            "category_id",
+            "category_name",
+            "condition",
+            "cost_of_delivery",
+            "cust_first_name",
+            "cust_last_name",
+            "customer_class",
+            "customer_id",
+            "delivery_status",
+            "delivery_type",
+            "discount_amount",
+            "discount_percent",
+            "dispatch_date",
+            "estimated_delivery",
+            "gift_wrap",
+            "line_item_id",
+            "line_total",
+            "list_price",
+            "order_date",
+            "order_id",
+            "order_mode",
+            "order_status",
+            "order_total",
+            "payment_method_code",
+            "product_description",
+            "product_id",
+            "product_name",
+            "product_status",
+            "promotion_description",
+            "promotion_id",
+            "promotion_name",
+            "quantity",
+            "quantity_on_hand",
+            "return_date",
+            "return_status",
+            "shipping_address_line1",
+            "shipping_address_line2",
+            "shipping_country",
+            "shipping_region",
+            "shipping_town_city",
+            "shipping_zipcode",
+            "stock_status",
+            "unit_price",
+            "updated_at",
+            "wait_till_complete_yn",
+            "warehouse_id",
+            "warehouse_name"
+          ],
+          "rows": 44
+        },
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+          "table": "order_history",
+          "columns": [
+            "as_of_date",
+            "customer_id",
+            "order_id",
+            "order_status",
+            "order_total"
+          ],
+          "rows": 36
+        },
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "table": "products",
+          "columns": [
+            "catalog_url",
+            "category_id",
+            "date_added",
+            "list_price",
+            "min_price",
+            "product_description",
+            "product_id",
+            "product_name",
+            "product_status",
+            "supplier_id",
+            "warranty_period",
+            "weight_class"
+          ],
+          "rows": 45
+        }
+      ],
+      "queries": [
+        {
+          "file": "delivery_cost_share.sql",
+          "sqlHash": "f400f4dc6953158580c020ab6552aa83471b349314dabb957b100927c9c8119a",
+          "ok": true,
+          "columns": [
+            "delivery_share"
+          ],
+          "rowCount": 1,
+          "resultHash": "d04b529b188e59a4e6d3fe4cdb5ce0c51ab4d7b5140de8eab6ff17c3556e2e8a"
+        },
+        {
+          "file": "order_status_mix.sql",
+          "sqlHash": "75cf36a035fa8a6ab9b5c163f9872f5347f848afbe530bedf97135db13d3ecbf",
+          "ok": true,
+          "columns": [
+            "order_status",
+            "orders",
+            "order_value"
+          ],
+          "rowCount": 6,
+          "resultHash": "8e0ab45e5e0780972a443c2bfcbfd8a0babf75b27079184abb3d9cd7f8ea9dda"
+        },
+        {
+          "file": "revenue_net_of_delivery.sql",
+          "sqlHash": "252b1f6c4f867d5b757b4faf1658fe605047350bc016e07bf93ed80434b30953",
+          "ok": true,
+          "columns": [
+            "customer_class",
+            "total_revenue",
+            "delivery_cost",
+            "net_revenue"
+          ],
+          "rowCount": 6,
+          "resultHash": "adfdd7d65a4f4dbcda5b1a90f012ea0139f2fe2b1e8abbf9b9d4a8c013e210fd"
+        }
+      ],
+      "allGreen": true
+    },
+    "red": {
+      "tables": [
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "table": "order_details",
+          "columns": [
+            "cust_email",
+            "phone_number",
+            "billing_address_line1",
+            "billing_address_line2",
+            "billing_country",
+            "billing_region",
+            "billing_town_city",
+            "billing_zipcode",
+            "category_id",
+            "category_name",
+            "condition",
+            "delivery_cost_usd",
+            "cust_first_name",
+            "cust_last_name",
+            "customer_class",
+            "customer_id",
+            "delivery_status",
+            "delivery_type",
+            "discount_amount",
+            "discount_percent",
+            "dispatch_date",
+            "estimated_delivery",
+            "gift_wrap",
+            "line_item_id",
+            "line_total",
+            "list_price",
+            "order_date",
+            "order_id",
+            "order_mode",
+            "order_status",
+            "order_total",
+            "payment_method_code",
+            "product_description",
+            "product_id",
+            "product_name",
+            "product_status",
+            "promotion_description",
+            "promotion_id",
+            "promotion_name",
+            "quantity",
+            "quantity_on_hand",
+            "return_date",
+            "return_status",
+            "shipping_address_line1",
+            "shipping_address_line2",
+            "shipping_country",
+            "shipping_region",
+            "shipping_town_city",
+            "shipping_zipcode",
+            "stock_status",
+            "unit_price",
+            "updated_at",
+            "wait_till_complete_yn",
+            "warehouse_id",
+            "warehouse_name"
+          ],
+          "rows": 44
+        },
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+          "table": "order_history",
+          "columns": [
+            "as_of_date",
+            "customer_id",
+            "order_id",
+            "order_status",
+            "order_total"
+          ],
+          "rows": 36
+        },
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "table": "products",
+          "columns": [
+            "catalog_url",
+            "category_id",
+            "date_added",
+            "list_price",
+            "min_price",
+            "product_description",
+            "product_id",
+            "product_name",
+            "product_status",
+            "supplier_id",
+            "warranty_period",
+            "weight_class"
+          ],
+          "rows": 45
+        }
+      ],
+      "queries": [
+        {
+          "file": "delivery_cost_share.sql",
+          "sqlHash": "f400f4dc6953158580c020ab6552aa83471b349314dabb957b100927c9c8119a",
+          "ok": false,
+          "error": "no such column: cost_of_delivery",
+          "columns": [],
+          "rowCount": 0
+        },
+        {
+          "file": "order_status_mix.sql",
+          "sqlHash": "75cf36a035fa8a6ab9b5c163f9872f5347f848afbe530bedf97135db13d3ecbf",
+          "ok": true,
+          "columns": [
+            "order_status",
+            "orders",
+            "order_value"
+          ],
+          "rowCount": 6,
+          "resultHash": "8e0ab45e5e0780972a443c2bfcbfd8a0babf75b27079184abb3d9cd7f8ea9dda"
+        },
+        {
+          "file": "revenue_net_of_delivery.sql",
+          "sqlHash": "252b1f6c4f867d5b757b4faf1658fe605047350bc016e07bf93ed80434b30953",
+          "ok": false,
+          "error": "no such column: cost_of_delivery",
+          "columns": [],
+          "rowCount": 0
+        }
+      ],
+      "allGreen": false
+    },
+    "repaired": {
+      "tables": [
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+          "table": "order_details",
+          "columns": [
+            "cust_email",
+            "phone_number",
+            "billing_address_line1",
+            "billing_address_line2",
+            "billing_country",
+            "billing_region",
+            "billing_town_city",
+            "billing_zipcode",
+            "category_id",
+            "category_name",
+            "condition",
+            "delivery_cost_usd",
+            "cust_first_name",
+            "cust_last_name",
+            "customer_class",
+            "customer_id",
+            "delivery_status",
+            "delivery_type",
+            "discount_amount",
+            "discount_percent",
+            "dispatch_date",
+            "estimated_delivery",
+            "gift_wrap",
+            "line_item_id",
+            "line_total",
+            "list_price",
+            "order_date",
+            "order_id",
+            "order_mode",
+            "order_status",
+            "order_total",
+            "payment_method_code",
+            "product_description",
+            "product_id",
+            "product_name",
+            "product_status",
+            "promotion_description",
+            "promotion_id",
+            "promotion_name",
+            "quantity",
+            "quantity_on_hand",
+            "return_date",
+            "return_status",
+            "shipping_address_line1",
+            "shipping_address_line2",
+            "shipping_country",
+            "shipping_region",
+            "shipping_town_city",
+            "shipping_zipcode",
+            "stock_status",
+            "unit_price",
+            "updated_at",
+            "wait_till_complete_yn",
+            "warehouse_id",
+            "warehouse_name"
+          ],
+          "rows": 44
+        },
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+          "table": "order_history",
+          "columns": [
+            "as_of_date",
+            "customer_id",
+            "order_id",
+            "order_status",
+            "order_total"
+          ],
+          "rows": 36
+        },
+        {
+          "urn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+          "table": "products",
+          "columns": [
+            "catalog_url",
+            "category_id",
+            "date_added",
+            "list_price",
+            "min_price",
+            "product_description",
+            "product_id",
+            "product_name",
+            "product_status",
+            "supplier_id",
+            "warranty_period",
+            "weight_class"
+          ],
+          "rows": 45
+        }
+      ],
+      "queries": [
+        {
+          "file": "delivery_cost_share.sql",
+          "sqlHash": "0b38082af420dbb393a1ddd10aa7aa2fd5b1130c6f471bc35256acd5ddb8754e",
+          "ok": true,
+          "columns": [
+            "delivery_share"
+          ],
+          "rowCount": 1,
+          "resultHash": "d04b529b188e59a4e6d3fe4cdb5ce0c51ab4d7b5140de8eab6ff17c3556e2e8a"
+        },
+        {
+          "file": "order_status_mix.sql",
+          "sqlHash": "75cf36a035fa8a6ab9b5c163f9872f5347f848afbe530bedf97135db13d3ecbf",
+          "ok": true,
+          "columns": [
+            "order_status",
+            "orders",
+            "order_value"
+          ],
+          "rowCount": 6,
+          "resultHash": "8e0ab45e5e0780972a443c2bfcbfd8a0babf75b27079184abb3d9cd7f8ea9dda"
+        },
+        {
+          "file": "revenue_net_of_delivery.sql",
+          "sqlHash": "f7b8328dae414a8f9f69a905bedf89c41b22f39a607b3db73062928e4df13f0d",
+          "ok": true,
+          "columns": [
+            "customer_class",
+            "total_revenue",
+            "delivery_cost",
+            "net_revenue"
+          ],
+          "rowCount": 6,
+          "resultHash": "adfdd7d65a4f4dbcda5b1a90f012ea0139f2fe2b1e8abbf9b9d4a8c013e210fd"
+        }
+      ],
+      "allGreen": true
+    }
+  },
+  "proposal": {
+    "edits": [
+      {
+        "stepIndex": 1,
+        "stepTitle": "Pull revenue and delivery cost by customer class",
+        "kind": "column-rename",
+        "from": "cost_of_delivery",
+        "to": "delivery_cost_usd",
+        "rationale": "`delivery_cost_usd` on ORDER_DETAILS: it is on the entity now, was not when this runbook was recorded, and is the closest match to `cost_of_delivery` (0.76).",
+        "confidence": "medium",
+        "claimId": "column-exists:db8ff6d8e9f8",
+        "occurrences": 3
+      }
+    ],
+    "unresolved": [],
+    "reviewers": [
+      "DataHub SE Team",
+      "David Kim",
+      "Julia Novak"
+    ]
+  },
+  "approval": {
+    "mode": "operator",
+    "note": "Approved by the operator running the drill, who reads the same rationale a PR reviewer would. Outside the drill the edit set rides a pull request (npm run propose -- --pr) and merging it is the approval. Findings the detector could not derive an edit for are in `unresolved` and are never applied.",
+    "approvedBy": "michael",
+    "at": "2026-08-04T17:35:29.815Z",
+    "planHash": "ef655a1eba420d347e9643460027f570cc3224bf3bba1fe005ec50d5c1928469",
+    "applied": [
+      {
+        "kind": "column-rename",
+        "from": "cost_of_delivery",
+        "to": "delivery_cost_usd",
+        "confidence": "medium"
+      }
+    ],
+    "withheld": []
+  },
+  "repairs": [
+    {
+      "file": "delivery_cost_share.sql",
+      "hashBefore": "f400f4dc6953158580c020ab6552aa83471b349314dabb957b100927c9c8119a",
+      "hashAfter": "0b38082af420dbb393a1ddd10aa7aa2fd5b1130c6f471bc35256acd5ddb8754e",
+      "replacements": 2,
+      "changed": true
+    },
+    {
+      "file": "order_status_mix.sql",
+      "hashBefore": "75cf36a035fa8a6ab9b5c163f9872f5347f848afbe530bedf97135db13d3ecbf",
+      "hashAfter": "75cf36a035fa8a6ab9b5c163f9872f5347f848afbe530bedf97135db13d3ecbf",
+      "replacements": 0,
+      "changed": false
+    },
+    {
+      "file": "revenue_net_of_delivery.sql",
+      "hashBefore": "252b1f6c4f867d5b757b4faf1658fe605047350bc016e07bf93ed80434b30953",
+      "hashAfter": "f7b8328dae414a8f9f69a905bedf89c41b22f39a607b3db73062928e4df13f0d",
+      "replacements": 3,
+      "changed": true
+    }
+  ],
+  "diff": "--- delivery_cost_share.sql (before)\n+++ delivery_cost_share.sql (repaired)\n@@ -1,5 +1,5 @@\n -- Margin watch: delivery cost as a share of order revenue.\n--- Reads order_details on cost_of_delivery and order_total.\n-SELECT ROUND(SUM(cost_of_delivery) / SUM(order_total), 4) AS delivery_share\n+-- Reads order_details on delivery_cost_usd and order_total.\n+SELECT ROUND(SUM(delivery_cost_usd) / SUM(order_total), 4) AS delivery_share\n FROM order_details;\n \n\n--- revenue_net_of_delivery.sql (before)\n+++ revenue_net_of_delivery.sql (repaired)\n@@ -1,10 +1,10 @@\n -- Commercial pack: revenue net of delivery, by customer class.\n--- Reads order_details — cost_of_delivery is the column the repair drill\n+-- Reads order_details — delivery_cost_usd is the column the repair drill\n -- renames out from under this query.\n SELECT customer_class,\n        ROUND(SUM(order_total), 2) AS total_revenue,\n-       ROUND(SUM(cost_of_delivery), 2) AS delivery_cost,\n-       ROUND(SUM(order_total) - SUM(cost_of_delivery), 2) AS net_revenue\n+       ROUND(SUM(delivery_cost_usd), 2) AS delivery_cost,\n+       ROUND(SUM(order_total) - SUM(delivery_cost_usd), 2) AS net_revenue\n FROM order_details\n GROUP BY customer_class\n ORDER BY customer_class;\n",
+  "hashes": {
+    "plan": "ef655a1eba420d347e9643460027f570cc3224bf3bba1fe005ec50d5c1928469",
+    "catalog": {
+      "baseline": {
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)": {
+          "entity": "214214e38bf6",
+          "aspects": {
+            "schema": "3f98350c8745",
+            "ownership": "06a2431b52d3",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "6f3f70fb7154"
+          }
+        },
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)": {
+          "entity": "574d60e4d127",
+          "aspects": {
+            "schema": "4f728ef0ad52",
+            "ownership": "4f53cda18c2b",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "6f3f70fb7154"
+          }
+        },
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)": {
+          "entity": "722cfaee9b5f",
+          "aspects": {
+            "schema": "fce7ae62b628",
+            "ownership": "d8d5b5dea4e9",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "6f3f70fb7154"
+          }
+        }
+      },
+      "broken": {
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)": {
+          "entity": "9bbfc8c37648",
+          "aspects": {
+            "schema": "8aad033b1680",
+            "ownership": "06a2431b52d3",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "6f3f70fb7154"
+          }
+        },
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)": {
+          "entity": "574d60e4d127",
+          "aspects": {
+            "schema": "4f728ef0ad52",
+            "ownership": "4f53cda18c2b",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "6f3f70fb7154"
+          }
+        },
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)": {
+          "entity": "722cfaee9b5f",
+          "aspects": {
+            "schema": "fce7ae62b628",
+            "ownership": "d8d5b5dea4e9",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "6f3f70fb7154"
+          }
+        }
+      },
+      "restored": {
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)": {
+          "entity": "214214e38bf6",
+          "aspects": {
+            "schema": "3f98350c8745",
+            "ownership": "06a2431b52d3",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "6f3f70fb7154"
+          }
+        },
+        "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)": {
+          "entity": "574d60e4d127",
+          "aspects": {
+            "schema": "4f728ef0ad52",
+            "ownership": "4f53cda18c2b",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "6f3f70fb7154"
+          }
+        },
+        "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)": {
+          "entity": "722cfaee9b5f",
+          "aspects": {
+            "schema": "fce7ae62b628",
+            "ownership": "d8d5b5dea4e9",
+            "deprecation": "ea9a6f4c3e7f",
+            "health": "6f3f70fb7154"
+          }
+        }
+      }
+    },
+    "artifacts": {
+      "files": {
+        "delivery_cost_share.sql": {
+          "before": "f400f4dc6953158580c020ab6552aa83471b349314dabb957b100927c9c8119a",
+          "after": "0b38082af420dbb393a1ddd10aa7aa2fd5b1130c6f471bc35256acd5ddb8754e"
+        },
+        "order_status_mix.sql": {
+          "before": "75cf36a035fa8a6ab9b5c163f9872f5347f848afbe530bedf97135db13d3ecbf",
+          "after": "75cf36a035fa8a6ab9b5c163f9872f5347f848afbe530bedf97135db13d3ecbf"
+        },
+        "revenue_net_of_delivery.sql": {
+          "before": "252b1f6c4f867d5b757b4faf1658fe605047350bc016e07bf93ed80434b30953",
+          "after": "f7b8328dae414a8f9f69a905bedf89c41b22f39a607b3db73062928e4df13f0d"
+        }
+      },
+      "results": {
+        "delivery_cost_share.sql": {
+          "green": "d04b529b188e59a4e6d3fe4cdb5ce0c51ab4d7b5140de8eab6ff17c3556e2e8a",
+          "red": null,
+          "repaired": "d04b529b188e59a4e6d3fe4cdb5ce0c51ab4d7b5140de8eab6ff17c3556e2e8a"
+        },
+        "order_status_mix.sql": {
+          "green": "8e0ab45e5e0780972a443c2bfcbfd8a0babf75b27079184abb3d9cd7f8ea9dda",
+          "red": "8e0ab45e5e0780972a443c2bfcbfd8a0babf75b27079184abb3d9cd7f8ea9dda",
+          "repaired": "8e0ab45e5e0780972a443c2bfcbfd8a0babf75b27079184abb3d9cd7f8ea9dda"
+        },
+        "revenue_net_of_delivery.sql": {
+          "green": "adfdd7d65a4f4dbcda5b1a90f012ea0139f2fe2b1e8abbf9b9d4a8c013e210fd",
+          "red": null,
+          "repaired": "adfdd7d65a4f4dbcda5b1a90f012ea0139f2fe2b1e8abbf9b9d4a8c013e210fd"
+        }
+      }
+    }
+  },
+  "writeback": {
+    "tagsWhileBroken": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)": [
+        "urn:li:tag:b2fd91.__default_large_table",
+        "urn:li:tag:b2fd91.__default_high_queries",
+        "urn:li:tag:UnvalidatedRunbookStep",
+        "urn:li:tag:StaleRunbook"
+      ]
+    },
+    "tagsAfterRepair": {
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)": [
+        "urn:li:tag:b2fd91.__default_large_table",
+        "urn:li:tag:b2fd91.__default_high_queries",
+        "urn:li:tag:UnvalidatedRunbookStep"
+      ]
+    },
+    "incidentsRaised": [
+      {
+        "urn": "urn:li:incident:5f0894f8-9c20-4b56-a985-67bdd997f620",
+        "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "reused": false,
+        "assignees": [
+          "urn:li:corpuser:b2fd91.brock1@example.com",
+          "urn:li:corpuser:b2fd91.jonny1@example.com"
+        ]
+      }
+    ],
+    "incidentsResolved": [
+      {
+        "urn": "urn:li:incident:5f0894f8-9c20-4b56-a985-67bdd997f620",
+        "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)"
+      }
+    ],
+    "assertionAfterRepair": [
+      {
+        "urn": "urn:li:assertion:instaboard-0a02391ab278999326f7",
+        "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+        "result": "SUCCESS"
+      },
+      {
+        "urn": "urn:li:assertion:instaboard-74ce1705b72ffd0598d4",
+        "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_history,PROD)",
+        "result": "SUCCESS"
+      },
+      {
+        "urn": "urn:li:assertion:instaboard-5d8cafbfee42329c3599",
+        "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:dbt,b2fd91.order_entry_db.order_entry.products,PROD)",
+        "result": "SUCCESS"
+      }
+    ]
+  }
+}

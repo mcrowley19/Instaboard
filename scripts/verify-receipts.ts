@@ -33,6 +33,7 @@
  *
  * Flags:
  *   --catalog=<name>    northbeam (default) or showcase
+ *   --repair            verify the prove:repair receipts instead of the loop's
  *   --baseline=<path>   compare against a file instead of the copy at HEAD
  *   --baseline=git      the copy at HEAD (default)
  */
@@ -44,17 +45,19 @@ import path from "node:path";
 const args = process.argv.slice(2);
 const catalog = args.find((a) => a.startsWith("--catalog="))?.split("=")[1] ?? "northbeam";
 const baselineArg = args.find((a) => a.startsWith("--baseline="))?.split("=")[1] ?? "git";
+const repair = args.includes("--repair");
 
-const RELATIVE = path.join(
-  "examples",
-  "live",
-  catalog === "northbeam" ? "prove-loop-receipts.json" : `prove-loop-receipts-${catalog}.json`,
-);
+const stem = repair ? "prove-repair-receipts" : "prove-loop-receipts";
+const RELATIVE = path.join("examples", "live", catalog === "northbeam" ? `${stem}.json` : `${stem}-${catalog}.json`);
 
 /* ── What a re-run is allowed to change ───────────────────────────────── */
 
-/** Dropped wholesale: when the run happened and which server it talked to. */
-const VOLATILE_KEYS = new Set(["startedAt", "finishedAt", "gms"]);
+/**
+ * Dropped wholesale: when the run happened, which server it talked to, and who
+ * ran it. The repair receipts record the operator as the drill's approver, and
+ * "michael" on a laptop has to agree with "runner" on CI.
+ */
+const VOLATILE_KEYS = new Set(["startedAt", "finishedAt", "gms", "approvedBy"]);
 
 /**
  * Identifiers minted per run. The shape is asserted, the value is not — a
@@ -120,18 +123,29 @@ function normalizeReceipts(receipts: unknown): unknown {
     if (check.phase === "datahub" && check.what === "DataHub is up") check.detail = "<how DataHub got here>";
   }
 
-  const readBack = out.tagReadBack as Record<string, Record<string, unknown>> | undefined;
-  if (!readBack) return out;
+  // The loop's receipts carry tag read-backs under `tagReadBack`; the repair's
+  // carry them inside `writeback`. Same facts, same filtering.
+  const writeback = out.writeback as Record<string, unknown> | undefined;
+  const readBacks = [
+    out.tagReadBack as Record<string, Record<string, unknown>> | undefined,
+    writeback && {
+      tagsWhileBroken: writeback.tagsWhileBroken as Record<string, unknown>,
+      tagsAfterRepair: writeback.tagsAfterRepair as Record<string, unknown>,
+    },
+  ];
 
-  for (const phase of Object.keys(readBack)) {
-    const byDataset = readBack[phase];
-    if (!byDataset || typeof byDataset !== "object") continue;
-    for (const datasetUrn of Object.keys(byDataset)) {
-      const urns = byDataset[datasetUrn];
-      if (!Array.isArray(urns)) continue;
-      byDataset[datasetUrn] = urns
-        .filter((urn): urn is string => typeof urn === "string" && OWN_TAGS.includes(urn))
-        .sort();
+  for (const readBack of readBacks) {
+    if (!readBack) continue;
+    for (const phase of Object.keys(readBack)) {
+      const byDataset = readBack[phase];
+      if (!byDataset || typeof byDataset !== "object") continue;
+      for (const datasetUrn of Object.keys(byDataset)) {
+        const urns = byDataset[datasetUrn];
+        if (!Array.isArray(urns)) continue;
+        byDataset[datasetUrn] = urns
+          .filter((urn): urn is string => typeof urn === "string" && OWN_TAGS.includes(urn))
+          .sort();
+      }
     }
   }
   return out;
@@ -213,7 +227,7 @@ try {
   fresh = JSON.parse(readFileSync(freshPath, "utf8"));
 } catch (err) {
   console.error(`No receipts to verify at ${RELATIVE}: ${err instanceof Error ? err.message : String(err)}`);
-  console.error(`Run \`npm run prove -- --catalog=${catalog}\` first.`);
+  console.error(`Run \`npm run prove${repair ? ":repair" : ""} -- --catalog=${catalog}\` first.`);
   process.exit(2);
 }
 
