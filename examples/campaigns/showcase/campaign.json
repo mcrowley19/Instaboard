@@ -1,0 +1,68 @@
+{
+  "catalog": "showcase",
+  "generatedFrom": "examples/live/prove-repair-receipts-showcase.json",
+  "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,b2fd91.order_entry_db.analytics.order_details,PROD)",
+  "edits": [
+    {
+      "kind": "column-rename",
+      "from": "cost_of_delivery",
+      "to": "delivery_cost_usd",
+      "confidence": "medium"
+    }
+  ],
+  "planHash": "ef655a1eba420d347e9643460027f570cc3224bf3bba1fe005ec50d5c1928469",
+  "repos": [
+    {
+      "repo": "showcase",
+      "files": [
+        {
+          "file": "delivery_cost_share.sql",
+          "replacements": 2,
+          "hashBefore": "f400f4dc6953158580c020ab6552aa83471b349314dabb957b100927c9c8119a",
+          "hashAfter": "0b38082af420dbb393a1ddd10aa7aa2fd5b1130c6f471bc35256acd5ddb8754e"
+        },
+        {
+          "file": "revenue_net_of_delivery.sql",
+          "replacements": 3,
+          "hashBefore": "252b1f6c4f867d5b757b4faf1658fe605047350bc016e07bf93ed80434b30953",
+          "hashAfter": "f7b8328dae414a8f9f69a905bedf89c41b22f39a607b3db73062928e4df13f0d"
+        }
+      ],
+      "patchHash": "faa0b01e2817aea74947a991d60f0c08089f10c7902b830fe1760f6de7d7f161",
+      "applyCheck": {
+        "passed": true,
+        "detail": "git apply --check passed, the patch applied to a pristine copy, and every patched file hashed as promised"
+      }
+    },
+    {
+      "repo": "showcase-dbt",
+      "files": [
+        {
+          "file": "models/commercial/revenue_net_of_delivery.sql",
+          "replacements": 3,
+          "hashBefore": "b58d91644042dd87d53df121d58ce860cab1e79491dc73ad24bc17bf239320da",
+          "hashAfter": "907620ac5f6363ca81df86abda6f36bd450576cc26e593ba2febf3b9bc38bb44"
+        },
+        {
+          "file": "models/sources.yml",
+          "replacements": 1,
+          "hashBefore": "932ff88692764048861edb217c8de5e4284bfd25ca7926aebbf00077f41feba1",
+          "hashAfter": "f12d126a6e4690a56159cda4a4dcecbdf6ec2ebab61190fa3398f5c7e41326ee"
+        }
+      ],
+      "patchHash": "deaf952fc4bee355820a461f58812b8f16809485df472139bd4157ca4822e235",
+      "applyCheck": {
+        "passed": true,
+        "detail": "git apply --check passed, the patch applied to a pristine copy, and every patched file hashed as promised"
+      }
+    }
+  ],
+  "evidence": {
+    "source": "live",
+    "savedQueriesMatched": [],
+    "savedQueriesChecked": 0,
+    "downstream": [],
+    "detail": "0/0 saved queries on the dataset mention the old column; 0 downstream dataset(s) one hop away."
+  },
+  "at": "2026-08-04T18:04:40.158Z"
+}

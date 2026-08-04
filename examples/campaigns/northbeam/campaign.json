@@ -1,0 +1,75 @@
+{
+  "catalog": "northbeam",
+  "generatedFrom": "examples/live/prove-repair-receipts.json",
+  "urn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
+  "edits": [
+    {
+      "kind": "column-rename",
+      "from": "net_amount_usd",
+      "to": "net_revenue_usd",
+      "confidence": "medium"
+    }
+  ],
+  "planHash": "bd0d8633c5bd7c284fd6b945b18f08bc90f3d83697b9611b62e8e3484121712f",
+  "repos": [
+    {
+      "repo": "northbeam",
+      "files": [
+        {
+          "file": "monthly_net_revenue.sql",
+          "replacements": 2,
+          "hashBefore": "456667d0813cdc63f7e89688e437607efb111b011a9bf71098a8b20b632b53dd",
+          "hashAfter": "f7339040405bb4d00e26c74625c72fb2f7d1fcacceb8a279b9ba066d9ea7d26e"
+        },
+        {
+          "file": "refund_drag.sql",
+          "replacements": 3,
+          "hashBefore": "4a7e9954b3abd6a7d0409f5cb10947ccc1332de95d61a67bf723b2f7e88ff31a",
+          "hashAfter": "5cd3edc324bb78d3759ece99d60eff7eb6a1ba2b411da71a91fe96d65276596a"
+        }
+      ],
+      "patchHash": "ec6b32063f6d88b68c270a49704d65d06e955ea6038594e677ce4aa1b4151f48",
+      "applyCheck": {
+        "passed": true,
+        "detail": "git apply --check passed, the patch applied to a pristine copy, and every patched file hashed as promised"
+      }
+    },
+    {
+      "repo": "northbeam-dbt",
+      "files": [
+        {
+          "file": "models/finance/monthly_net_revenue.sql",
+          "replacements": 2,
+          "hashBefore": "fcd175a91d9de55432a715698e1196a4a35390ad6a47d70c3bc6a2ba2020a7ca",
+          "hashAfter": "e6e8ab4699a76312a47065b09b12c8e37b715440de745a91d951626b7716bc05"
+        },
+        {
+          "file": "models/sources.yml",
+          "replacements": 1,
+          "hashBefore": "9209379848ffd6cbf0e52b0e20270303f558eecd6f09574d0583069107cdfa7e",
+          "hashAfter": "08946d857af6d49afee03d9a01c88261f1310cc75fb0d716ab1cc2a32c4a584f"
+        }
+      ],
+      "patchHash": "a7e8eaba7b42a0a0f7fb1c6ea075a23f3b3665f5eedfa45d900c033ec1ccd520",
+      "applyCheck": {
+        "passed": true,
+        "detail": "git apply --check passed, the patch applied to a pristine copy, and every patched file hashed as promised"
+      }
+    }
+  ],
+  "evidence": {
+    "source": "live",
+    "savedQueriesMatched": [
+      {
+        "name": "Net revenue by customer country (last 90 days)",
+        "excerpt": "SELECT c.country, SUM(r.net_amount_usd) AS net_revenue"
+      }
+    ],
+    "savedQueriesChecked": 1,
+    "downstream": [
+      "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)"
+    ],
+    "detail": "1/1 saved queries on the dataset mention the old column; 1 downstream dataset(s) one hop away."
+  },
+  "at": "2026-08-04T18:04:31.032Z"
+}

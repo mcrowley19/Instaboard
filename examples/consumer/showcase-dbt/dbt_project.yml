@@ -1,0 +1,4 @@
+name: showcase_commercial
+version: "1.0.0"
+profile: showcase
+model-paths: ["models"]

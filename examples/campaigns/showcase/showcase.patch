@@ -1,0 +1,25 @@
+--- a/delivery_cost_share.sql
++++ b/delivery_cost_share.sql
+@@ -1,4 +1,4 @@
+ -- Margin watch: delivery cost as a share of order revenue.
+--- Reads order_details on cost_of_delivery and order_total.
+-SELECT ROUND(SUM(cost_of_delivery) / SUM(order_total), 4) AS delivery_share
++-- Reads order_details on delivery_cost_usd and order_total.
++SELECT ROUND(SUM(delivery_cost_usd) / SUM(order_total), 4) AS delivery_share
+ FROM order_details;
+--- a/revenue_net_of_delivery.sql
++++ b/revenue_net_of_delivery.sql
+@@ -1,10 +1,10 @@
+ -- Commercial pack: revenue net of delivery, by customer class.
+--- Reads order_details — cost_of_delivery is the column the repair drill
++-- Reads order_details — delivery_cost_usd is the column the repair drill
+ -- renames out from under this query.
+ SELECT customer_class,
+        ROUND(SUM(order_total), 2) AS total_revenue,
+-       ROUND(SUM(cost_of_delivery), 2) AS delivery_cost,
+-       ROUND(SUM(order_total) - SUM(cost_of_delivery), 2) AS net_revenue
++       ROUND(SUM(delivery_cost_usd), 2) AS delivery_cost,
++       ROUND(SUM(order_total) - SUM(delivery_cost_usd), 2) AS net_revenue
+ FROM order_details
+ GROUP BY customer_class
+ ORDER BY customer_class;

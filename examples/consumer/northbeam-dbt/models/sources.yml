@@ -1,0 +1,21 @@
+version: 2
+
+sources:
+  - name: marts
+    database: analytics
+    schema: marts
+    tables:
+      - name: fct_revenue
+        description: Revenue fact, one row per successful payment, net of refunds.
+        columns:
+          - name: revenue_date
+            description: Settlement date.
+          - name: gross_amount_usd
+            description: Charged amount before refunds.
+          - name: net_amount_usd
+            description: Charged amount minus refunds. Use this for revenue.
+      - name: payment_health_daily
+        description: Daily payment success rates by provider.
+        columns:
+          - name: provider
+          - name: success_rate

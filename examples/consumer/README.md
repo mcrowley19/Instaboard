@@ -1,6 +1,6 @@
 # Consumer workspace
 
-These are the queries downstream of the catalog: the reports that break when a column is renamed. Each folder matches one of the prove catalogs, and each file names the tables and columns it reads in a header comment. Two files per folder read the column the repair drill renames. One reads something else entirely, as a control.
+These are the codebases downstream of the catalog: the reports and models that break when a column is renamed. `northbeam/` and `showcase/` are plain SQL workspaces, one per prove catalog; each file names the tables and columns it reads in a header comment, two files read the column the repair drill renames, and one reads something else entirely, as a control. `northbeam-dbt/` and `showcase-dbt/` are small dbt projects reading the same sources, which gives `npm run campaign` a second repo to patch — the model SQL and the `sources.yml` documenting the column.
 
 To watch them break and get repaired, run
 

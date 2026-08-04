@@ -83,6 +83,16 @@ calls a model.
 | The write-back comes off in the same run: assertion back to passing, tag retracted, incidents resolved, each read back from GMS. | `writeback` in the repair receipts | **live** `npm run prove:repair` |
 | The committed repair receipts are what a fresh run produces, on both catalogs, checked in CI. | [`.github/workflows/prove.yml`](.github/workflows/prove.yml) | **live** `npm run prove:repair && npm run prove:verify -- --repair` |
 
+## The campaign, mergeable
+
+| Claim | Proof | Re-derive it |
+| --- | --- | --- |
+| The approved correction fans out as one git patch per consumer repo, dbt project included, and every patch is verified by applying it to a pristine copy with git. | [`examples/campaigns/`](examples/campaigns/) · `applyCheck` in each `campaign.json` | **offline** `npm run campaign` |
+| In the dbt repo the patch lands in the model SQL and in the `sources.yml` that documents the column, in one diff. | [`examples/campaigns/northbeam/northbeam-dbt.patch`](examples/campaigns/northbeam/northbeam-dbt.patch) | **offline** `npm run campaign` |
+| The committed patches are a pure function of the committed receipts and repos: CI re-derives them byte-for-byte and re-applies them on every push. | [`tests/campaign.test.ts`](tests/campaign.test.ts) | **offline** `npm test` |
+| A campaign ships approved edits only, and says so: the manifest carries the plan hash from the repair receipts it was generated from. | `planHash` in each `campaign.json` | **offline** `npm test` |
+| The blast radius is argued from the catalog where the catalog can answer — saved queries naming the old column, downstream lineage — and labelled `unavailable` where it cannot. | `evidence` in each `campaign.json` | **live** `npm run campaign` |
+
 ## The hosted demo
 
 | Claim | Proof | Re-derive it |

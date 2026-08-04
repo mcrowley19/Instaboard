@@ -210,6 +210,18 @@ hash, since the warehouse takes the rename as `ALTER TABLE … RENAME COLUMN` an
 a rename cannot move the data underneath. Receipts land in
 [`examples/live/prove-repair-receipts.json`](examples/live/prove-repair-receipts.json).
 
+More than one codebase reads a column like that, so `npm run campaign` turns
+the same approved correction into one git patch per consumer repo, for the
+plain SQL workspace and the dbt project alike. In dbt that means the model SQL
+and the `sources.yml` documenting the column, together. Every patch is applied
+to a pristine copy before anything ships, and the manifest records the result
+next to the plan hash of the approval it rides on. Where a live catalog is
+reachable, the manifest also carries the catalog's case for the blast radius:
+saved queries that mention the old column, and what sits one hop downstream in
+lineage. The committed patches under
+[`examples/campaigns/`](examples/campaigns/) are re-derived byte-for-byte in CI
+from the committed receipts and repos, then re-applied.
+
 ### Or click through it without installing anything
 
 The hosted demo at [instaboard-mu.vercel.app](https://instaboard-mu.vercel.app)
@@ -819,6 +831,7 @@ behaviours run underneath all of them:
 | --- | --- |
 | `npm run prove` | **the whole loop end to end, 39 assertions** (`-- --catalog=showcase` for DataHub's datapack) |
 | `npm run prove:repair` | **the executed repair**: consumer SQL breaks under a live catalog rename and comes back byte-identical (`-- --catalog=showcase` works here too) |
+| `npm run campaign` | fan the approved correction out as git patches across every consumer repo, dbt included, each verified by applying it |
 | `npm run prove:verify` | check the receipts that run just wrote against the committed ones; CI runs this (`--repair` for the repair receipts) |
 | `npm run draft` | draft runbooks from catalog evidence, no recording needed (`--query=`, `--urn=`, `--save`) |
 | `npm run bench:drift` | plant known drift, decoys and controls; score detection and correction |
@@ -893,12 +906,14 @@ evals/          benchmark.ts + benchmark-showcase.ts (20 cases each) · suites.t
                 score.ts · run.ts · verify.ts · transcripts.ts · results/
 extension/      Chrome side panel · entity-from-url.js (the detection contract)
 scripts/        prove-loop.ts (the one-command proof) · prove-repair.ts (the
-                executed repair) · drift-benchmark.ts
+                executed repair) · repair-campaign.ts (mergeable patches per
+                consumer repo) · drift-benchmark.ts
                 draft-runbooks.ts · seed_datahub.py · showcase-drill.ts
                 validate-runbooks.ts · propose-fixes.ts · export-examples.ts
                 capture-replay.ts · live-receipts.ts
 examples/       runbooks/ (five real ones + validation reports) · drafts/ · proposals/
-                consumer/ (the SQL the repair drill breaks and fixes)
+                consumer/ (the SQL and dbt repos the drills break and fix)
+                campaigns/ (verified-mergeable patches, one per repo)
                 live/ (dated receipts from live runs, both catalogs)
 submission/oss/ the upstream skill PR, the friction reports, the entity-detection package
 tests/          vitest suite (229 tests)

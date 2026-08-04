@@ -1,0 +1,24 @@
+--- a/models/finance/monthly_net_revenue.sql
++++ b/models/finance/monthly_net_revenue.sql
+@@ -1,8 +1,8 @@
+ -- Finance close model: net revenue by month off the revenue fact.
+--- The source column net_amount_usd is what the repair drill renames.
++-- The source column net_revenue_usd is what the repair drill renames.
+ select
+     date_trunc('month', revenue_date) as month,
+-    sum(net_amount_usd) as net_revenue,
++    sum(net_revenue_usd) as net_revenue,
+     count(*) as payments
+ from {{ source('marts', 'fct_revenue') }}
+ group by 1
+--- a/models/sources.yml
++++ b/models/sources.yml
+@@ -12,7 +12,7 @@
+             description: Settlement date.
+           - name: gross_amount_usd
+             description: Charged amount before refunds.
+-          - name: net_amount_usd
++          - name: net_revenue_usd
+             description: Charged amount minus refunds. Use this for revenue.
+       - name: payment_health_daily
+         description: Daily payment success rates by provider.

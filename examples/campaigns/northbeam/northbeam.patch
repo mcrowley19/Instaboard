@@ -1,0 +1,24 @@
+--- a/monthly_net_revenue.sql
++++ b/monthly_net_revenue.sql
+@@ -1,8 +1,8 @@
+ -- Finance close pack: net revenue by month, off the revenue fact.
+--- Reads analytics.marts.fct_revenue — net_amount_usd is the column the
++-- Reads analytics.marts.fct_revenue — net_revenue_usd is the column the
+ -- repair drill renames out from under this query.
+ SELECT strftime('%Y-%m', revenue_date) AS month,
+-       ROUND(SUM(net_amount_usd), 2) AS net_revenue,
++       ROUND(SUM(net_revenue_usd), 2) AS net_revenue,
+        COUNT(*) AS payments
+ FROM fct_revenue
+ GROUP BY 1
+--- a/refund_drag.sql
++++ b/refund_drag.sql
+@@ -1,5 +1,5 @@
+ -- Refund drag: what refunds cost against gross, and the net share that survives.
+--- Reads analytics.marts.fct_revenue on both gross_amount_usd and net_amount_usd.
+-SELECT ROUND(SUM(gross_amount_usd) - SUM(net_amount_usd), 2) AS refund_drag_usd,
+-       ROUND(SUM(net_amount_usd) / SUM(gross_amount_usd), 4) AS net_share
++-- Reads analytics.marts.fct_revenue on both gross_amount_usd and net_revenue_usd.
++SELECT ROUND(SUM(gross_amount_usd) - SUM(net_revenue_usd), 2) AS refund_drag_usd,
++       ROUND(SUM(net_revenue_usd) / SUM(gross_amount_usd), 4) AS net_share
+ FROM fct_revenue;

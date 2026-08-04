@@ -1,0 +1,20 @@
+version: 2
+
+sources:
+  - name: analytics
+    database: order_entry_db
+    schema: analytics
+    tables:
+      - name: order_details
+        description: Certified wide order table.
+        columns:
+          - name: customer_class
+          - name: order_total
+            description: The glossary-sanctioned revenue measure.
+          - name: cost_of_delivery
+            description: Delivery cost the commercial team nets off revenue.
+      - name: order_history
+        description: Point-in-time order snapshots.
+        columns:
+          - name: order_status
+          - name: as_of_date
