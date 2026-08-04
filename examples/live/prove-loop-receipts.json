@@ -1,6 +1,6 @@
 {
-  "startedAt": "2026-08-03T09:58:23.654Z",
-  "finishedAt": "2026-08-03T10:01:46.116Z",
+  "startedAt": "2026-08-04T18:07:55.504Z",
+  "finishedAt": "2026-08-04T18:11:10.089Z",
   "gms": "http://localhost:8080",
   "catalog": "the sample catalog this repo seeds with scripts/seed_datahub.py",
   "catalogProfile": "northbeam",
@@ -135,7 +135,7 @@
       "phase": "write-back",
       "what": "a drift note is in the catalog",
       "passed": true,
-      "detail": "urn:li:document:shared-cdb7c503-b5ff-45e4-8ded-0878b0925e7e"
+      "detail": "urn:li:document:shared-57a3bf48-14b1-45f2-a77a-4508e1fff006"
     },
     {
       "phase": "write-back",
@@ -412,7 +412,7 @@
           "remedy": "Point this step at the replacement dataset named in DataHub."
         }
       ],
-      "documentUrn": "urn:li:document:shared-cdb7c503-b5ff-45e4-8ded-0878b0925e7e",
+      "documentUrn": "urn:li:document:shared-57a3bf48-14b1-45f2-a77a-4508e1fff006",
       "assertions": [
         {
           "urn": "urn:li:assertion:instaboard-f80ab7b3a1306fa23998",
@@ -433,21 +433,21 @@
       "structuredProperties": [
         {
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.payment_health_daily,PROD)",
-          "status": "prove-monthly-revenue-close: validated (checked 2026-08-03)",
+          "status": "prove-monthly-revenue-close: validated (checked 2026-08-04)",
           "driftValues": 0,
           "pins": 5,
           "coverage": "prove-monthly-revenue-close: 1/1 steps validated"
         },
         {
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
-          "status": "prove-monthly-revenue-close: stale (checked 2026-08-03)",
+          "status": "prove-monthly-revenue-close: stale (checked 2026-08-04)",
           "driftValues": 2,
           "pins": 7,
           "coverage": "prove-monthly-revenue-close: 1/1 steps validated"
         },
         {
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
-          "status": "prove-monthly-revenue-close: stale (checked 2026-08-03)",
+          "status": "prove-monthly-revenue-close: stale (checked 2026-08-04)",
           "driftValues": 1,
           "pins": 5,
           "coverage": "prove-monthly-revenue-close: 0/1 steps validated, catalog gaps: health"
@@ -455,7 +455,7 @@
       ],
       "incidents": [
         {
-          "urn": "urn:li:incident:63003916-ce03-4af3-a53b-ae2893effc75",
+          "urn": "urn:li:incident:92e4d905-7851-43a0-8ae1-7e3f07ebd033",
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)",
           "reused": false,
           "assignees": [
@@ -463,7 +463,7 @@
           ]
         },
         {
-          "urn": "urn:li:incident:a06e5fae-a6a7-4daf-8917-abb6418b8de2",
+          "urn": "urn:li:incident:e5fb84a4-b402-4cb6-bab5-5afb97b86a7d",
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)",
           "reused": false,
           "assignees": [
@@ -483,7 +483,7 @@
             "kind": "column-rename",
             "from": "net_amount_usd",
             "to": "net_revenue_usd",
-            "rationale": "`net_revenue_usd` is on fct_revenue now and was not when this runbook was recorded, and it is the closest match to `net_amount_usd` (0.65).",
+            "rationale": "`net_revenue_usd` on fct_revenue: it is on the entity now, was not when this runbook was recorded, and is the closest match to `net_amount_usd` (0.65).",
             "confidence": "medium",
             "claimId": "column-exists:c1d447df18e7",
             "occurrences": 3
@@ -592,15 +592,15 @@
         ],
         "kept": [],
         "errors": [],
-        "at": "2026-08-03T10:01:42.390Z"
+        "at": "2026-08-04T18:11:05.823Z"
       },
       "resolvedIncidents": [
         {
-          "urn": "urn:li:incident:63003916-ce03-4af3-a53b-ae2893effc75",
+          "urn": "urn:li:incident:92e4d905-7851-43a0-8ae1-7e3f07ebd033",
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.fct_revenue,PROD)"
         },
         {
-          "urn": "urn:li:incident:a06e5fae-a6a7-4daf-8917-abb6418b8de2",
+          "urn": "urn:li:incident:e5fb84a4-b402-4cb6-bab5-5afb97b86a7d",
           "datasetUrn": "urn:li:dataset:(urn:li:dataPlatform:snowflake,analytics.marts.mrr_monthly,PROD)"
         }
       ]

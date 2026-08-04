@@ -194,10 +194,20 @@ const READ_DATASET_ASSERTIONS = `
  * exist **or is not associated with any entity**". So ask the question the
  * failure is actually about — does the dataset list this assertion yet.
  */
+/*
+ * The budget has a history worth keeping. Twelve seconds was plenty on a warm
+ * machine and lost six writes in one cold CI run. Ninety seconds fixed that
+ * run and then lost all three baseline writes on the next cold datapack run
+ * (prove.yml run 30934797636): the relationship index sat behind a
+ * thousand-entity ingest backlog for roughly ten minutes, and every write
+ * after the backlog drained succeeded. The budget now assumes the index may
+ * be minutes behind, and the poll stays cheap so a warm catalog still returns
+ * on the first read.
+ */
 async function waitForAssertionOnDataset(
   assertionUrn: string,
   datasetUrn: string,
-  timeoutMs = 90_000
+  timeoutMs = 12 * 60_000
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -206,7 +216,7 @@ async function waitForAssertionOnDataset(
     }>(READ_DATASET_ASSERTIONS, { urn: datasetUrn });
     const attached = res.data?.dataset?.assertions?.assertions ?? [];
     if (attached.some((a) => a.urn === assertionUrn)) return true;
-    await new Promise((r) => setTimeout(r, 3_000));
+    await new Promise((r) => setTimeout(r, 5_000));
   }
   return false;
 }

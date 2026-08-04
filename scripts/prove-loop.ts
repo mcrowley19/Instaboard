@@ -226,7 +226,8 @@ function assertClean(result: SweepResult, phase: string): void {
     phase,
     "the runbook's assertion is passing in DataHub",
     Boolean(row?.structured?.assertions.length) && row.structured!.assertions.every((a) => a.result === "SUCCESS"),
-    row?.structured?.assertions.map((a) => `${a.urn.slice(-12)}=${a.result}`).join(", ") || "no assertion written"
+    row?.structured?.assertions.map((a) => `${a.urn.slice(-12)}=${a.result}`).join(", ") ||
+      `no assertion written${row?.structured?.errors.length ? ` — ${row.structured.errors.join("; ").slice(0, 300)}` : ""}`
   );
   check(
     phase,
@@ -308,7 +309,8 @@ function assertCaught(result: SweepResult, liveOwners: Record<string, number>): 
     "write-back",
     "the runbook's assertion is now FAILING in DataHub",
     Boolean(row?.structured?.assertions.some((a) => a.result === "FAILURE")),
-    row?.structured?.assertions.map((a) => `${a.urn.slice(-12)}=${a.result}`).join(", ") || "no assertion written"
+    row?.structured?.assertions.map((a) => `${a.urn.slice(-12)}=${a.result}`).join(", ") ||
+      `no assertion written${row?.structured?.errors.length ? ` — ${row.structured.errors.join("; ").slice(0, 300)}` : ""}`
   );
   check(
     "write-back",

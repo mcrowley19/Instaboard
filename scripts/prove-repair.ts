@@ -443,7 +443,8 @@ async function main() {
     "repair",
     "the runbook's assertion is back to passing in DataHub",
     Boolean(cleanRow?.structured?.assertions.length) && cleanRow!.structured!.assertions.every((a) => a.result === "SUCCESS"),
-    cleanRow?.structured?.assertions.map((a) => `${a.urn.slice(-12)}=${a.result}`).join(", ") || "no assertion written"
+    cleanRow?.structured?.assertions.map((a) => `${a.urn.slice(-12)}=${a.result}`).join(", ") ||
+      `no assertion written${cleanRow?.structured?.errors.length ? ` — ${cleanRow.structured.errors.join("; ").slice(0, 300)}` : ""}`
   );
   check(
     "repair",
