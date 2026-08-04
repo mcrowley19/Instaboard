@@ -222,12 +222,22 @@ function assertClean(result: SweepResult, phase: string): void {
     Boolean(row) && row.claims.total > 0 && row.claims.broken === 0,
     row ? `${row.claims.holds}/${row.claims.total} claims hold` : "no row"
   );
+  // One assertion per touched dataset, or the check fails. A run where a write
+  // quietly went missing used to pass on the assertions that made it, and the
+  // only trace was a receipt detail that no longer matched the committed one.
+  const expectedAssertions = [...new Set(runbook().steps.map((s) => s.urn).filter(Boolean))].length;
   check(
     phase,
     "the runbook's assertion is passing in DataHub",
-    Boolean(row?.structured?.assertions.length) && row.structured!.assertions.every((a) => a.result === "SUCCESS"),
-    row?.structured?.assertions.map((a) => `${a.urn.slice(-12)}=${a.result}`).join(", ") ||
-      `no assertion written${row?.structured?.errors.length ? ` — ${row.structured.errors.join("; ").slice(0, 300)}` : ""}`
+    row?.structured?.assertions.length === expectedAssertions &&
+      row.structured!.assertions.every((a) => a.result === "SUCCESS"),
+    row?.structured?.assertions.length
+      ? `${row.structured!.assertions.map((a) => `${a.urn.slice(-12)}=${a.result}`).join(", ")}` +
+        (row.structured!.assertions.length === expectedAssertions
+          ? ""
+          : ` — ${row.structured!.assertions.length}/${expectedAssertions} datasets covered` +
+            (row.structured!.errors.length ? `; ${row.structured!.errors.join("; ").slice(0, 300)}` : ""))
+      : `no assertion written${row?.structured?.errors.length ? ` — ${row.structured.errors.join("; ").slice(0, 300)}` : ""}`
   );
   check(
     phase,

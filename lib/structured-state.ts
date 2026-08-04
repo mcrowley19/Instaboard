@@ -200,14 +200,17 @@ const READ_DATASET_ASSERTIONS = `
  * run and then lost all three baseline writes on the next cold datapack run
  * (prove.yml run 30934797636): the relationship index sat behind a
  * thousand-entity ingest backlog for roughly ten minutes, and every write
- * after the backlog drained succeeded. The budget now assumes the index may
- * be minutes behind, and the poll stays cheap so a warm catalog still returns
- * on the first read.
+ * after the backlog drained succeeded. Twelve minutes then lost one more on
+ * run 30941216483, where the association landed at roughly fifteen. The
+ * budget now clears the worst lag observed with room to spare, the upserts
+ * all land before any wait starts so the budget is shared rather than paid
+ * per dataset, and the poll stays cheap so a warm catalog still returns on
+ * the first read.
  */
 async function waitForAssertionOnDataset(
   assertionUrn: string,
   datasetUrn: string,
-  timeoutMs = 12 * 60_000
+  timeoutMs = 20 * 60_000
 ): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -361,12 +364,17 @@ export async function writeStructuredState(handoff: Handoff, report: DecayReport
   const claimsByUrn = new Map<string, RunbookClaim[]>();
   for (const c of report.claims ?? []) claimsByUrn.set(c.urn, [...(claimsByUrn.get(c.urn) ?? []), c]);
 
+  /*
+   * Upsert every assertion before waiting on any of them. The upsert itself
+   * returns at once; what lags is GMS associating the assertion with its
+   * dataset, and on a catalog still chewing through a datapack ingest that lag
+   * was observed at a quarter of an hour (prove.yml run 30941216483). Upserting
+   * inside the per-dataset loop queued each association behind the previous
+   * dataset's full wait; upserting them all first lets every association land
+   * while the first one is being waited on.
+   */
+  const upsertedByDataset = new Map<string, { urn: string } | { error: string }>();
   for (const datasetUrn of urns) {
-    const findings = findingsByUrn.get(datasetUrn) ?? [];
-    const stale = findings.some((f) => f.severity === "broken");
-    const day = report.checkedAt.slice(0, 10);
-
-    /* 1. The assertion, and its result. */
     try {
       const assertionUrn = assertionUrnFor(handoff.id, datasetUrn);
       const upserted = await datahubGraphQL<{ upsertCustomAssertion: { urn: string } }>(UPSERT_ASSERTION, {
@@ -382,14 +390,30 @@ export async function writeStructuredState(handoff: Handoff, report: DecayReport
           logic: (claimsByUrn.get(datasetUrn) ?? []).map((c) => `${c.kind}: ${c.statement}`).join("\n") || "no claims",
         },
       });
+      upsertedByDataset.set(
+        datasetUrn,
+        upserted.data?.upsertCustomAssertion?.urn
+          ? { urn: upserted.data.upsertCustomAssertion.urn }
+          : { error: upserted.errors?.map((e) => e.message).join("; ") || "no urn returned" }
+      );
+    } catch (err) {
+      upsertedByDataset.set(datasetUrn, { error: err instanceof Error ? err.message : String(err) });
+    }
+  }
 
-      if (!upserted.data?.upsertCustomAssertion?.urn) {
-        receipt.errors.push(
-          `upsertCustomAssertion(${datasetUrn}): ${upserted.errors?.map((e) => e.message).join("; ") || "no urn returned"}`
-        );
+  for (const datasetUrn of urns) {
+    const findings = findingsByUrn.get(datasetUrn) ?? [];
+    const stale = findings.some((f) => f.severity === "broken");
+    const day = report.checkedAt.slice(0, 10);
+
+    /* 1. The assertion's result, against the assertion upserted above. */
+    try {
+      const upserted = upsertedByDataset.get(datasetUrn)!;
+      if ("error" in upserted) {
+        receipt.errors.push(`upsertCustomAssertion(${datasetUrn}): ${upserted.error}`);
       } else {
         const type = stale ? "FAILURE" : "SUCCESS";
-        const reported = await reportResultWithRetry(upserted.data.upsertCustomAssertion.urn, datasetUrn, {
+        const reported = await reportResultWithRetry(upserted.urn, datasetUrn, {
           type,
           timestampMillis: Date.parse(report.checkedAt),
           properties: resultProperties(handoff, report, datasetUrn, findings),
@@ -397,7 +421,7 @@ export async function writeStructuredState(handoff: Handoff, report: DecayReport
         if (!reported.ok) {
           receipt.errors.push(`reportAssertionResult(${datasetUrn}): ${reported.error}`);
         } else {
-          receipt.assertions.push({ urn: upserted.data.upsertCustomAssertion.urn, datasetUrn, result: type });
+          receipt.assertions.push({ urn: upserted.urn, datasetUrn, result: type });
         }
       }
     } catch (err) {
