@@ -11,15 +11,15 @@ This suite exists to take that objection away as far as it can be taken away.
 
 | | Written by |
 | --- | --- |
-| The catalog | DataHub — `showcase-ecommerce`, their published demo datapack |
+| The catalog | DataHub, as `showcase-ecommerce`, their published demo datapack |
 | The questions | a different vendor's model, from `catalog-dump.json` and `author-prompt.md` and nothing else |
 | The answer keys | the same model, in the same pass |
-| The scorer | ours, unchanged — `evals/score.ts`, deterministic substring matching, no LLM judge |
+| The scorer | ours, unchanged: `evals/score.ts`, deterministic substring matching, no LLM judge |
 
-The author model was shown one thing: a flat JSON read of the catalog off a live
+The author model was shown one thing, a flat JSON read of the catalog off a live
 GMS. It never saw instaboard's system prompt, its tool list, the skill, the
-README, the scorer's source, or the two benchmarks we wrote ourselves. It was
-not told that DataHub was involved, that there were arms, or what kind of system
+README, the scorer's source, or the two benchmarks we wrote ourselves. Nobody
+told it that DataHub was involved, that there were arms, or what kind of system
 would be answering. It was told to include questions it expected a good
 assistant to get wrong.
 
@@ -29,10 +29,10 @@ assistant to get wrong.
 That is the specific defect in a self-authored benchmark, and it is gone.
 
 **It does not buy:** we wrote the instructions to the author, and instructions
-shape a set. `author-prompt.md` is committed verbatim, unedited, so the shaping
-is something you can read rather than something you have to take on trust. We
-also chose the catalog — though DataHub authored it — and we chose to run on a
-catalog rather than a warehouse, which is the domain the whole project is about.
+shape a set. `author-prompt.md` is committed verbatim and unedited, so you can
+read the shaping for yourself. We also chose the catalog, though DataHub authored
+it, and we chose a catalog as the domain, which is what the whole project is
+about.
 
 **It is one model's set, once.** Twenty questions from one author is not a
 confidence interval. The most useful thing anyone reading this can do is delete
@@ -50,20 +50,20 @@ difficulty:
 `author.ts` checks both mechanically, before any arm runs, and writes every
 rejection into `cases.json` with its reason. The filter cannot see how hard a
 case is, and no case has ever been dropped for being one instaboard fails. Run
-`npx tsx evals/holdout/author.ts --validate-only` to re-apply it yourself; it
+`npx tsx evals/holdout/author.ts --validate-only` to re-apply it yourself. It
 also fails if the dump or the prompt has changed since the cases were authored,
 because then the committed cases no longer correspond to what the author saw.
 
 ## Held out means held out
 
-The cases were generated and committed **before** any arm ran. The git history
-is the record: the commit that adds `cases.json` precedes the commit that adds
+The cases were generated and committed **before** any arm ran. The git history is
+the record: the commit that adds `cases.json` precedes the commit that adds
 `evals/results/holdout-scorecard.md`. Nothing was edited, dropped or re-authored
 after a score was seen, and the first run is published whatever it says.
 
-If a second independent author is added later, it gets its own cases file and
-its own published score. Replacing this set with a better one after seeing how
-this one scored is exactly how a held-out set stops being held out.
+If a second independent author is added later, it gets its own cases file and its
+own published score. Replacing this set with a better one after seeing how this
+one scored is exactly how a held-out set stops being held out.
 
 ## Not yet scored, and why
 
@@ -72,30 +72,30 @@ There is no `holdout-scorecard.md` in `evals/results/`. That is deliberate.
 The suite has been run once, against a DataHub holding only `showcase-ecommerce`,
 on the same free model the two published scorecards used
 (`nvidia/nemotron-3-ultra-550b-a55b:free`). It produced 2/18 with the catalog and
-9/18 with no tools — the control arm winning, which is not a result, it is a
-symptom. The reason is in the raw output: **10 of the 18 grounded cases failed
-with `openrouter returned no choices`**, the provider returning an empty
-response part-way through a multi-call tool loop. The control arm makes zero
-tool calls and one request per case, so it is barely exposed to the failure and
-comes out ahead by not participating.
+9/18 with no tools, so the control arm won, which is a symptom and not a result.
+The reason sits in the raw output: **10 of the 18 grounded cases failed with
+`openrouter returned no choices`**, the provider returning an empty response
+part-way through a multi-call tool loop. The control arm makes zero tool calls
+and one request per case, so it is barely exposed to the failure and comes out
+ahead by not participating.
 
 That number measures free-tier reliability under multi-call loads. Publishing it
 as a held-out result would misrepresent the tool in the negative direction as
 surely as a self-authored benchmark misrepresents it in the positive one, so it
-is not published. The run was discarded, not kept and caveated.
+is not published. The run was discarded and no caveated version was kept.
 
-What it would take: a provider that can complete a 3–10 call tool loop without
+What it would take: a provider that can complete a 3-to-10 call tool loop without
 dropping responses. The cases, the catalog dump, the prompt and the harness are
 all here and frozen, so scoring it is one command for anyone who has one.
 
 **Since then, two of the three obstacles are gone.** The dropped responses were
-being treated as terminal; they are now retried, along with the empty-message
+being treated as terminal. They are now retried, along with the empty-message
 variant of the same failure, so a multi-call arm is no longer punished for being
 the one that makes multiple calls (`lib/providers.ts`). And a per-day rate limit,
 which arrives as the same 429 as a per-minute one, was being retried until every
-remaining case recorded an error — producing a scorecard of near-zeros that reads
-as a model failing rather than a quota resetting. That is now detected as
-terminal and the run stops with its cache intact.
+remaining case recorded an error, producing a scorecard of near-zeros that reads
+as a model failing when a quota was resetting. That now registers as terminal and
+the run stops with its cache intact.
 
 What is left is the third: a request budget large enough to finish, on a catalog
 holding showcase and nothing else. See *Running it* below.
@@ -104,12 +104,12 @@ Two things the attempt did establish, which are worth having:
 
 - **The catalog has to be showcase-only.** Run against a DataHub also holding
   this repo's Northbeam catalog, the agent answers these questions from
-  Northbeam — "there is no dataset named `order_details`" — because the
-  questions were written from a showcase-only dump and the names collide.
+  Northbeam ("there is no dataset named `order_details`"), because the questions
+  were written from a showcase-only dump and the names collide.
 - **These questions need more tool calls than the ones we wrote.** The grounded
-  arm averaged well over six calls per case here. Whether the published 19/20
-  and 20/20 partly reflect questions that resolve in fewer hops is a real
-  question this suite could answer, once it can be scored.
+  arm averaged well over six calls per case here. Whether the published 19/20 and
+  20/20 partly come from questions that resolve in fewer hops is a real question
+  this suite could answer, once it can be scored.
 
 ## Running it
 
@@ -124,16 +124,15 @@ npm run eval -- --live --runs=3 --suite=holdout
 
 ### The catalog has to be showcase-only, and that is not a flag
 
-This is the practical obstacle, and it is worth knowing before you start rather
-than after a wasted run. The questions were written from a showcase-only dump, so
-with Northbeam also loaded the agent answers them from Northbeam — "there is no
-dataset named `order_details`" — and the score measures the collision instead of
-the catalog.
+This is the practical obstacle, and it is worth knowing before you start. The
+questions were written from a showcase-only dump, so with Northbeam also loaded
+the agent answers them from Northbeam ("there is no dataset named
+`order_details`") and the score measures the collision.
 
-The two packs **share platforms**: Northbeam seeds `snowflake` and `postgres`,
-and showcase uses both as well. So there is no platform filter, domain or
-DataHub View that separates them for an agent that searches the whole catalog.
-The separation has to be per-URN, so there is a tool for it:
+The two packs **share platforms**. Northbeam seeds `snowflake` and `postgres`,
+and showcase uses both as well. So no platform filter, domain or DataHub View
+separates them for an agent that searches the whole catalog. The separation has
+to be per-URN, so there is a tool for it:
 
 ```bash
 npm run catalog:status     # what would the holdout see right now?
@@ -142,33 +141,32 @@ npm run eval -- --live --runs=3 --suite=holdout
 npm run catalog:restore    # put back exactly what was hidden
 ```
 
-`catalog:isolate` derives its keep-list from `catalog-dump.json` itself — the
-same file the author model was shown — so the visible catalog and the questions
-cannot drift apart. It soft-deletes through `batchUpdateSoftDeleted`, the
-mutation DataHub's own UI uses, which takes the entity out of the search index
-while leaving every aspect it owns untouched; restoring is the same call with
-the flag flipped. The URNs it hid go to a manifest first, so `--restore` puts
-back precisely what it took and cannot resurrect something that was already
-soft-deleted for its own reasons.
+`catalog:isolate` derives its keep-list from `catalog-dump.json` itself, the same
+file the author model was shown, so the visible catalog and the questions cannot
+drift apart. It soft-deletes through `batchUpdateSoftDeleted`, the mutation
+DataHub's own UI uses, which takes the entity out of the search index and leaves
+every aspect it owns untouched. Restoring is the same call with the flag flipped.
+The URNs it hid go to a manifest first, so `--restore` puts back precisely what
+it took and cannot resurrect something that was already soft-deleted for its own
+reasons.
 
 Verified on a live catalog: with 24 datasets hidden, the exact
 `analytics.marts.fct_revenue` URN stops appearing in search results and comes
 back after `--restore`. Writing the `status` aspect directly does *not* achieve
-this — the aspect lands and the entity stays in the index — which is worth
+this, since the aspect lands and the entity stays in the index, which is worth
 knowing before reaching for the obvious approach.
 
 That matters if the same instance is doing anything else. It is the same catalog
-the hosted write-back demo reads — `demoRunbook()` names three Northbeam
-snowflake datasets — so a holdout run and a live demo cannot share one DataHub.
+the hosted write-back demo reads, where `demoRunbook()` names three Northbeam
+snowflake datasets, so a holdout run and a live demo cannot share one DataHub.
 Either run the holdout on a second instance, or accept that the demo is down for
 the length of the run.
 
-**Budget it in requests, not minutes.** 18 cases × 3 arms is 54 agent runs and
-several hundred model calls; on a free tier metered per day that is most of a
+**Budget it in requests.** 18 cases × 3 arms is 54 agent runs and
+several hundred model calls. On a free tier metered per day that is most of a
 day's allowance for a single pass, and `--runs=3` triples it. The harness caches
-per (model, catalog, arm, case, run) and stops cleanly on a daily cap rather than
-burning the remaining cases on retries, so a capped run resumes the next day
-instead of restarting.
+per (model, catalog, arm, case, run) and stops cleanly on a daily cap, leaving
+the remaining cases unburned, so a capped run resumes the next day.
 
 `npm run eval:verify` re-scores the committed answers for this suite along with
 the other two, so the published number stays reproducible from raw answers

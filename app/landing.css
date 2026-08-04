@@ -88,9 +88,8 @@
 
 .lp .band-rail {
   font-family: var(--sans);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
   font-weight: 650;
   color: var(--ink-3);
   align-self: start;
@@ -176,14 +175,17 @@
 }
 
 .lp-head-hero {
+  position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: end;
   gap: 0 clamp(24px, 5vw, 64px);
   margin-top: clamp(26px, 3.5vw, 46px);
 }
 
 .lp-head h1 {
+  position: relative;
+  z-index: 2;
   font-family: var(--display);
   font-size: clamp(2.4rem, 6.6vw, 5.6rem);
   line-height: 1.02;
@@ -225,6 +227,8 @@
 }
 
 .lp-head-body {
+  position: relative;
+  z-index: 2;
   margin-top: clamp(28px, 4vw, 48px);
 }
 
@@ -288,26 +292,54 @@
   border-color: var(--sig);
 }
 
-/* the logo mark, set large, sat on the headline's baseline */
+/* The logo mark, blown up to fill the empty column to the right of the
+   headline, ruled through on the same 34px grid the masthead sits on. It reads
+   as ground rather than as a graphic parked on top of the headline. */
 .lp-glyph {
-  align-self: end;
-  justify-self: end;
+  position: absolute;
+  right: 0.13em;
+  bottom: -0.348em;
+  z-index: 0;
+  pointer-events: none;
+  user-select: none;
   font-family: var(--sans);
-  font-size: clamp(150px, 21vw, 330px);
+  font-size: clamp(340px, 60vw, 920px);
   font-weight: 800;
   line-height: 0.74;
   letter-spacing: -0.04em;
-  color: var(--sig);
-  user-select: none;
-  margin-bottom: 0.055em;
+
+  /* accent at the top of the stroke, dissolving into the paper on the way down */
+  background-image: linear-gradient(
+    194deg,
+    color-mix(in srgb, var(--sig) 46%, transparent) 0%,
+    color-mix(in srgb, var(--sig) 30%, transparent) 34%,
+    color-mix(in srgb, var(--sig) 15%, transparent) 68%,
+    color-mix(in srgb, var(--sig) 4%, transparent) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+
+  /* three masks, intersected: the fade downward, then the grid across it */
+  -webkit-mask-image:
+    linear-gradient(179deg, #000 0%, #000 20%, rgba(0, 0, 0, 0.45) 55%, rgba(0, 0, 0, 0.14) 76%, transparent 94%),
+    repeating-linear-gradient(90deg, #000 0 32px, transparent 32px 34px),
+    repeating-linear-gradient(180deg, #000 0 32px, transparent 32px 34px);
+  mask-image:
+    linear-gradient(179deg, #000 0%, #000 20%, rgba(0, 0, 0, 0.45) 55%, rgba(0, 0, 0, 0.14) 76%, transparent 94%),
+    repeating-linear-gradient(90deg, #000 0 32px, transparent 32px 34px),
+    repeating-linear-gradient(180deg, #000 0 32px, transparent 32px 34px);
+  -webkit-mask-composite: source-in, source-in;
+  mask-composite: intersect, intersect;
+
   opacity: 0;
-  animation: lp-glyph-in 1.1s cubic-bezier(0.16, 0.9, 0.28, 1) 0.34s forwards;
+  animation: lp-glyph-in 1.4s cubic-bezier(0.16, 0.9, 0.28, 1) 0.34s forwards;
 }
 
 @keyframes lp-glyph-in {
   from {
     opacity: 0;
-    transform: translateY(24px);
+    transform: translate(14px, 30px);
   }
   to {
     opacity: 1;
@@ -315,10 +347,9 @@
   }
 }
 
+/* Below this the headline claims the full width and there is no column left
+   for the mark to sit in. */
 @media (max-width: 900px) {
-  .lp-head-hero {
-    grid-template-columns: minmax(0, 1fr);
-  }
   .lp-glyph {
     display: none;
   }
@@ -623,6 +654,95 @@
   }
   .lp-table td:nth-child(2) {
     white-space: normal;
+  }
+}
+
+/* ── the July/August story ──────────────────────────────── */
+.lp-story {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  max-width: 960px;
+  margin-top: clamp(26px, 4vw, 44px);
+}
+
+.lp-story-col {
+  padding: 0 28px 0 16px;
+  border-left: 1px solid var(--rule);
+  transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.lp.anim .lp-story-col {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.lp.anim .lp-story.in .lp-story-col {
+  opacity: 1;
+  transform: none;
+}
+
+.lp.anim .lp-story.in .lp-story-col:nth-child(2) {
+  transition-delay: 0.26s;
+}
+
+.lp-story-col .tickmark {
+  width: 1px;
+  height: 20px;
+  background: var(--sig);
+  margin-left: -17px;
+  margin-bottom: 14px;
+}
+
+.lp-story-col.aug .tickmark {
+  background: var(--warn);
+}
+
+.lp-story-col .when {
+  display: block;
+  font-family: var(--sans);
+  font-size: 11px;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 10px;
+}
+
+.lp-story-col.aug .when {
+  color: var(--warn);
+}
+
+.lp-story-col p {
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: var(--ink-2);
+  max-width: 46ch;
+}
+
+.lp-story-col b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.lp-story-col code {
+  font-family: var(--sans);
+  font-size: 12.5px;
+  background: var(--panel-2);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 1.5px 5px;
+  color: var(--ink);
+}
+
+@media (max-width: 700px) {
+  .lp-story {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lp-story-col {
+    padding: 0 0 24px 16px;
+  }
+  .lp-story-col:last-child {
+    padding-bottom: 0;
   }
 }
 
@@ -1215,6 +1335,121 @@
   margin-left: auto;
   color: var(--sig-strong);
   font-weight: 550;
+}
+
+.lp-sub code {
+  font-family: var(--sans);
+  font-size: 12.5px;
+  background: var(--panel-2);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 1.5px 5px;
+  color: var(--ink);
+}
+
+/* ── how you use it ─────────────────────────────────────── */
+.lp-use {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: clamp(28px, 4vw, 46px);
+}
+
+.lp-lane {
+  padding: 0 26px 0 18px;
+  border-left: 1px solid var(--rule);
+  transition: opacity 0.6s ease, transform 0.6s cubic-bezier(0.2, 0.8, 0.3, 1);
+}
+
+.lp.anim .lp-lane {
+  opacity: 0;
+  transform: translateY(14px);
+}
+
+.lp.anim .lp-reveal.in .lp-lane {
+  opacity: 1;
+  transform: none;
+}
+
+.lp.anim .lp-reveal.in .lp-lane:nth-child(1) { transition-delay: 0.2s; }
+.lp.anim .lp-reveal.in .lp-lane:nth-child(2) { transition-delay: 0.38s; }
+.lp.anim .lp-reveal.in .lp-lane:nth-child(3) { transition-delay: 0.56s; }
+
+.lp-lane .lane-where {
+  display: flex;
+  align-items: center;
+  width: fit-content;
+  padding: 2px 9px;
+  margin-bottom: 10px;
+  border-radius: 99px;
+  background: var(--sig-dim);
+  color: var(--sig-strong);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.lp-lane h3 {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.018em;
+  margin-bottom: 12px;
+}
+
+.lp-lane ol {
+  list-style: none;
+  counter-reset: lane-step;
+  margin: 0;
+  padding: 0;
+}
+
+.lp-lane li {
+  counter-increment: lane-step;
+  position: relative;
+  padding-left: 21px;
+  margin-bottom: 10px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+
+.lp-lane li:last-child {
+  margin-bottom: 0;
+}
+
+.lp-lane li::before {
+  content: counter(lane-step);
+  position: absolute;
+  left: 0;
+  top: 1px;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.lp-lane code,
+.lp-lane b {
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.lp-lane code {
+  font-size: 12.5px;
+  background: var(--panel-2);
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+
+@media (max-width: 860px) {
+  .lp-use {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .lp-lane {
+    padding: 0 0 26px 18px;
+  }
+  .lp-lane:last-child {
+    padding-bottom: 0;
+  }
 }
 
 /* ── reveal + reduced motion ────────────────────────────── */

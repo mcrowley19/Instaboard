@@ -13,10 +13,10 @@ This directory is what it takes to run the second kind.
 
 The app reaches DataHub through `mcp-server-datahub`, spawned as a subprocess
 over stdio, and serverless runtimes will not do that. That used to rule Vercel
-out entirely — the hosted deployment fell back to the fixture and said so.
+out entirely, and the hosted deployment fell back to the fixture and said so.
 
-It no longer does. The four tools the validation and write-back loop needs —
-`get_entities`, `get_dataset_health`, `save_document`, `add_tags` — all have
+It no longer does. The four tools the validation and write-back loop needs
+(`get_entities`, `get_dataset_health`, `save_document`, `add_tags`) all have
 GraphQL equivalents, and GraphQL is plain HTTP. `lib/mcp-over-graphql.ts`
 implements exactly those four and nothing else, and `lib/mcp.ts` reaches for it
 when the subprocess is unavailable but a GMS is answering. So a Vercel
@@ -31,28 +31,28 @@ vercel deploy --prod
 ```
 
 `/api/status` will report `graphql: true` and name the catalog it is talking to.
-If it reports `demo: true`, it could not reach GMS.
+A report of `demo: true` means it could not reach GMS.
 
-The agent's chat path still needs the real MCP server — it uses the full 20-tool
-surface, not four — so on this shape the chat answers from the committed replay
-while the drift and write-back panels are live. That split is what the status
-pill exists to make legible.
+The agent's chat path still needs the real MCP server, since it uses the full
+20-tool surface, so on this shape the chat answers from the committed replay
+while the drift and write-back panels stay live. Making that split legible is
+what the status pill is for.
 
 **Exposing GMS.** The quickstart's GMS has no authentication. If you tunnel it
 (`cloudflared tunnel --url http://localhost:8080` needs no account and no card),
 anyone with the URL can read and write that catalog. That is acceptable for a
 disposable demo catalog and unacceptable for anything else. A quick-tunnel
-hostname is random, which is obscurity, not security.
+hostname is random, which is obscurity, and obscurity is not security.
 
 ### B. Next to DataHub on one box
 
-The older shape, and the better one for anything long-lived: `datahub-gms` is
+The older shape, and the better one for anything long-lived. `datahub-gms` is
 never published, and the only port on the internet belongs to the app.
 
-On this path the drift playground writes nothing to the catalog — a visitor's
-breaking changes are applied to the snapshot their request just read and thrown
-away. `DEMO_WRITEBACK_ENABLED=true` is what opts into the write-back demo, on
-either shape.
+On this path the drift playground writes nothing to the catalog. A visitor's
+breaking changes are applied to the snapshot their request just read and then
+thrown away. `DEMO_WRITEBACK_ENABLED=true` is what opts into the write-back
+demo, on either shape.
 
 ## What free costs
 
@@ -61,17 +61,17 @@ DataHub's quickstart wants about 8 GB of RAM. Being straight about the options:
 | Option | Free? | Fit |
 | --- | --- | --- |
 | **Oracle Cloud Always Free** (Ampere A1, up to 4 OCPU / 24 GB) | free indefinitely; card required for identity, not billed | the only mainstream free tier big enough to run this 24/7 |
-| GitHub Codespaces | 120 core-hours/month | works, but sleeps when idle — no good as a link a judge clicks at 2am |
+| GitHub Codespaces | 120 core-hours/month | works, though it sleeps when idle, so it is no good as a link a judge clicks at 2am |
 | AWS / GCP / Azure always-free instances | free | 1 GB of RAM. Not close |
 | Fly / Render / Railway free tiers | free | nowhere near 8 GB |
 
-So: Oracle Always Free if the link has to stay up. A1 capacity is genuinely
-hard to get in some regions — retry, or pick another region.
+So: Oracle Always Free if the link has to stay up. A1 capacity is hard to get in
+some regions, so retry, or pick another region.
 
-`datahub-lowmem.yml` caps the JVM heaps to bring the stack to roughly 4.5–5 GB
-if the box is smaller. **It has not been tested** — this project has only ever
-run DataHub on a 16 GB laptop and a 16 GB CI runner. Watch `docker stats` on the
-first boot.
+`datahub-lowmem.yml` caps the JVM heaps to bring the stack to roughly 4.5 to
+5 GB if the box is smaller. **It has not been tested.** This project has only
+ever run DataHub on a 16 GB laptop and a 16 GB CI runner. Watch `docker stats`
+on the first boot.
 
 ## The sequence
 
@@ -107,14 +107,14 @@ If step 4 comes back `"fixture": true`, the app could not reach GMS. Check that
 ## Before you leave it running
 
 - **Firewall.** Only 80 and 443 open. GMS on 8080 and the DataHub frontend on
-  9002 must not be reachable from outside the box — the compose file does not
-  publish them, but a cloud provider's default security group might.
-- **The catalog is the demo's, not yours.** Seed it with the sample catalog.
-  Do not point this at a catalog holding anything real: the demo reads owner
-  names and descriptions and prints them to whoever loads the page.
+  9002 must not be reachable from outside the box. The compose file does not
+  publish them, though a cloud provider's default security group might.
+- **The catalog is the demo's.** Seed it with the sample catalog. Do not point
+  this at a catalog holding anything real: the demo reads owner names and
+  descriptions and prints them to whoever loads the page.
 - **`DEMO_LIVE_TTL_MS`.** One catalog read is shared between visitors for this
-  many milliseconds, so a burst of traffic costs one read rather than one per
-  visitor. Raise it on a small box.
+  many milliseconds, so a burst of traffic costs one read across all of them.
+  Raise it on a small box.
 
 ## Files
 
@@ -123,4 +123,4 @@ If step 4 comes back `"fixture": true`, the app could not reach GMS. Check that
 | `Dockerfile` | the app, plus `uv` for the MCP server it spawns |
 | `docker-compose.yml` | app + Caddy, joined to DataHub's existing network, GMS unpublished |
 | `Caddyfile` | TLS and the reverse proxy; edit the hostname |
-| `datahub-lowmem.yml` | JVM heap caps for a small box — untested, see above |
+| `datahub-lowmem.yml` | JVM heap caps for a small box, untested, see above |
