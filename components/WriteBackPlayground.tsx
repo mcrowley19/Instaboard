@@ -164,7 +164,7 @@ export default function WriteBackPlayground() {
                     ? `${result.findings.length} finding${result.findings.length === 1 ? "" : "s"}: ${result.findings
                         .map((f) => f.kind)
                         .join(", ")}`
-                    : "no findings — every claim the runbook makes about the catalog holds again"}
+                    : "no findings: every claim the guide makes about the catalog holds again"}
                   {result.action === "repair" && result.comparedToRecordTime === false
                     ? " · no record-time baseline was held by this instance, so this compares against the catalog as it stands"
                     : ""}
@@ -221,13 +221,13 @@ export default function WriteBackPlayground() {
                 </b>
                 {result.retractionEarned === false && (
                   <span className="lp-decay-remedy">
-                    Nothing was retracted: the runbook did not come back clean, so something other than the injected
+                    Nothing was retracted: the guide did not come back clean, so something other than the injected
                     drift is still wrong. Repair clears what it caused, not everything.
                   </span>
                 )}
                 {result.retracted.kept.length > 0 && (
                   <span className="lp-decay-remedy">
-                    {result.retracted.kept.length} dataset kept the tag — another runbook is still stale on it, and
+                    {result.retracted.kept.length} dataset kept the tag: another guide is still stale on it, and
                     clearing it would retract a warning this repair did not earn.
                   </span>
                 )}
@@ -288,7 +288,7 @@ export default function WriteBackPlayground() {
       <p className="lp-note">
         This writes to a real DataHub and then puts it back. The column is dropped for as long as the validation
         takes and restored before the response returns, one visitor at a time, and the only entities it can touch are
-        the three this runbook names — there is no parameter that points it anywhere else. It is meant for a
+        the three this guide names, since no parameter points it anywhere else. It is meant for a
         disposable catalog. The identical sequence runs in{" "}
         <a href="https://github.com/mcrowley19/Instaboard/blob/main/.github/workflows/prove.yml">CI on every push</a>,
         against a DataHub booted from nothing, and the committed receipts have to match what it produces.

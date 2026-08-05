@@ -223,7 +223,7 @@ function renderReview(steps) {
       <input id="ho-role" placeholder="e.g. Payments Data Lead" /></div>
     <div class="step-count" style="margin:10px 0 6px">${steps.length} recorded step${steps.length === 1 ? "" : "s"}</div>
     <div id="ho-steps"></div>
-    <button class="btn primary" id="ho-save" style="width:100%;margin-top:10px">Generate runbook & save to DataHub</button>
+    <button class="btn primary" id="ho-save" style="width:100%;margin-top:10px">Generate guide & save to DataHub</button>
     <div class="gen-log" id="ho-log"></div>`;
 
   const list = document.getElementById("ho-steps");
@@ -294,7 +294,7 @@ async function saveHandoff(steps) {
     div.textContent = err && err.message ? err.message : String(err);
     log.appendChild(div);
     saveBtn.disabled = false;
-    saveBtn.textContent = "Generate runbook & save to DataHub";
+    saveBtn.textContent = "Generate guide & save to DataHub";
   }
 }
 
@@ -394,7 +394,7 @@ function renderGuide() {
     <div class="step-card">
       <div class="step-count">Step ${index + 1} of ${handoff.steps.length}${done[index] ? " · done ✓" : ""}</div>
       <div class="step-title">${escapeHtml(step.title)}</div>
-      <span class="here-pill hidden" id="here-pill">📍 You're on this page</span>
+      <span class="here-pill hidden" id="here-pill">You're on this page</span>
       <div class="step-body">
         <p>${escapeHtml(step.instruction)}</p>
         <p class="why"><strong>Why:</strong> ${escapeHtml(step.why)}</p>
@@ -410,7 +410,7 @@ function renderGuide() {
       <button class="btn" id="g-prev" ${index === 0 ? "disabled" : ""}>← Back</button>
       <button class="btn primary" id="g-next">${done[index] ? "Next →" : index === handoff.steps.length - 1 ? "Mark done ✓" : "Mark done → next"}</button>
     </div>
-    ${allDone ? `<div class="guide-done">🎉 Handoff complete — this task is yours now.</div>` : ""}`;
+    ${allDone ? `<div class="guide-done">Handoff complete. This task is yours now.</div>` : ""}`;
 
   document.getElementById("g-back").addEventListener("click", renderHandoffs);
   document.getElementById("g-prev").addEventListener("click", () => {

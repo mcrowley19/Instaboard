@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Overridable so a second dev server (screenshot tooling) never shares
+  // .next with the main one — two writers corrupt the build cache.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   serverExternalPackages: ["@modelcontextprotocol/sdk"],
   async headers() {
     // Let the Chrome extension call the API (no cookies involved).

@@ -82,7 +82,7 @@ export default function ProgressPage() {
 
         {pct === 100 && (
           <div className="card" style={{ textAlign: "center", borderColor: "var(--green)" }}>
-            🎉 Week 1 complete — you know your way around the catalog.
+            Week 1 complete. You know your way around the catalog.
           </div>
         )}
       </div>

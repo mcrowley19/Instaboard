@@ -64,9 +64,9 @@ Buttons are disabled on non-DataHub pages.
 task in your DataHub tab. Every page you visit is captured as a step, carrying
 the URL, title and entity URN. Type a note on each page, the "why" your successor
 can't google, and press *Add note*. Hit **■ Stop**, give the task a title and
-your name, and click *Generate runbook & save to DataHub*. The backend looks
+your name, and click *Generate guide & save to DataHub*. The backend looks
 up every entity you touched, so owners, schemas, real saved queries and lineage,
-merges in your notes, and produces a step-by-step runbook that is:
+merges in your notes, and produces a step-by-step guide that is:
 
 - stored on the backend (`GET /api/handoffs`), and
 - **written back into DataHub** via the MCP `save_document` tool, linked to
@@ -74,7 +74,7 @@ merges in your notes, and produces a step-by-step runbook that is:
 
 **Joining? Inherit it.** Open the **Handoffs** tab, pick a task, and replay it.
 Each step shows what to do, why, real SQL, and gotchas. *Open this page ↗*
-navigates your DataHub tab to the right entity, a **📍 You're on this page**
+navigates your DataHub tab to the right entity, a **You're on this page**
 pill confirms when your current tab matches the step, and *Ask the coach* jumps
 to chat pre-loaded with the step's context. Progress is saved per handoff.
 

@@ -3,29 +3,29 @@
 [![ci](https://github.com/mcrowley19/Instaboard/actions/workflows/ci.yml/badge.svg)](https://github.com/mcrowley19/Instaboard/actions/workflows/ci.yml)
 [![prove](https://github.com/mcrowley19/Instaboard/actions/workflows/prove.yml/badge.svg)](https://github.com/mcrowley19/Instaboard/actions/workflows/prove.yml)
 
-**Write down what you know, and hear about it when the catalog stops agreeing.**
+**Onboarding for data teams, built on DataHub.**
 
-The runbook is called *Monthly revenue close*, recorded in July by the person
-who ran it. Step 1 checks `payment_health_daily` before trusting anything
-downstream. Step 2 sums `net_amount_usd` from `fct_revenue`, with a tip to ping
-Mike Rodriguez if the total looks short. Step 3 reconciles against
-`mrr_monthly`. Five weeks later the column is called `net_revenue_usd`,
-`mrr_monthly` is deprecated, and Mike has moved on. Every step reads with the
-confidence it had in July, and the next person follows it into a wall.
+instaboard records how a team does a task and saves it as a step-by-step guide
+in the catalog, then keeps checking that every step still matches what the
+catalog holds. New hires ask it questions in chat and get answers off the live
+catalog, with real table names and a URN you can paste into DataHub.
 
-instaboard captures a data workflow into DataHub and then keeps checking whether
-the catalog still agrees with it. When the two stop agreeing, that turns into
-state on the datasets involved: an assertion that fails, an incident assigned to
-whoever owns the data now, and a proposed correction for a human to approve.
+A guide names real columns, tables and owners, and all three keep changing
+underneath it. When the catalog stops agreeing with a step, that becomes state
+on the datasets involved: an assertion that fails, a warning tag, an incident
+assigned to whoever owns the data now, and a proposed correction for a human to
+approve. One naming note up front: guides were called runbooks in earlier
+versions, so the tag written to DataHub is `Stale Runbook` and several scripts
+and receipt files carry `runbook` in their paths.
 
 | The moment | What instaboard does |
 | --- | --- |
-| Someone hands in notice | They hit **● Record** in the side panel and do the task once. Every DataHub page they land on becomes a step, and their notes carry the why. |
-| Nobody ever recorded anything | `npm run draft` writes a first pass from the queries, lineage and owners the catalog already holds, labelled `inferred` everywhere it shows up. |
-| A column a runbook's SQL reads gets renamed | The sweep names the step and the claim that broke, tags the datasets, and `npm run propose` derives the correction as a diff for a human to approve. |
-| The person step 2 says to ping has left | The incident lands on whoever owns the dataset today. |
+| A task gets recorded | Hit **● Record** in the side panel and do the task once. Every DataHub page you land on becomes a step, and your notes carry the why. |
+| Nothing has been recorded yet | `npm run draft` writes a first pass from the queries, lineage and owners the catalog already holds, labelled `inferred` everywhere it shows up. |
+| A column a guide's SQL reads gets renamed | The sweep names the step and the claim that broke, tags the datasets, and `npm run propose` derives the correction as a diff for a human to approve. |
+| The owner a step says to ping has left | The incident lands on whoever owns the dataset today. |
 | A new hire starts asking questions | Chat answers from the live catalog, with real table names and a URN you can paste into DataHub. |
-| Someone repairs the runbook | The incident resolves, the assertion goes back to passing, and the `Stale Runbook` tag comes off. |
+| Someone repairs the guide | The incident resolves, the assertion goes back to passing, and the `Stale Runbook` tag comes off. |
 
 [**Using it**](#using-it) walks through installing it and what you do on each of
 the three surfaces. One command runs the whole thing end to end.
@@ -34,13 +34,12 @@ the three surfaces. One command runs the whole thing end to end.
 npm run prove
 ```
 
-It starts DataHub if it isn't already up, ingests a sample catalog, captures
-the *Monthly revenue close* runbook from the story above and validates it
-clean. Then it performs the story's break for real, through DataHub's own write
-APIs. It **renames `net_amount_usd` out from under step 2's SQL, deprecates
-`mrr_monthly`, and takes Mike Rodriguez off `fct_revenue`**. Revalidation has
-to catch all three. Afterwards the catalog is restored and the runbook has to
-go green again.
+It starts DataHub if it isn't already up, ingests a sample catalog, records a
+three-step *Monthly revenue close* guide and validates it clean. Then it breaks
+the catalog for real, through DataHub's own write APIs. It **renames
+`net_amount_usd` out from under step 2's SQL, deprecates `mrr_monthly`, and
+takes Mike Rodriguez off `fct_revenue`**. Revalidation has to catch all three.
+Afterwards the catalog is restored and the guide has to go green again.
 
 **There are 39 assertions and the script exits non-zero if any of them fails.
 The last run passed 39 of 39, on both catalogs.**
@@ -80,9 +79,9 @@ npm run prove:repair                 # the correction, executed: real consumer S
 
 Two lines in there matter more than the rest. The clean runs don't report as
 passes, because one claim on `mrr_monthly` can't be checked at all. Nothing in
-the catalog is monitoring that table, so calling the runbook green would mean
+the catalog is monitoring that table, so calling the guide green would mean
 inventing evidence. The other line is the tag coming back off. It goes on when
-the runbook breaks and comes off when someone repairs it, with DataHub read back
+the guide breaks and comes off when someone repairs it, with DataHub read back
 on both sides so the write receipt isn't taken on trust.
 
 The decay engine is told nothing about the breaking changes. It re-reads the
@@ -97,9 +96,9 @@ Ubuntu runner every time anyone pushes, runs this loop against it on both
 catalogs, and then diffs the receipts it just generated against the ones
 committed here. Every check, verdict, coverage figure, tag read-back and
 proposed edit has to match; only server-minted UUIDs and the run timestamps are
-masked. The badge above says whether the last run reproduced them. No API key
-goes anywhere near it, since drift detection has no model in it, so it runs on
-pull requests from forks too.
+masked. The badge above says whether the last run reproduced them. Drift
+detection has no model in it, so the workflow needs no API key and runs on pull
+requests from forks too.
 
 Every claim below has a row in [`EVIDENCE.md`](EVIDENCE.md), naming the artifact
 that proves it and the command that re-derives that artifact. Most of them need
@@ -111,9 +110,9 @@ weakness in the rename detector, where a full token reorder from
 below the threshold, and one assertion of our own that was too strict. Both are
 fixed.
 
-![Validating a runbook against live DataHub](docs/media/validate-live.gif)
+![Validating a guide against live DataHub](docs/media/validate-live.gif)
 
-*Recorded against a live DataHub. One click re-validates a runbook, flags the
+*Recorded against a live DataHub. One click re-validates a guide, flags the
 failing freshness assertion on step 1, and writes the warning back to the
 catalog.
 [The note inside DataHub](docs/screenshots/stale-runbook-note-in-datahub.jpg) ·
@@ -158,45 +157,47 @@ dataset name and explains what feeds it, what it would break, and who to warn.
 
 ### Record what somebody knows
 
-Install the side panel: open `chrome://extensions`, turn on Developer mode, hit
-**Load unpacked**, pick the `extension/` folder, then pin the icon and click it.
-Longer instructions are in [`extension/README.md`](extension/README.md).
+Install the side panel: grab the zip behind **Download the extension** on the
+landing page, or use the repo's `extension/` folder directly. Open
+`chrome://extensions`, turn on Developer mode, hit **Load unpacked** and pick
+the folder, then pin the icon and click it. Longer instructions are in
+[`extension/README.md`](extension/README.md).
 
 Open the DataHub page you would normally start from and hit **● Record** in the
 panel header. Now do the task. Every page you land on is captured as a step
 carrying its URL, title and entity URN, and **Add note** attaches the *why* to
 whichever step you are on, which is the part no catalog holds. Hit **■ Stop**,
-give the task a title and your name, and click **Generate runbook & save to
+give the task a title and your name, and click **Generate guide & save to
 DataHub**. The backend looks up every entity you touched, merges in your notes,
-and writes the runbook into the catalog with `save_document`.
+and writes the guide into the catalog with `save_document`.
 
 `npm run draft -- --query=revenue` does a version of this with nobody recording
 anything, working from the queries and lineage the catalog already holds. Then
 whoever is leaving corrects a page that exists.
 
-### Read a runbook you inherited
+### Read a guide you inherited
 
 Open **Handoffs** and pick one. Each step shows the action, the why, the real
 SQL and the gotchas. *Open this page ↗* drives your DataHub tab to the right
-entity, and a **📍 You're on this page** pill confirms when the tab matches the
+entity, and a **You're on this page** marker confirms when the tab matches the
 step. Progress is saved per handoff, so you can stop halfway and come back.
 
 ### Find out when it stops being true
 
 On any handoff, click **Validate against DataHub**. It re-reads every entity the
-runbook depends on and reports what has moved since the day it was recorded,
+guide depends on and reports what has moved since the day it was recorded,
 one claim at a time. From a terminal, `npm run validate` runs the same sweep
-over every stored runbook and exits non-zero on a broken one, which is enough
+over every stored guide and exits non-zero on a broken one, which is enough
 for cron or a CI gate.
 
-A broken runbook then shows up inside DataHub, on the datasets involved: a
+A broken guide then shows up inside DataHub, on the datasets involved: a
 `Stale Runbook` tag, a failing assertion, structured properties naming the
 change, and an incident assigned to whoever owns the dataset today. All of it
-comes back off when the runbook is repaired.
+comes back off when the guide is repaired.
 
 `npm run propose` derives the correction from the catalog and prints a unified
 diff carrying the evidence behind each edit. `--apply` accepts it into the
-runbook store and `--pr` opens a pull request.
+guide store and `--pr` opens a pull request.
 [Worked example](examples/proposals/monthly-revenue-close.md).
 
 `npm run prove:repair` proves the correction by executing it. Real consumer SQL
@@ -210,12 +211,12 @@ hash, since the warehouse takes the rename as `ALTER TABLE … RENAME COLUMN` an
 a rename cannot move the data underneath. Receipts land in
 [`examples/live/prove-repair-receipts.json`](examples/live/prove-repair-receipts.json).
 
-The runbook's body of record is its Document in DataHub, and `npm run
-reconcile` is how the two stay honest. It compares every stored runbook
+A guide's body of record is its Document in DataHub, and `npm run
+reconcile` is how the two stay honest. It compares every stored guide
 against its catalog document by content hash, three ways: the catalog now, the
 local copy now, both as of the last sync. Edit the document inside DataHub and
 the catalog wins; the next reconcile, or the next sweep, pulls your edit onto
-the runbook verbatim and nothing overwrites it. Corrections applied here reach
+the guide verbatim and nothing overwrites it. Corrections applied here reach
 the catalog through a compare-and-set push that re-reads the digest first, and
 a push that would land on top of somebody's DataHub edit is refused, including
 the case where the edit was pulled but nobody folded it in yet. When both
@@ -255,7 +256,7 @@ the queries people ran, the lineage of what feeds what, who owns which table and
 what has been failing. `npm run draft -- --query=revenue` reads all of that and
 writes a first pass: a health check, the upstream checks, the recorded SQL, the
 downstream blast radius. So the tool does something useful on day one in any
-DataHub, and whoever is leaving starts from a draft they can correct.
+DataHub, and whoever records starts from a draft they can correct.
 
 No catalog can tell you *why step 2 exists*. Drafted steps are marked
 `inferred`, their reasons are written as evidence, and every surface that renders
@@ -263,17 +264,17 @@ one says **"Draft runbook — nobody recorded this"**. A draft that passed itsel
 off as a colleague's judgement would defeat the whole point of the project.
 [Sample](examples/drafts/).
 
-**1. Capture.** Whoever is leaving hits ● Record and does the task in DataHub the
+**1. Capture.** Whoever knows the task hits ● Record and does it in DataHub the
 way they always do. Every page they land on becomes a step, and they type in the
 *why*. The agent then fills each step out from the live catalog with owners, the
-real recorded SQL, lineage and health, and writes the finished runbook back
+real recorded SQL, lineage and health, and writes the finished guide back
 through `save_document`, linked to the datasets it touches. Five real ones sit in
 [`examples/runbooks/`](examples/runbooks/).
 
 **2. Pin.** Each step breaks down into **claims**: this dataset exists, it has a
 column called `net_amount_usd`, Mike owns it. Every claim is pinned to a content
 fingerprint of the exact catalog aspect that backed it. Fingerprints hash public
-catalog facts, so anyone holding the runbook and a DataHub connection can
+catalog facts, so anyone holding the guide and a DataHub connection can
 recompute one and check the pin.
 
 **3. Validate.** Read the catalog again and re-check every claim. What runs here
@@ -286,7 +287,7 @@ so you can confirm any verdict in the DataHub UI in about ten seconds:
 ```
 
 The report says `18 of 19 claims still hold`. A reader learns from that the
-runbook is followable apart from one named thing, which is the kind of answer
+guide is followable apart from one named thing, which is the kind of answer
 somebody can act on.
 
 It also says what it couldn't check. A verdict comes back as one of three things:
@@ -301,7 +302,7 @@ The third one exists because a validator fails by going quiet. A step pointing a
 a dataset with no assertions looks identical to a step whose checks are all
 passing, and "no failing assertions" is a true sentence that means nothing when
 nothing is asserting. The same goes for a dataset the catalog holds no schema
-for. An empty field list used to read here as *every column the runbook names has
+for. An empty field list used to read here as *every column the guide names has
 been dropped*, which is about the loudest false positive available on the least
 reliable input going. Both now come back as coverage gaps, reported per step and
 naming the dimension:
@@ -315,31 +316,31 @@ That figure goes into DataHub as `instaboard.revalidationCoverage`, since a
 coverage number nobody can see turns back into the thing it exists to prevent. On
 DataHub's own `showcase-ecommerce` datapack the honest answer works out at **0/4
 steps validated**. That catalog ships with no assertions and several unowned
-tables, so none of the runbook's steps are fully checkable, and the tool says so.
+tables, so none of the guide's steps are fully checkable, and the tool says so.
 
 **4. Write it back as state.** The findings land in the catalog as things a
 person will walk into:
 
-- a **custom assertion** per (runbook, dataset) that fails while the runbook is
+- a **custom assertion** per (guide, dataset) that fails while the guide is
   stale and passes when it validates clean, carrying the specific catalog change
   and the provenance chain in its result properties;
-- **structured properties** with the runbook's status, the change that broke it,
+- **structured properties** with the guide's status, the change that broke it,
   and every validated-against pin;
 - a **`Stale Runbook` tag** on everything that drifted, plus an
   **`Unvalidated Runbook Step` tag** on anything the catalog held too little
   about to check. They stay separate because one of them asks you to fix the
-  runbook and the other asks you to fix the catalog entry;
+  guide and the other asks you to fix the catalog entry;
 - a real **Incident** on any dataset where a step would now fail, **assigned to
   whoever owns that dataset today**, who in the owner-drift case is the person
-  the runbook has never heard of.
+  the guide has never heard of.
 
 Clean runs get written too, because a dataset that only ever hears from you when
 something breaks leaves "fine" and "nobody checked" looking the same.
 
-All of it comes back off again. When someone repairs the runbook, the incident is
+All of it comes back off again. When someone repairs the guide, the incident is
 resolved, the assertion goes back to passing and the `Stale Runbook` tag is
 removed. That last one is guarded, since the tag is shared: if a *different*
-stored runbook is still stale on that dataset the tag stays put, and the receipt
+stored guide is still stale on that dataset the tag stays put, and the receipt
 says whose it is. A detector that only ever adds state ends up as a catalog full
 of warnings about problems fixed months ago, which nobody reads. The proof loop
 asserts the retraction by reading DataHub back on both sides.
@@ -363,7 +364,7 @@ drill raised are resolved, with each of those facts read back out of GMS. The
 receipt binds a plan hash over the approved edits to per-file artifact hashes
 and to the catalog's own schema fingerprints at baseline, broken and restored.
 
-`npm run validate` runs steps 3 to 5 over every stored runbook and exits non-zero
+`npm run validate` runs steps 3 to 5 over every stored guide and exits non-zero
 on a broken one, so you can hang it off cron or use it as a CI gate.
 
 ---
@@ -380,7 +381,7 @@ npm run bench:drift              # plant, score, restore; needs a DataHub
 npm run bench:drift -- --verify  # re-derive this table from the committed run
 ```
 
-That plants known drifts across every stored runbook, mixes in two kinds of
+That plants known drifts across every stored guide, mixes in two kinds of
 negative, validates blind and then scores two axes separately.
 
 <!-- drift-table:start -->
@@ -418,19 +419,19 @@ run, so it cannot drift from the artifact it came from.
 Four things in the harness keep the numbers honest:
 
 - **A baseline pass.** Findings that pre-date the injection are excluded from the
-  false-positive count, so a runbook that was already stale doesn't get blamed on
+  false-positive count, so a guide that was already stale doesn't get blamed on
   the engine, and doesn't quietly pad its score either.
 - **Independent ground truth.** Working out which columns a step depends on
   happens by tokenising its SQL. Asking the engine's own reference matcher would
   leave recall measuring the harness agreeing with itself.
-- **Decoys on datasets that runbooks do read.** Two of the six drop a column
-  from a table a runbook uses, where no step mentions that column. The engine
+- **Decoys on datasets that guides do read.** Two of the six drop a column
+  from a table a guide uses, where no step mentions that column. The engine
   holds a snapshot of those entities and has to stay quiet anyway, which is a
   good deal harder than passing a decoy planted on some table nobody reads.
-- **Controls that change what runbooks *do* read.** A column added, a description
+- **Controls that change what guides *do* read.** A column added, a description
   rewritten, a second owner appointed. Every one of those moves the aspect
   fingerprint a claim is pinned to, and none of them invalidates anything, so a
-  detector that equates "the aspect changed" with "the runbook broke" fires on
+  detector that equates "the aspect changed" with "the guide broke" fires on
   all three. This is where a real catalog spends most of its time, and it's the
   negative worth having. A fourth control belongs on that list, "an assertion was
   added and passes", and isn't planted: `deleteAssertion` refuses the assertions
@@ -439,7 +440,7 @@ Four things in the harness keep the numbers honest:
   not be reversed, and every other change here is.
 
 Recall is counted per planted drift and precision per finding, on purpose: one
-drift legitimately produces several findings when two runbooks read the same
+drift legitimately produces several findings when two guides read the same
 table, and both are right.
 
 Running the benchmark paid off twice over straight away. `plan` → `plan_v2` came
@@ -453,8 +454,8 @@ remains, and it comes from the shape of the problem.
 
 `evals/` holds a 20-question onboarding benchmark, made of the questions a real
 new hire asks in week 1, scored **deterministically** against the catalog. Every
-check is a substring match on facts that live in DataHub. There is no LLM judge
-anywhere in the scoring, and no partial credit.
+check is a substring match on facts that live in DataHub, a case passes only
+when every check in it passes, and nothing in the scoring involves an LLM judge.
 
 The obvious two-arm design, with tools and without them, partly measures *having
 tools* at all. So there's a third arm sitting in the middle: the same agent loop,
@@ -529,7 +530,7 @@ confidence interval on 100% takes a great deal more than that. The last run
 covered four of the five drift kinds, the planted semantic case among them. No
 `owner-removed` drift got planted, because the planner only plants one when a
 step names an owner whose username tokens show up in its prose, and none of the
-stored runbooks happened to qualify. So the proof loop is what covers the owner
+stored guides happened to qualify. So the proof loop is what covers the owner
 path, twice, on both catalogs. A control for an assertion added that passes is
 missing for the reason given above. Both numbers come from one run on one
 catalog family, so neither is a
@@ -553,9 +554,9 @@ currency, inclusion and exclusion words, time grain, numbers), a
 after. The benchmark plants one such change, beside a reworded description with
 the same measurement terms that must stay silent. The dangerous remainder is
 the redefinition nobody documents: an upstream filter change that leaves the
-description untouched produces nothing, and a runbook can still sit at 19/19
+description untouched produces nothing, and a guide can still sit at 19/19
 claims holding while being wrong in exactly that way. The comparison also needs
-the description as it stood at record time, so only runbooks recorded since
+the description as it stood at record time, so only guides recorded since
 column documentation entered the snapshot can be checked at all.
 
 **Columns in SQL are read from the query's syntax tree; prose is still matched
@@ -597,7 +598,7 @@ matcher can solve and which we had written off as unsolvable. It was unsolvable
 adversarial case is still planted on every run, and you should assume there are
 more.
 
-**A drafted runbook is a starting point.** Everything in a draft comes from
+**A drafted guide is a starting point.** Everything in a draft comes from
 catalog evidence, and no catalog holds the reason a step exists. Drafts are worth
 having because correcting one costs far less than writing from nothing, though a
 team that files drafts without correcting them has automated the production of
@@ -640,7 +641,7 @@ number of catalog reads at every size** (25 over GraphQL, 27 over MCP, since the
 two transports ask one health question differently) and spent **zero LLM
 tokens**, which the benchmark earns by refusing to start if `LLM_API_KEY` is set.
 That's the load-bearing claim and it is exact: the sweep reads the entities the
-runbooks name, so its cost is a property of how many runbooks you have, and how
+guides name, so its cost is a property of how many guides you have, and how
 big your catalog is doesn't come into it.
 
 **The timing column is missing on purpose.** Wall-clock proved noisier than
@@ -661,11 +662,11 @@ would have hung indefinitely and never raised an error; `callDataHubTool` now
 carries a 120s deadline because of it. Whether the hang is load, catalog size, or
 something else in that client is not established.
 
-**And 100,000 is still a guess.** The sweep is serial per runbook, and the
+**And 100,000 is still a guess.** The sweep is serial per guide, and the
 structured-property merge reads before it writes, which would get expensive.
 Nothing above extrapolates there.
 
-**DataHub was not the source of truth for a runbook's text, and now it can be.**
+**DataHub was not the source of truth for a guide's text, and now it can be.**
 `get_entities` on a document URN returns the URN and nothing else, so the body
 lived in local storage and DataHub held a copy nobody could verify. That turned
 out not to be a DataHub limitation at all: GMS returns
@@ -685,13 +686,14 @@ what tells you the two agree, in place of an architecture that would make
 divergence impossible.
 
 **The write-back has no permissions model.** It uses whatever token you
-configure. There's no RBAC awareness, no notion of who triggered a sweep, and no
-guard against two sweeps running at once over the same runbook.
+configure. RBAC goes unexamined, the sweep records nothing about who triggered
+it, and two sweeps can run at once over the same guide with nothing to stop
+them.
 
 **Custom assertions can't be cleaned up.** `deleteAssertion` refuses the CUSTOM
 assertions that `upsertCustomAssertion` creates
 ([filed upstream](https://github.com/datahub-project/datahub/issues/18817)), so
-deleting a runbook leaves its assertion behind on the dataset until someone
+deleting a guide leaves its assertion behind on the dataset until someone
 removes it with the CLI.
 
 **The Chrome extension is unit-tested and not browser-tested.** Entity detection
@@ -707,7 +709,7 @@ that name. One of them is **recall**, an agent that remembers what it learned
 about a catalog so the next session starts warmer.
 [`datahub-memory`](https://github.com/datahub-project/datahub-skills/pull/69) does
 that, and it is a separate problem from this one. instaboard captures what a
-*person* knew as a runbook that a human wrote and vouched for, then re-checks it
+*person* knew as a guide that a human wrote and vouched for, then re-checks it
 deterministically against the catalog and reports which specific claim stopped
 being true. The half that matters here is the revalidation, so the claims, the
 pins, the coverage, the write-back and the retraction, and none of it depends on
@@ -715,13 +717,13 @@ an agent remembering anything.
 
 ## When you shouldn't use this
 
-- **Your runbooks aren't about catalogued data.** The whole mechanism is
-  re-checking claims against a catalog. A runbook about a deploy process has no
+- **Your guides aren't about catalogued data.** The whole mechanism is
+  re-checking claims against a catalog. A guide about a deploy process has no
   claims this can verify.
 - **Your catalog is thin.** If datasets have no owners, no glossary terms and no
   health signals, there is little for a claim to be pinned to, and the benchmark
   above says most of the value was in exactly that metadata.
-- **You need semantic correctness.** See above. This proves a runbook is still
+- **You need semantic correctness.** See above. This proves a guide is still
   *executable*, and says nothing about whether it is still *right*.
 - **You want fully automatic remediation.** By design it stops at a proposal.
 
@@ -767,7 +769,7 @@ Three of them changed this codebase.
 [#172](https://github.com/acryldata/mcp-server-datahub/issues/172) is why
 `lib/datahub-graphql.ts` exists, and why `discountSelfWrittenState` in
 `lib/decay.ts` has to stop the sweep reading its own incidents and assertions
-back as drift. The document read-back gap is why a runbook's body lives in local
+back as drift. The document read-back gap is why a guide's body lives in local
 storage with DataHub holding the shared copy, which is the opposite of the
 arrangement we wanted, and it is named in *What we haven't proven*.
 
@@ -803,7 +805,7 @@ LLM_PROVIDER=gemini      LLM_MODEL=gemini-2.5-flash
 ```
 
 **Chrome side panel.** [Install instructions](extension/README.md). It follows
-you inside DataHub, detects the entity on screen, and records runbooks. One real
+you inside DataHub, detects the entity on screen, and records guides. One real
 capture against a live catalog is committed at
 [`examples/live/extension-receipt.json`](examples/live/extension-receipt.json).
 
@@ -858,16 +860,16 @@ behaviours run underneath all of them:
 | `npm run prove` | **the whole loop end to end, 39 assertions** (`-- --catalog=showcase` for DataHub's datapack) |
 | `npm run prove:repair` | **the executed repair**: consumer SQL breaks under a live catalog rename and comes back byte-identical (`-- --catalog=showcase` works here too) |
 | `npm run campaign` | fan the approved correction out as git patches across every consumer repo, dbt included, each verified by applying it |
-| `npm run reconcile` | reconcile every runbook against its DataHub document by content hash; catalog edits win (`--push` for local changes) |
+| `npm run reconcile` | reconcile every guide against its DataHub document by content hash; catalog edits win (`--push` for local changes) |
 | `npm run prove:sync` | **the body of record, proved**: a DataHub edit wins, a conflicting push is refused, the steward's words survive |
 | `npm run prove:verify` | check the receipts that run just wrote against the committed ones; CI runs this (`--repair` for the repair receipts) |
-| `npm run draft` | draft runbooks from catalog evidence, no recording needed (`--query=`, `--urn=`, `--save`) |
+| `npm run draft` | draft guides from catalog evidence with nobody recording anything (`--query=`, `--urn=`, `--save`) |
 | `npm run bench:drift` | plant known drift, decoys and controls; score detection and correction |
 | `npm run bench:verify` | re-derive the published drift table from the committed run; CI runs this |
-| `npm run validate` | sweep every runbook for decay; write notes, assertions, properties, incidents and tags back |
+| `npm run validate` | sweep every guide for decay; write notes, assertions, properties, incidents and tags back |
 | `npm run propose` | derive corrections as reviewable diffs (`--apply`, `--pr`) |
-| `npm run examples` | export stored runbooks to `examples/runbooks/` |
-| `npm test` | vitest suite (229 tests, MCP and GMS mocked) |
+| `npm run examples` | export stored guides to `examples/runbooks/` |
+| `npm test` | vitest suite (346 tests, MCP and GMS mocked) |
 | `npm run eval` | the 20-case benchmark, all three arms (`-- --suite=showcase`) |
 | `npm run eval:verify` | re-score the committed answers for both suites; CI runs this |
 | `npm run showcase:drill` | `record` / `break` / `receipts` / `restore` on DataHub's own datapack |
@@ -944,7 +946,7 @@ examples/       runbooks/ (five real ones + validation reports) · drafts/ · pr
                 campaigns/ (verified-mergeable patches, one per repo)
                 live/ (dated receipts from live runs, both catalogs)
 submission/oss/ the upstream skill PR, the friction reports, the entity-detection package
-tests/          vitest suite (229 tests)
+tests/          vitest suite (346 tests)
 ```
 
 ## Security notes

@@ -127,7 +127,7 @@ export default function PathPage() {
                 <span className="tag">{path.role}</span>
                 <span className="tag">{path.domain}</span>
                 <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-                  {saveState === "saved" && <span style={{ color: "var(--green)", fontSize: 12.5 }}>✓ Saved to DataHub</span>}
+                  {saveState === "saved" && <span style={{ color: "var(--green)", fontSize: 12.5 }}>Saved to DataHub</span>}
                   {saveState === "failed" && <span style={{ color: "var(--red)", fontSize: 12.5 }}>Save failed</span>}
                   <button className="btn" onClick={saveToDataHub} disabled={saveState === "saving" || saveState === "saved"}>
                     {saveState === "saving" ? "Saving…" : "Save to DataHub"}

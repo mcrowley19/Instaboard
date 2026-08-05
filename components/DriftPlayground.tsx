@@ -74,12 +74,12 @@ const VERDICT_COPY: Record<string, { label: string; tone: string; blurb: string 
   PASS: {
     label: "PASS",
     tone: "ok",
-    blurb: "Every claim this runbook makes about the catalog was checked, and every one holds.",
+    blurb: "Every claim this guide makes about the catalog was checked, and every one holds.",
   },
   FINDING: {
     label: "FINDING",
     tone: "bad",
-    blurb: "The catalog moved under a step. Following the runbook as written would not work.",
+    blurb: "The catalog moved under a step. Following the guide as written would not work.",
   },
   INSUFFICIENT_DATA: {
     label: "INSUFFICIENT_DATA",
@@ -149,7 +149,7 @@ export default function DriftPlayground() {
     <div className="lp-play">
       <div className="lp-play-controls">
         <div className="lp-play-label">
-          Break the catalog. The runbook was recorded 2026-07-01 against a catalog where all of this was true.
+          Break the catalog. The guide was recorded 2026-07-01 against a catalog where all of this was true.
         </div>
         <div className="lp-play-buttons">
           {mutations.map((m) => (
@@ -175,7 +175,7 @@ export default function DriftPlayground() {
       <div className="lp-decay">
         <div className="lp-trace-head">
           <span className={`dot ${result?.severity === "ok" ? "" : "warn"}`} />
-          <span>runbook validation</span>
+          <span>guide validation</span>
           <span className="grow">monthly MRR report · recorded 2026-07-01 by Priya Patel</span>
         </div>
 
@@ -279,7 +279,7 @@ export default function DriftPlayground() {
         <p className="lp-note">
           This runs against a built-in fixture of the Northbeam catalog, so nothing is written back — incidents,
           assertions and tags need a real DataHub. The verdict above comes from the same function the live sweep
-          calls. Receipts from real runs, including a stale tag being applied and then retracted when the runbook is
+          calls. Receipts from real runs, including a stale tag being applied and then retracted when the guide is
           repaired, are committed at{" "}
           <a href="https://github.com/mcrowley19/Instaboard/blob/main/examples/live/prove-loop-receipts.json">
             examples/live/
