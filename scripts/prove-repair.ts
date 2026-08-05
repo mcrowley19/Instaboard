@@ -431,6 +431,13 @@ async function main() {
     controls.map((f) => `${f}: ${repairedByFile[f]?.resultHash?.slice(0, 12)}`).join("; ")
   );
 
+  // The incident the red sweep just raised reaches DataHub's incident index a
+  // beat behind the write, and the repaired sweep can only close what the
+  // index shows it. Same lag, same wait, as every other index-dependent step;
+  // run 31005338938 hit the race when the sweep got marginally faster.
+  say("    waiting for DataHub to index the incident…");
+  await new Promise((r) => setTimeout(r, INDEX_LAG_MS));
+
   const repairedSweep = await sweep();
   const cleanRow = repairedSweep.rows[0];
   check(
