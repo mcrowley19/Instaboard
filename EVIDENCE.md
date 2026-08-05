@@ -85,6 +85,15 @@ calls a model.
 | The write-back comes off in the same run: assertion back to passing, tag retracted, incidents resolved, each read back from GMS. | `writeback` in the repair receipts | **live** `npm run prove:repair` |
 | The committed repair receipts are what a fresh run produces, on both catalogs, checked in CI. | [`.github/workflows/prove.yml`](.github/workflows/prove.yml) | **live** `npm run prove:repair && npm run prove:verify -- --repair` |
 
+## The body of record
+
+| Claim | Proof | Re-derive it |
+| --- | --- | --- |
+| The runbook body of record is its Document in DataHub: an edit made there wins, pulled onto the runbook verbatim by content-hash reconcile, and the sweep runs the same reconcile unattended. | [`examples/live/document-sync-receipts.json`](examples/live/document-sync-receipts.json) · [`lib/runbook-sync.ts`](lib/runbook-sync.ts) | **live** `npm run prove:sync` |
+| Nothing this tool writes can overwrite a document somebody edited in DataHub: every push is compare-and-set on the digest, a pulled edit blocks pushes until a person folds it in, and a conflict is left for a person with both digests named. | the `blocked-push` and `refused-push` entries in the sync receipts · [`tests/document-sync-receipts.test.ts`](tests/document-sync-receipts.test.ts) | **offline** `npm test` |
+| The three-way decision is a pure function, tested to exhaustion. | [`tests/runbook-sync.test.ts`](tests/runbook-sync.test.ts) | **offline** `npm test` |
+| An accepted correction reaches the catalog copy too: `npm run propose -- --apply` pushes the corrected body compare-and-set. | [`scripts/propose-fixes.ts`](scripts/propose-fixes.ts) | **live** `npm run propose -- --apply` |
+
 ## The campaign, mergeable
 
 | Claim | Proof | Re-derive it |

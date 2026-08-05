@@ -1,0 +1,208 @@
+{
+  "startedAt": "2026-08-05T12:21:31.484Z",
+  "finishedAt": "2026-08-05T12:21:37.916Z",
+  "gms": "http://localhost:8080",
+  "documentUrn": "urn:li:document:shared-26e60df8-346c-4bec-a9d4-2856123d53b8",
+  "method": "A runbook was saved as a DataHub Document, edited inside DataHub through updateDocumentContents (the same mutation the UI editor lands on), and reconciled by three-way content digest. The catalog edit was pulled verbatim; the local correction was pushed compare-and-set; and with both sides moved, the push was refused and the steward's edit read back intact. The document and runbook were temporary and removed.",
+  "checks": [
+    {
+      "phase": "save",
+      "what": "the document was created and reads back byte for byte",
+      "passed": true,
+      "detail": "urn:li:document:shared-26e60df8-346c-4bec-a9d4-2856123d53b8 @ 7a60ae6f6614ca1a"
+    },
+    {
+      "phase": "baseline",
+      "what": "the runbook and its document are in sync",
+      "passed": true,
+      "detail": "The catalog document and the local runbook agree with the last sync on both sides."
+    },
+    {
+      "phase": "steward-edit",
+      "what": "the edit landed through DataHub's own mutation",
+      "passed": true,
+      "detail": "catalog now at 6cb1f8977b5e6e79"
+    },
+    {
+      "phase": "pull",
+      "what": "the edit is detected as catalog-ahead and pulled",
+      "passed": true,
+      "detail": "The document was edited in DataHub (7a60ae6f6614ca1a → 6cb1f8977b5e6e79) and the catalog wins: the edited body is stored on the handoff verbatim. The structured steps predate it until someone folds the edit in."
+    },
+    {
+      "phase": "pull",
+      "what": "the steward's words are on the handoff verbatim",
+      "passed": true,
+      "detail": "pulled 2313 chars at 2026-08-05T12:21:35.398Z"
+    },
+    {
+      "phase": "pull",
+      "what": "a second reconcile has nothing left to do",
+      "passed": true,
+      "detail": "The catalog document and the local runbook agree with the last sync on both sides."
+    },
+    {
+      "phase": "push",
+      "what": "a push before the pulled edit is folded in is refused",
+      "passed": true,
+      "detail": "A body edited in DataHub was pulled at 2026-08-05T12:21:35.398Z and has not been folded into the runbook. Pushing now would overwrite that edit by the back door. Fold it in, mark it folded, then push."
+    },
+    {
+      "phase": "push",
+      "what": "the folded runbook is detected as local-ahead",
+      "passed": true,
+      "detail": "The local runbook changed and the catalog document has not. Safe to push."
+    },
+    {
+      "phase": "push",
+      "what": "the push goes through and reads back byte for byte",
+      "passed": true,
+      "detail": "Pushed 438c5aa881c616af over 6cb1f8977b5e6e79 after confirming the catalog still matched the sync base, and read it back: the catalog returns the pushed body byte for byte."
+    },
+    {
+      "phase": "push",
+      "what": "the pushed body carries the folded steward guidance",
+      "passed": true,
+      "detail": "catalog at 438c5aa881c616af"
+    },
+    {
+      "phase": "conflict",
+      "what": "both edits together are reported as a conflict, nothing auto-resolved",
+      "passed": true,
+      "detail": "Both sides moved since the last sync: catalog 438c5aa881c616af → c2c7dba5fb6f0c42, local 438c5aa881c616af → 78683ad6ae9a88da. Neither side is overwritten; a person merges this."
+    },
+    {
+      "phase": "conflict",
+      "what": "the push is refused",
+      "passed": true,
+      "detail": "The catalog document is at c2c7dba5fb6f0c42, and the last sync saw 438c5aa881c616af. Somebody edited it in DataHub; pushing would overwrite them. Reconcile first."
+    },
+    {
+      "phase": "conflict",
+      "what": "the steward's edit is still in the catalog, read back after the refusal",
+      "passed": true,
+      "detail": "catalog still at c2c7dba5fb6f0c42, steward's note intact"
+    }
+  ],
+  "summary": {
+    "total": 13,
+    "passed": 13,
+    "failed": 0
+  },
+  "syncs": [
+    {
+      "phase": "baseline",
+      "runbookId": "prove-body-of-record",
+      "at": "2026-08-05T12:21:35.357Z",
+      "action": "none",
+      "status": "in-sync",
+      "documentUrn": "urn:li:document:shared-26e60df8-346c-4bec-a9d4-2856123d53b8",
+      "localDigest": "7a60ae6f6614ca1a",
+      "catalogDigest": "7a60ae6f6614ca1a",
+      "base": {
+        "catalog": "7a60ae6f6614ca1a",
+        "local": "7a60ae6f6614ca1a"
+      },
+      "detail": "The catalog document and the local runbook agree with the last sync on both sides."
+    },
+    {
+      "phase": "catalog-edit",
+      "runbookId": "prove-body-of-record",
+      "at": "2026-08-05T12:21:35.398Z",
+      "action": "pulled",
+      "status": "catalog-ahead",
+      "documentUrn": "urn:li:document:shared-26e60df8-346c-4bec-a9d4-2856123d53b8",
+      "localDigest": "7a60ae6f6614ca1a",
+      "catalogDigest": "6cb1f8977b5e6e79",
+      "base": {
+        "catalog": "7a60ae6f6614ca1a",
+        "local": "7a60ae6f6614ca1a"
+      },
+      "detail": "The document was edited in DataHub (7a60ae6f6614ca1a → 6cb1f8977b5e6e79) and the catalog wins: the edited body is stored on the handoff verbatim. The structured steps predate it until someone folds the edit in."
+    },
+    {
+      "phase": "after-pull",
+      "runbookId": "prove-body-of-record",
+      "at": "2026-08-05T12:21:35.408Z",
+      "action": "none",
+      "status": "in-sync",
+      "documentUrn": "urn:li:document:shared-26e60df8-346c-4bec-a9d4-2856123d53b8",
+      "localDigest": "7a60ae6f6614ca1a",
+      "catalogDigest": "6cb1f8977b5e6e79",
+      "base": {
+        "catalog": "6cb1f8977b5e6e79",
+        "local": "7a60ae6f6614ca1a"
+      },
+      "detail": "The catalog document and the local runbook agree with the last sync on both sides."
+    },
+    {
+      "phase": "blocked-push",
+      "runbookId": "prove-body-of-record",
+      "at": "2026-08-05T12:21:35.411Z",
+      "action": "refused",
+      "status": "local-ahead",
+      "documentUrn": "urn:li:document:shared-26e60df8-346c-4bec-a9d4-2856123d53b8",
+      "detail": "A body edited in DataHub was pulled at 2026-08-05T12:21:35.398Z and has not been folded into the runbook. Pushing now would overwrite that edit by the back door. Fold it in, mark it folded, then push."
+    },
+    {
+      "phase": "local-edit",
+      "runbookId": "prove-body-of-record",
+      "at": "2026-08-05T12:21:35.420Z",
+      "action": "none",
+      "status": "local-ahead",
+      "documentUrn": "urn:li:document:shared-26e60df8-346c-4bec-a9d4-2856123d53b8",
+      "localDigest": "438c5aa881c616af",
+      "catalogDigest": "6cb1f8977b5e6e79",
+      "base": {
+        "catalog": "6cb1f8977b5e6e79",
+        "local": "7a60ae6f6614ca1a"
+      },
+      "detail": "The local runbook changed and the catalog document has not. Safe to push."
+    },
+    {
+      "phase": "push",
+      "runbookId": "prove-body-of-record",
+      "at": "2026-08-05T12:21:35.449Z",
+      "action": "pushed",
+      "status": "in-sync",
+      "documentUrn": "urn:li:document:shared-26e60df8-346c-4bec-a9d4-2856123d53b8",
+      "localDigest": "438c5aa881c616af",
+      "catalogDigest": "438c5aa881c616af",
+      "base": {
+        "catalog": "6cb1f8977b5e6e79",
+        "local": "7a60ae6f6614ca1a"
+      },
+      "detail": "Pushed 438c5aa881c616af over 6cb1f8977b5e6e79 after confirming the catalog still matched the sync base, and read it back: the catalog returns the pushed body byte for byte."
+    },
+    {
+      "phase": "conflict",
+      "runbookId": "prove-body-of-record",
+      "at": "2026-08-05T12:21:35.481Z",
+      "action": "none",
+      "status": "conflict",
+      "documentUrn": "urn:li:document:shared-26e60df8-346c-4bec-a9d4-2856123d53b8",
+      "localDigest": "78683ad6ae9a88da",
+      "catalogDigest": "c2c7dba5fb6f0c42",
+      "base": {
+        "catalog": "438c5aa881c616af",
+        "local": "438c5aa881c616af"
+      },
+      "detail": "Both sides moved since the last sync: catalog 438c5aa881c616af → c2c7dba5fb6f0c42, local 438c5aa881c616af → 78683ad6ae9a88da. Neither side is overwritten; a person merges this."
+    },
+    {
+      "phase": "refused-push",
+      "runbookId": "prove-body-of-record",
+      "at": "2026-08-05T12:21:35.488Z",
+      "action": "refused",
+      "status": "conflict",
+      "documentUrn": "urn:li:document:shared-26e60df8-346c-4bec-a9d4-2856123d53b8",
+      "localDigest": "78683ad6ae9a88da",
+      "catalogDigest": "c2c7dba5fb6f0c42",
+      "base": {
+        "catalog": "438c5aa881c616af",
+        "local": "438c5aa881c616af"
+      },
+      "detail": "The catalog document is at c2c7dba5fb6f0c42, and the last sync saw 438c5aa881c616af. Somebody edited it in DataHub; pushing would overwrite them. Reconcile first."
+    }
+  ]
+}

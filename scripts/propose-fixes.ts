@@ -22,6 +22,7 @@ import path from "node:path";
 import { detectDecayWithState } from "../lib/decay";
 import { handoffToMarkdown, listHandoffs, saveHandoff } from "../lib/handoff-store";
 import { proposalToMarkdown, proposeFix, type RunbookProposal } from "../lib/remediate";
+import { pushHandoffDocument } from "../lib/runbook-sync";
 
 const args = process.argv.slice(2);
 const filter = args.find((a) => a.startsWith("--filter="))?.split("=")[1];
@@ -150,6 +151,17 @@ async function main() {
     if (apply && proposal.edits.length) {
       saveHandoff(proposal.updated);
       if (!json) console.log(`    ✓ applied to the runbook store (${proposal.edits.length} edit(s))`);
+      // The body of record lives in DataHub, so an accepted correction goes
+      // there too — compare-and-set on the content digest, and refused rather
+      // than clobbering a document somebody edited in the catalog meanwhile.
+      const pushed = await pushHandoffDocument(proposal.updated);
+      if (!json) {
+        console.log(
+          pushed.action === "pushed"
+            ? `    ✓ pushed to the DataHub document (${pushed.localDigest})`
+            : `    ⚠️  DataHub document not updated (${pushed.status}): ${pushed.detail}`
+        );
+      }
     }
 
     if (openPr && proposal.edits.length) {

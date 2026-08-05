@@ -1,0 +1,47 @@
+{
+  "at": "2026-08-05T12:19:14.033Z",
+  "gms": "http://localhost:8080",
+  "method": "Each stored runbook was compared against its Document in DataHub by normalized sha256 content digest, three ways: catalog now, local rendering now, both as of the last sync. Catalog edits are pulled and recorded verbatim; pushes are compare-and-set on the digest; conflicts are left for a person.",
+  "receipts": [
+    {
+      "runbookId": "reading-the-order-detail-table-msc00u1p",
+      "at": "2026-08-05T12:19:14.008Z",
+      "action": "none",
+      "status": "unwritten",
+      "localDigest": "1e514be8377a59e1",
+      "detail": "This runbook has never been written to DataHub, so there is no body of record yet."
+    },
+    {
+      "runbookId": "showcase-order-status-backfill",
+      "at": "2026-08-05T12:19:14.014Z",
+      "action": "none",
+      "status": "unwritten",
+      "localDigest": "b5331452901d7f5d",
+      "detail": "This runbook has never been written to DataHub, so there is no body of record yet."
+    },
+    {
+      "runbookId": "showcase-promotion-margin-review",
+      "at": "2026-08-05T12:19:14.022Z",
+      "action": "none",
+      "status": "unwritten",
+      "localDigest": "eb55003a56669784",
+      "detail": "This runbook has never been written to DataHub, so there is no body of record yet."
+    },
+    {
+      "runbookId": "showcase-weekly-order-revenue",
+      "at": "2026-08-05T12:19:14.027Z",
+      "action": "none",
+      "status": "unwritten",
+      "localDigest": "4150a6845bb2a350",
+      "detail": "This runbook has never been written to DataHub, so there is no body of record yet."
+    },
+    {
+      "runbookId": "sample-monthly-mrr-report",
+      "at": "2026-08-05T12:19:14.033Z",
+      "action": "none",
+      "status": "unwritten",
+      "localDigest": "f5a5899295d49b51",
+      "detail": "This runbook has never been written to DataHub, so there is no body of record yet."
+    }
+  ]
+}

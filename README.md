@@ -210,6 +210,20 @@ hash, since the warehouse takes the rename as `ALTER TABLE … RENAME COLUMN` an
 a rename cannot move the data underneath. Receipts land in
 [`examples/live/prove-repair-receipts.json`](examples/live/prove-repair-receipts.json).
 
+The runbook's body of record is its Document in DataHub, and `npm run
+reconcile` is how the two stay honest. It compares every stored runbook
+against its catalog document by content hash, three ways: the catalog now, the
+local copy now, both as of the last sync. Edit the document inside DataHub and
+the catalog wins; the next reconcile, or the next sweep, pulls your edit onto
+the runbook verbatim and nothing overwrites it. Corrections applied here reach
+the catalog through a compare-and-set push that re-reads the digest first, and
+a push that would land on top of somebody's DataHub edit is refused, including
+the case where the edit was pulled but nobody folded it in yet. When both
+sides moved, the conflict is named with both digests and left for a person.
+`npm run prove:sync` walks that whole lifecycle against a live DataHub and
+writes receipts to
+[`examples/live/document-sync-receipts.json`](examples/live/document-sync-receipts.json).
+
 More than one codebase reads a column like that, so `npm run campaign` turns
 the same approved correction into one git patch per consumer repo, for the
 plain SQL workspace and the dbt project alike. In dbt that means the model SQL
@@ -844,6 +858,8 @@ behaviours run underneath all of them:
 | `npm run prove` | **the whole loop end to end, 39 assertions** (`-- --catalog=showcase` for DataHub's datapack) |
 | `npm run prove:repair` | **the executed repair**: consumer SQL breaks under a live catalog rename and comes back byte-identical (`-- --catalog=showcase` works here too) |
 | `npm run campaign` | fan the approved correction out as git patches across every consumer repo, dbt included, each verified by applying it |
+| `npm run reconcile` | reconcile every runbook against its DataHub document by content hash; catalog edits win (`--push` for local changes) |
+| `npm run prove:sync` | **the body of record, proved**: a DataHub edit wins, a conflicting push is refused, the steward's words survive |
 | `npm run prove:verify` | check the receipts that run just wrote against the committed ones; CI runs this (`--repair` for the repair receipts) |
 | `npm run draft` | draft runbooks from catalog evidence, no recording needed (`--query=`, `--urn=`, `--save`) |
 | `npm run bench:drift` | plant known drift, decoys and controls; score detection and correction |

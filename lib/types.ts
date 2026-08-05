@@ -334,7 +334,19 @@ export interface Handoff {
    * `roundTrip.matches` is the only thing here that distinguishes "we sent it"
    * from "the catalog holds it".
    */
-  datahub?: { saved: boolean; detail?: string; documentUrn?: string; roundTrip?: RoundTripReceipt };
+  datahub?: {
+    saved: boolean;
+    detail?: string;
+    documentUrn?: string;
+    roundTrip?: RoundTripReceipt;
+    /** Digest of the catalog document at last sync — the base of the three-way compare in `lib/runbook-sync.ts`. */
+    syncedCatalogDigest?: string;
+    /** Digest of the local rendering at last sync. */
+    syncedLocalDigest?: string;
+    /** A body edited in DataHub and accepted from there, verbatim. The catalog won. */
+    pulledBody?: string;
+    pulledAt?: string;
+  };
   /** Catalog state at record time, keyed by URN — the decay baseline. */
   snapshots?: Record<string, EntitySnapshot>;
   /** Result of the most recent validation run against live DataHub. */

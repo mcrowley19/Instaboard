@@ -116,11 +116,15 @@ export async function POST(req: Request) {
         // could diverge with nothing to notice. The receipt records the URN, the
         // digest of what was sent, and the digest of what DataHub returns.
         const documentUrn = documentUrnFrom(doc);
+        const roundTrip = documentUrn ? await verifyDocumentRoundTrip(documentUrn, markdown) : undefined;
         handoff.datahub = {
           saved: !doc.isError,
           detail: doc.content.slice(0, 300),
           ...(documentUrn ? { documentUrn } : {}),
-          ...(documentUrn ? { roundTrip: await verifyDocumentRoundTrip(documentUrn, markdown) } : {}),
+          ...(roundTrip ? { roundTrip } : {}),
+          // The sync base for lib/runbook-sync.ts: at capture, the catalog copy
+          // and the local rendering are the same bytes by construction.
+          ...(roundTrip ? { syncedCatalogDigest: roundTrip.writtenDigest, syncedLocalDigest: roundTrip.writtenDigest } : {}),
         };
 
         saveHandoff(handoff);

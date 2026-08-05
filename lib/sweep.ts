@@ -44,6 +44,7 @@ import {
 } from "./native-writeback";
 import { writeStructuredState, type StructuredStateReceipt } from "./structured-state";
 import { proposeFix, type RunbookProposal } from "./remediate";
+import { reconcileHandoff, type SyncReceipt } from "./runbook-sync";
 import { listHandoffs, saveHandoff } from "./handoff-store";
 import type { DecayFinding, DecayReport, Handoff } from "./types";
 
@@ -74,6 +75,8 @@ export interface SweepRow {
   retracted: RetractionReceipt | null;
   /** The unvalidatable-step tag, applied and retracted with the catalog's gaps. */
   coverageTags: CoverageTagReceipt | null;
+  /** The body-of-record reconcile: was the document edited in DataHub, and what happened. */
+  documentSync: SyncReceipt | null;
 }
 
 export interface SweepResult {
@@ -106,6 +109,13 @@ export async function validateRunbook(
   options: { propose?: boolean } = {}
 ): Promise<{ row: SweepRow; report: DecayReport }> {
   const { propose = true } = options;
+
+  // The body of record first: if somebody edited the runbook's document inside
+  // DataHub, the catalog wins, and the sweep accepts the edit before judging
+  // anything. An unattended pass that ignored catalog edits would make
+  // "authoritative" a word on a page.
+  const documentSync = await reconcileHandoff(handoff);
+
   const { report, live } = await detectDecayWithState(handoff);
   handoff.decay = report;
   saveHandoff(handoff);
@@ -175,6 +185,7 @@ export async function validateRunbook(
       resolved,
       retracted,
       coverageTags,
+      documentSync,
     },
   };
 }
