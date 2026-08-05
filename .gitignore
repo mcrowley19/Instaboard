@@ -57,3 +57,6 @@ evals/results/cache.json
 # Written by scripts/isolate-catalog.ts while a catalog is temporarily isolated.
 # Runtime state, and losing it would strand soft-deleted datasets.
 data/isolation-manifest.json*
+
+# local tooling config
+.claude/
